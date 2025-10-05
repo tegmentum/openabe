@@ -13,6 +13,12 @@ package:
 	./download_gtest.sh $(VERSION)
 
 googletest-release-$(VERSION)/.built: googletest-release-$(VERSION)
+	# Fix CMake version compatibility for macOS
+	@if [[ "$(shell uname -s)" == "Darwin" ]]; then \
+		sed -i '' 's/cmake_minimum_required(VERSION [0-9.]*)/cmake_minimum_required(VERSION 3.5)/' $</googletest/CMakeLists.txt; \
+	else \
+		sed -i 's/cmake_minimum_required(VERSION [0-9.]*)/cmake_minimum_required(VERSION 3.5)/' $</googletest/CMakeLists.txt; \
+	fi
 	cd $<; \
 	mkdir -p build && cd build/ && \
 	cmake -DCMAKE_INSTALL_PREFIX:PATH=$(DEPS_INSTALL_ZROOT) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ../googletest/ && \

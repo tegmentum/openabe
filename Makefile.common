@@ -15,7 +15,7 @@ LOCAL_INCLUDE ?= /usr/local/include
 LOCAL_INSTALL_BIN ?= /usr/local/bin
 
 # Include locations
-#  Dependencies (C/C++)
+#  Dependencies (C/C++) - MUST come first to override system headers (especially OpenSSL)
 CCFLAGS = -I$(DEPS_INSTALL_ZROOT)/include
 CXXFLAGS := -I$(DEPS_INSTALL_ZROOT)/include
 #  Local includes (for generated headers from bison/flex)
@@ -23,6 +23,11 @@ CXXFLAGS += -I$(ZROOT)/src
 #  Common includes (C/C++)
 CCFLAGS += -I$(INCLUDE_ROOT) -I$(LOCAL_INCLUDE)
 CXXFLAGS += -I$(INCLUDE_ROOT) -I$(LOCAL_INCLUDE)
+# On macOS, add GMP from Homebrew but explicitly block OpenSSL headers from Homebrew
+ifeq ($(shell uname -s), Darwin)
+	CCFLAGS += -I/opt/homebrew/opt/gmp/include
+	CXXFLAGS += -I/opt/homebrew/opt/gmp/include
+endif
 
 RELIC_LIB = -lrelic -lrelic_ec
 RELIC_LIB_STATIC = -lrelic_s -lrelic_s_ec
@@ -97,13 +102,16 @@ else
        SHFLAGS = -dynamiclib -current_version 1.0 -compatibility_version 1.0 -arch $(ARCH_FLAG)
        SHLIB = dylib
        GTESTEXT = 0.$(SHLIB)
-       # pull in headers installed via brew (for gmp/relic/openssl)
+       # pull in headers installed via brew
        CCFLAGS += -fPIC -arch $(ARCH_FLAG)
        CXXFLAGS += -I$(LOCAL_INCLUDE) $(OS_CXXFLAGS) -arch $(ARCH_FLAG)
+       CCFLAGS += -I$(LOCAL_INCLUDE)
        # include the clang C++ standard library (as a result, enable TR1_TUPLE flag)
        CXXFLAGS += -stdlib=libc++ -DGTEST_USE_OWN_TR1_TUPLE=1 -Wno-deprecated
        # (Option to use GMP with OpenSSL?): -DOPENSSL_USE_GMP -lgmp
-       OPENSSL_CONFIG := Configure darwin64-x86_64-cc shared
+       # OpenSSL 1.1.1 doesn't have darwin64-arm64-cc, but darwin64-x86_64-cc works
+       # when combined with the native clang compiler which auto-detects arm64
+       OPENSSL_CONFIG := Configure darwin64-x86_64-cc no-asm shared
        ADD_CFLAGS += -Wno-implicit-function-declaration -Wno-macro-redefined
     endif
     # TODO: add check for ARM, etc
@@ -129,7 +137,7 @@ CXXFLAGS += -g -O2
 # CC="afl-clang" # for mac
 # CXX="afl-clang++"
 
-LDFLAGS += -L$(DEPS_INSTALL_ZROOT)/lib -L$(OABE_LIB_ROOT) -L$(LOCAL_LIB_ROOT)
+LDFLAGS += -L$(DEPS_INSTALL_ZROOT)/lib -L$(OABE_LIB_ROOT) -L$(LOCAL_LIB_ROOT) -L/opt/homebrew/lib
 ifeq ($(OS_NAME), Darwin)
   LDFLAGS += -arch $(ARCH_FLAG)
 endif

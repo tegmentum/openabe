@@ -48,7 +48,7 @@ relic-$(VERSION)/.built: relic-${VERSION}
 	make && \
 	make install && \
 	sed -i '' -e '/^#define VERSION/d' $(DEPS_INSTALL_ZROOT)/include/relic/relic_conf.h && \
-	sed -i '' -e '/^#define ep2_mul/d' $(DEPS_INSTALL_ZROOT)/include/relic/relic_label.h && \
+	sed -i '' -e 's|^#define ep2_mul|//#define ep2_mul|' $(DEPS_INSTALL_ZROOT)/include/relic/relic_label.h && \
 	sed -i '' -e '/^#define VERSION/d' $(DEPS_INSTALL_ZROOT)/include/relic$(EC_HDR_PREFIX)/relic_conf.h && \
 	../run_install_clean.sh && \
 	touch ../$@
