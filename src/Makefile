@@ -18,14 +18,14 @@ OABE_KEYS = keys/zkdf.o keys/zkey.o keys/zpkey.o keys/zkeystore.o keys/zsymkey.o
 OABE_LOW = ske/zcontextske.o pke/zcontextpke.o pksig/zcontextpksig.o \
           abe/zcontextabe.o abe/zcontextcca.o abe/zcontextcpwaters.o abe/zcontextkpgpsw.o
 OABE_TOOLS = tools/zlsss.o tools/zprng.o 
-OABE_ZML = zml/zgroup.o zml/zpairing.o zml/zelliptic.o zml/zelement.o zml/zelement_ec.o zml/zelement_bp.o
+OABE_ZML = zml/zgroup.o zml/zpairing.o zml/zelliptic.o zml/zelement.o zml/zelement_ec.o zml/zelement_bp.o zml/zstandard_serialization.o
 OABE_UTILS = utils/zkeymgr.o utils/zcryptoutils.o utils/zcontainer.o utils/zbenchmark.o utils/zerror.o utils/zcontainer.o \
             utils/zciphertext.o utils/zpolicy.o utils/zattributelist.o utils/zdriver.o utils/zfunctioninput.o
             
 OABE_OBJ_TARGETS = zobject.o openabe.o zcontext.o zcrypto_box.o zsymcrypto.o zparser.o zscanner.o \
                   $(OABE_ZML) $(OABE_KEYS) $(OABE_LOW) $(OABE_TOOLS) $(OABE_UTILS) openssl_init.o $(OS_OBJS)
 
-OABE_OBJ_FILES = zobject.o openabe.o zgroup.o zlsss.o zerror.o zpairing.o zelliptic.o zelement.o zelement_ec.o zelement_bp.o zcontainer.o zciphertext.o \
+OABE_OBJ_FILES = zobject.o openabe.o zgroup.o zlsss.o zerror.o zpairing.o zelliptic.o zelement.o zelement_ec.o zelement_bp.o zstandard_serialization.o zcontainer.o zciphertext.o \
 	     zkey.o zpkey.o zkeystore.o zfunctioninput.o zcontext.o zpolicy.o zsymkey.o zprng.o zattributelist.o \
 	     zcontextske.o zcontextpke.o zcontextpksig.o zcontextabe.o zcontextcpwaters.o zcontextkpgpsw.o \
 	     zcontextcca.o zkdf.o zkeymgr.o zcryptoutils.o zcrypto_box.o zbenchmark.o zparser.o zscanner.o zdriver.o zsymcrypto.o \
@@ -47,7 +47,7 @@ LIBRARYH=header
 
 GENFILES = location.hh position.hh stack.hh *.tab.* zscanner.cpp
 
-PROGRAMS = test_libopenabe test_zml test_zml1 test_zml2 test_policy test_abe test_pke test_ske test_zsym test_keystore bench_libopenabe profile_libopenabe fuzz_policy fuzz_attrlist
+PROGRAMS = test_libopenabe test_zml test_zml1 test_zml2 test_policy test_abe test_pke test_ske test_zsym test_keystore test_standard_serialization bench_libopenabe profile_libopenabe fuzz_policy fuzz_attrlist
 
 all: $(OABELIB) $(ZSYMLIB) $(PROGRAMS)
 
@@ -114,6 +114,9 @@ test_ske: $(OABELIB)
 
 test_keystore: $(OABELIB)
 	$(CXX) -o test_keystore $(CXX11FLAGS) $(LDFLAGS) -L. test_keystore.cpp $(OABELIB) $(OABELDLIBS) $(GTESTLIBS)
+
+test_standard_serialization: $(OABELIB)
+	$(CXX) -o test_standard_serialization $(CXX11FLAGS) $(LDFLAGS) -L. test_standard_serialization.cpp $(OABELIB) $(OABELDLIBS) -lpthread
 
 bench_libopenabe: $(OABELIB)
 	$(CXX) -o bench_libopenabe $(CXX11FLAGS) $(LDFLAGS) -L. bench_libopenabe.cpp $(OABELIB) $(OABELDLIBS) $(BOOST_SYSTEM) $(BOOST_THREAD)
