@@ -4,11 +4,18 @@
 set -e
 
 # Configuration
-WASI_SDK_PATH="${WASI_SDK_PATH:-/opt/wasi-sdk}"
+WASI_SDK_PATH="${WASI_SDK_PATH:-$HOME/wasi-sdk}"
 ZROOT="$(pwd)"
 WASM_BUILD_DIR="$ZROOT/build-wasm"
 WASM_OBJ_DIR="$WASM_BUILD_DIR/obj"
 WASM_PREFIX="$WASM_BUILD_DIR/install"
+
+# Check if WASI SDK is installed
+if [ ! -f "$WASI_SDK_PATH/bin/clang" ]; then
+    echo "Error: WASI SDK not found at $WASI_SDK_PATH"
+    echo "Please run ./build-deps-wasm.sh first to install WASI SDK and build dependencies"
+    exit 1
+fi
 
 # WASI-SDK tools
 export CC="$WASI_SDK_PATH/bin/clang"
@@ -166,6 +173,16 @@ build_parser() {
         warn "Bison failed"
         return 1
     }
+
+    # Copy parser headers to include directory for zscanner.h
+    mkdir -p "$ZROOT/src/include/openabe"
+    cp zparser.tab.hh "$ZROOT/src/include/openabe/" || {
+        warn "Failed to copy parser header"
+    }
+    # Also copy location.hh and other generated headers if they exist
+    for header in location.hh position.hh stack.hh; do
+        [ -f "$header" ] && cp "$header" "$ZROOT/src/include/openabe/"
+    done
 
     # Generate scanner
     info "Running flex on zscanner.ll..."

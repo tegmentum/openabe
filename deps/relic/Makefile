@@ -41,7 +41,7 @@ relic-$(VERSION)/.built: relic-${VERSION}
 	make && \
 	make install && \
 	cd ../$(EC_TMP); \
-	$(CMAKE_VARS) COMP="-O2 -funroll-loops -fomit-frame-pointer -Wno-unused-function -Wno-implicit-function-declaration -Wno-incompatible-pointer-types-discards-qualifiers" cmake $(COMPILER_VARS) -DCMAKE_OSX_ARCHITECTURES="$(ARCH_FLAG)" -DCMAKE_PREFIX_PATH="$(DEPS_INSTALL_ZROOT)" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_C_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_CXX_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_EXE_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_SHARED_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_INSTALL_PREFIX:PATH=$(DEPS_INSTALL_ZROOT) -DOPSYS=$(RELIC_OS) -DARCH="$(RELIC_ARCH)" -DWSIZE=64 \
+	$(CMAKE_VARS) COMP="-O2 -funroll-loops -fomit-frame-pointer -Wno-unused-function -Wno-implicit-function-declaration -Wno-incompatible-pointer-types-discards-qualifiers -I$(DEPS_INSTALL_ZROOT)/include" cmake $(COMPILER_VARS) -DCMAKE_OSX_ARCHITECTURES="$(ARCH_FLAG)" -DCMAKE_PREFIX_PATH="$(DEPS_INSTALL_ZROOT)" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_C_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_CXX_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_EXE_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_SHARED_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_INSTALL_PREFIX:PATH=$(DEPS_INSTALL_ZROOT) -DOPSYS=$(RELIC_OS) -DARCH="$(RELIC_ARCH)" -DWSIZE=64 \
 	-DWITH="BN;DV;FP;EP;MD" -DCHECK=off -DVERBS=off -DDEBUG=off -DMULTI=PTHREAD -DBENCH=0 -DTESTS=0 -DARITH=gmp -DFP_PRIME=$(EC_CURVE) \
 	-DFP_QNRES=off -DEP_METHD="PROJC;LWNAF;COMBS;INTER" -DFP_METHD="BASIC;COMBA;COMBA;MONTY;LOWER;SLIDE" -DFPX_METHD="INTEG;INTEG;LAZYR" -DPP_METHD="LAZYR;OATEP" \
 	-DSEED="ZERO" -DRAND="CALL" -DLABEL="$(EC_LABEL)" ../$<; \
@@ -55,7 +55,7 @@ relic-$(VERSION)/.built: relic-${VERSION}
 
 relic-$(VERSION): relic-$(VERSION).tar.gz
 	tar xf $^
-	cd relic-$(VERSION) && patch -p1 < ../blake2_fix.patch
+	cd relic-$(VERSION) && (patch -p1 < ../blake2_fix.patch || true)
 
 package:
 	./download_relic.sh relic-$(VERSION)

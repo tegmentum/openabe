@@ -36,7 +36,9 @@
 
 #include <openssl/aes.h>
 #include <openssl/rand.h>
+#ifndef __wasm__
 #include <mutex>
+#endif
 
 #define OpenABE_CTR_DRBG_BLOCKSIZE         16      /* Cipher Block size */
 #define OpenABE_CTR_DRBG_KEYSIZE_BYTES     32      /* Cipher Key size in bytes */
@@ -163,7 +165,9 @@ class OpenABECtrDrbgContext {
 private:
   OpenABECtrDrbg ctx_;
   OpenABEByteString short_entropy_;
+#ifndef __wasm__
   std::mutex lock_;
+#endif
 
 public:
   OpenABECtrDrbgContext(OpenABEByteString &entropy);

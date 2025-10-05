@@ -34,13 +34,13 @@
 #define __OPENSSL_INIT_CPP__
 
 #include <memory>
+#ifndef __wasm__
 #include <mutex>
+#include <pthread.h>
+#endif
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <openssl/ssl.h>
-#ifndef __wasm__
-#include <pthread.h>
-#endif
 
 #if defined(SSL_LIB_INIT)
 
@@ -58,6 +58,7 @@
 
 using namespace std;
 
+#ifndef __wasm__
 struct CRYPTO_dynlock_value {
     mutex the_mutex;
 };
@@ -92,12 +93,14 @@ static void dynlockDestroy(struct CRYPTO_dynlock_value* lock,
                            const char*, int) {
     delete lock;
 }
+#endif // __wasm__
 
 void openSslInitialize() {
 #if defined(SSL_LIB_INIT) && !defined(__wasm__)
     SSL_library_init();
     SSL_load_error_strings();
 #endif
+#ifndef __wasm__
     // static locking
     mutexes.reset(new mutex[CRYPTO_num_locks()]);
     if (mutexes == nullptr) {
@@ -109,11 +112,13 @@ void openSslInitialize() {
     CRYPTO_set_dynlock_create_callback(dynlockCreate);
     CRYPTO_set_dynlock_lock_callback(dynlockLock);
     CRYPTO_set_dynlock_destroy_callback(dynlockDestroy);
+#endif // __wasm__
 
     RAND_poll();
 }
 
 void openSslCleanup() {
+#ifndef __wasm__
     // dynamic cleanup
     CRYPTO_set_dynlock_create_callback(nullptr);
     CRYPTO_set_dynlock_lock_callback(nullptr);
@@ -125,4 +130,5 @@ void openSslCleanup() {
     EVP_cleanup();
     CRYPTO_cleanup_all_ex_data();
     mutexes.reset();
+#endif // __wasm__
 }

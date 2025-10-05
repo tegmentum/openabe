@@ -384,13 +384,17 @@ OpenABECtrDrbgContext::initSeed(const uint8_t *nonce, size_t nonce_len) {
 
 int OpenABECtrDrbgContext::getRandomBytes(uint8_t *output, size_t output_len) {
     // make sure we've called init on ctx. otherwise, throw an error
+#ifndef __wasm__
     std::lock_guard<std::mutex> write_lock(lock_);
+#endif
     return ctr_drbg_generate_random_with_add(ctx_, output, output_len, NULL, 0);
 }
 
 int OpenABECtrDrbgContext::getRandomBytes(OpenABEByteString *output, size_t output_len) {
     output->clear();
+#ifndef __wasm__
     std::lock_guard<std::mutex> write_lock(lock_);
+#endif
     return ctr_drbg_generate_random_with_add(ctx_, (uint8_t*)output->getInternalPtr(), output_len, NULL, 0);
 }
 

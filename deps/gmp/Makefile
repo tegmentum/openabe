@@ -13,10 +13,11 @@ gmp-$(VERSION)/.built: gmp-$(VERSION)
 	cd $<; \
 	./configure --prefix=$(DEPS_INSTALL_ZROOT) \
 		--host=$(ARCH_FLAG)-apple-darwin \
+		--build=$(shell uname -m)-apple-darwin \
 		--enable-cxx \
 		--enable-static \
 		--disable-shared \
-		CC="$(CC)" CXX="$(CXX)" \
+		CC="$(CC) -arch $(ARCH_FLAG)" CXX="$(CXX) -arch $(ARCH_FLAG)" \
 		CFLAGS="$(CCFLAGS)" CXXFLAGS="$(CXXFLAGS)" && \
 	make && \
 	make install && \

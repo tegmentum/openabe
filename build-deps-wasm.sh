@@ -4,7 +4,8 @@
 set -e
 
 # Configuration
-WASI_SDK_PATH="${WASI_SDK_PATH:-/opt/wasi-sdk}"
+WASI_SDK_VERSION="${WASI_SDK_VERSION:-24}"
+WASI_SDK_PATH="${WASI_SDK_PATH:-$HOME/wasi-sdk}"
 ZROOT="$(pwd)"
 WASM_BUILD_DIR="$ZROOT/build-wasm"
 WASM_DEPS_DIR="$WASM_BUILD_DIR/deps"
@@ -33,10 +34,97 @@ export LDFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT -lwasi-emulated-si
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# Detect OS and architecture
+detect_platform() {
+    local os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    local arch=$(uname -m)
+
+    case "$os" in
+        darwin)
+            OS_TYPE="macos"
+            ;;
+        linux)
+            OS_TYPE="linux"
+            ;;
+        *)
+            error "Unsupported OS: $os"
+            exit 1
+            ;;
+    esac
+
+    case "$arch" in
+        x86_64|amd64)
+            ARCH_TYPE="x86_64"
+            ;;
+        arm64|aarch64)
+            ARCH_TYPE="arm64"
+            ;;
+        *)
+            error "Unsupported architecture: $arch"
+            exit 1
+            ;;
+    esac
+}
+
+# Download and install WASI SDK
+install_wasi_sdk() {
+    if [ -f "$WASI_SDK_PATH/bin/clang" ]; then
+        info "WASI SDK already installed at $WASI_SDK_PATH"
+        return 0
+    fi
+
+    info "WASI SDK not found. Downloading WASI SDK $WASI_SDK_VERSION..."
+
+    detect_platform
+
+    # Construct download URL based on platform
+    # Format: wasi-sdk-{VERSION}.0-{ARCH}-{OS}.tar.gz
+    local wasi_sdk_name="wasi-sdk-${WASI_SDK_VERSION}.0"
+    local platform_arch="${ARCH_TYPE}-${OS_TYPE}"
+    local archive_name="${wasi_sdk_name}-${platform_arch}.tar.gz"
+    local download_url="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/${archive_name}"
+    local temp_dir=$(mktemp -d)
+    local archive="$temp_dir/wasi-sdk.tar.gz"
+
+    info "Downloading from: $download_url"
+
+    if ! curl -L -f -o "$archive" "$download_url"; then
+        error "Failed to download WASI SDK"
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+
+    info "Extracting WASI SDK to $WASI_SDK_PATH..."
+    mkdir -p "$(dirname "$WASI_SDK_PATH")"
+    tar -xzf "$archive" -C "$(dirname "$WASI_SDK_PATH")"
+
+    # The archive extracts to wasi-sdk-{VERSION}.0-{ARCH}-{OS}
+    local extracted_dir="$(dirname "$WASI_SDK_PATH")/${wasi_sdk_name}-${platform_arch}"
+    if [ -d "$extracted_dir" ] && [ "$extracted_dir" != "$WASI_SDK_PATH" ]; then
+        # Remove existing installation if present
+        [ -d "$WASI_SDK_PATH" ] && rm -rf "$WASI_SDK_PATH"
+        mv "$extracted_dir" "$WASI_SDK_PATH"
+    fi
+
+    rm -rf "$temp_dir"
+
+    if [ -f "$WASI_SDK_PATH/bin/clang" ]; then
+        info "WASI SDK installed successfully"
+    else
+        error "WASI SDK installation failed"
+        exit 1
+    fi
+}
+
+# Install WASI SDK if needed
+install_wasi_sdk
 
 # Create directories
 mkdir -p "$WASM_BUILD_DIR"
@@ -211,7 +299,8 @@ build_relic() {
         -DFP_PRIME=254 \
         -DWITH="BN;MD;DV;FP;EP;FPX;EPX;PP;PC" \
         -DBP_WITH_OPENSSL=on \
-        -DRAND=HASHD \
+        -DSEED=ZERO \
+        -DRAND=CALL \
         -DCHECK=off \
         -DTESTS=0 \
         -DBENCH=0 \

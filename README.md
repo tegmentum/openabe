@@ -10,6 +10,27 @@ This bundle includes full source code, examples and three main sources of docume
 
 The software is available for use under the [AGPL 3.0 license](https://github.com/zeutro/openabe/blob/master/LICENSE).
 
+## Quick Build
+
+OpenABE now includes a unified build script that supports multiple target platforms:
+
+```bash
+# Build for your current platform (macOS/Linux)
+./build.sh native
+
+# Build for WebAssembly (auto-downloads WASI SDK)
+./build.sh wasm
+
+# Build for all platforms
+./build.sh all
+```
+
+**Platform Support:**
+- Native: macOS (x86_64, ARM64), Linux (x86_64, ARM64)
+- WebAssembly: Universal (runs anywhere with wasmtime)
+
+For detailed build instructions, see [BUILD.md](BUILD.md) or [WASM_BUILD.md](WASM_BUILD.md).
+
 ## What is Attribute-Based Encryption (ABE)?
 
 Encryption is a method of encoding data that protects the confidentiality of its contents from unauthorized attackers. Traditionally, encryption was viewed as a tool to enable secure communication between a sender and a targeted recipient of information. For example, one might wish to store a message such that it can only be decrypted by the user bob@xyz.org.

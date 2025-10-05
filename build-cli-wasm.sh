@@ -4,11 +4,18 @@
 set -e
 
 # Configuration
-WASI_SDK_PATH="${WASI_SDK_PATH:-/opt/wasi-sdk}"
+WASI_SDK_PATH="${WASI_SDK_PATH:-$HOME/wasi-sdk}"
 ZROOT="$(pwd)"
 WASM_BUILD_DIR="$ZROOT/build-wasm"
 WASM_PREFIX="$WASM_BUILD_DIR/install"
 CLI_WASM_DIR="$ZROOT/cli-wasm"
+
+# Check if WASI SDK is installed
+if [ ! -f "$WASI_SDK_PATH/bin/clang" ]; then
+    echo "Error: WASI SDK not found at $WASI_SDK_PATH"
+    echo "Please run ./build-deps-wasm.sh first to install WASI SDK and build dependencies"
+    exit 1
+fi
 
 # WASI-SDK tools for wasm32-wasi (WASI Preview 1)
 # Note: Using wasip1 for now since wasip2 doesn't support C++ exceptions

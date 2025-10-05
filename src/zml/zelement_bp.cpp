@@ -501,7 +501,7 @@ void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
   rng->getRandomBytes(buf, length);
   zml_bignum_fromBin(this->m_ZP, buf, length);
 #else
-  rand_seed(&rng_trampoline, (void *)rng);
+  oabe_rand_seed(&rng_trampoline, (void *)rng);
   zml_bignum_rand(this->m_ZP, this->order);
 #endif
   zml_bignum_mod(this->m_ZP, this->order);
@@ -790,7 +790,7 @@ void G1::setRandom(OpenABERNG *rng) {
     ASSERT(rc == 1, OpenABE_ERROR_INVALID_INPUT);
 #else
 #ifndef __wasm__
-    rand_seed(&rng_trampoline, (void *)rng);
+    oabe_rand_seed(&rng_trampoline, (void *)rng);
 #endif
     // g1_rand(this->m_G1);
     g1_rand_op(this->m_G1);
@@ -1010,7 +1010,7 @@ void G2::setRandom(OpenABERNG *rng)
         int rc = BP_GROUP_get_generator_G2(GET_BP_GROUP(this->bgroup), this->m_G2);
         ASSERT(rc == 1, OpenABE_ERROR_INVALID_INPUT);
 #else
-		rand_seed(&rng_trampoline, (void *) rng);
+		oabe_rand_seed(&rng_trampoline, (void *) rng);
 		g2_rand(this->m_G2);
 #endif
 	}

@@ -15,6 +15,7 @@
 #include <openabe/utils/zconstants.h>
 
 #include <openssl/objects.h>
+#include <openssl/rand.h>
 
 #if defined(BP_WITH_OPENSSL)
 #define EC_WITH_OPENSSL
@@ -24,10 +25,26 @@
 /********************************************************************************
  * ZML abstract C operations for bignum operations
  ********************************************************************************/
+
+#if !defined(BP_WITH_OPENSSL) && defined(__wasm__)
+// WASM RNG callback using OpenSSL RAND_bytes
+static void wasm_rng_callback(uint8_t *buf, int size, void *args) {
+  (void)args; // unused
+  if (RAND_bytes(buf, size) != 1) {
+    // RAND_bytes failed - fill with zeros as fallback
+    memset(buf, 0, size);
+  }
+}
+#endif
+
 void zml_init() {
 #if !defined(BP_WITH_OPENSSL)
   core_init();
   ec_core_init();
+#ifdef __wasm__
+  // Register RNG callback for WASM builds
+  rand_seed(wasm_rng_callback, NULL);
+#endif
 #endif
 }
 
