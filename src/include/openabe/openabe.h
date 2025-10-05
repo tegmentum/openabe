@@ -115,6 +115,9 @@ typedef uint32_t OpenABESecurityLevel;
    #include <cstdio>
    using ::max_align_t;
 #endif
+#ifdef __wasm__
+#include <openabe/wasm_mutex.h>
+#endif
 #include <gmpxx.h>
 extern "C" {
 #include <openabe/zml/zelement.h>

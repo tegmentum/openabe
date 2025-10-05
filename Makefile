@@ -1,4 +1,4 @@
-.PHONY: all clean deps src cli examples bindings
+.PHONY: all clean deps src cli examples bindings wasm-deps wasm-lib wasm-cli wasm
 
 all: check-env deps src cli examples
 
@@ -64,3 +64,24 @@ clean:
 
 distclean:	clean
 	$(MAKE) -C deps distclean
+
+# WebAssembly build targets
+# Note: Requires WASI-SDK to be installed
+# Set WASI_SDK_PATH environment variable or install to /opt/wasi-sdk
+
+wasm-deps:
+	@echo "Building OpenABE dependencies for WebAssembly..."
+	./build-deps-wasm.sh
+
+wasm-lib: wasm-deps
+	@echo "Building OpenABE library for WebAssembly..."
+	./build-openabe-wasm.sh
+
+wasm-cli: wasm-lib
+	@echo "Building OpenABE CLI tools for WebAssembly..."
+	./build-cli-wasm.sh
+
+wasm: wasm-cli
+	@echo "WebAssembly build complete!"
+	@echo "WASM modules are in cli-wasm/"
+	@ls -lh cli-wasm/*.wasm 2>/dev/null || true

@@ -270,8 +270,14 @@ BPGroup::BPGroup(OpenABECurveID id) : ZGroup(id) {
 }
 
 BPGroup::~BPGroup() {
+#ifndef __wasm__
   bp_group_free(group);
   zml_bignum_free(order);
+#else
+  // WASM FIX: Skip RELIC group/bignum cleanup in WASM builds
+  // The entire WASM module instance is destroyed after execution,
+  // so explicit cleanup is unnecessary and causes traps
+#endif
 }
 
 void BPGroup::getGroupOrder(bignum_t o) {
@@ -338,8 +344,14 @@ ZP::ZP(const ZP& w)
 }
 
 ZP::~ZP() {
+#ifndef __wasm__
   zml_bignum_free(m_ZP);
   zml_bignum_free(order);
+#else
+  // WASM FIX: Skip RELIC bignum cleanup in WASM builds
+  // The entire WASM module instance is destroyed after execution,
+  // so explicit cleanup is unnecessary and causes traps
+#endif
 }
 
 ZP &ZP::operator+=(const ZP &x) {
@@ -485,7 +497,7 @@ void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
   // 2. call bignum_fromBin on the bytes obtained
   uint8_t buf[length];
   memset(buf, 0, length);
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_OPENSSL) || defined(__wasm__)
   rng->getRandomBytes(buf, length);
   zml_bignum_fromBin(this->m_ZP, buf, length);
 #else
@@ -658,7 +670,13 @@ G1 &G1::operator=(const G1 &w) {
 
 G1::~G1() {
   if (this->isInit) {
+#ifndef __wasm__
     g1_element_free(this->m_G1);
+#else
+    // WASM FIX: Skip RELIC element cleanup in WASM builds
+    // The entire WASM module instance is destroyed after execution,
+    // so explicit cleanup is unnecessary and causes traps
+#endif
     this->isInit = false;
   }
 }
@@ -771,7 +789,9 @@ void G1::setRandom(OpenABERNG *rng) {
     int rc = BP_GROUP_get_generator_G1(GET_BP_GROUP(this->bgroup), this->m_G1);
     ASSERT(rc == 1, OpenABE_ERROR_INVALID_INPUT);
 #else
+#ifndef __wasm__
     rand_seed(&rng_trampoline, (void *)rng);
+#endif
     // g1_rand(this->m_G1);
     g1_rand_op(this->m_G1);
 #endif
@@ -897,7 +917,13 @@ G2::operator=(const G2& w)
 G2::~G2()
 {
     if (this->isInit) {
+#ifndef __wasm__
         g2_element_free(this->m_G2);
+#else
+        // WASM FIX: Skip RELIC element cleanup in WASM builds
+        // The entire WASM module instance is destroyed after execution,
+        // so explicit cleanup is unnecessary and causes traps
+#endif
         this->isInit = false;
     }
 }

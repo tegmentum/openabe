@@ -60,7 +60,11 @@ public:
   uint32_t getRefCount() { return this->refCount; }
   virtual ZObject& operator=(const ZObject &rhs) { return *this; }
   virtual ZObject* clone() const { return NULL; } // throw an exception if not implemented
+#ifdef __wasm__
+  virtual void serialize(OpenABEByteString &result) const { fprintf(stderr, "serialize() not implemented\n"); abort(); }
+#else
   virtual void serialize(OpenABEByteString &result) const { throw OpenABE_ERROR_NOT_IMPLEMENTED; }
+#endif
   virtual bool isEqual(ZObject* z) const { return false; }
 
 protected:

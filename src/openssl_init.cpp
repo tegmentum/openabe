@@ -38,7 +38,9 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <openssl/ssl.h>
+#ifndef __wasm__
 #include <pthread.h>
+#endif
 
 #if defined(SSL_LIB_INIT)
 
@@ -92,7 +94,7 @@ static void dynlockDestroy(struct CRYPTO_dynlock_value* lock,
 }
 
 void openSslInitialize() {
-#if defined(SSL_LIB_INIT)
+#if defined(SSL_LIB_INIT) && !defined(__wasm__)
     SSL_library_init();
     SSL_load_error_strings();
 #endif

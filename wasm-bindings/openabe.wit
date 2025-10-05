@@ -1,0 +1,265 @@
+// OpenABE WebAssembly Component Interface
+// WIT (WebAssembly Interface Types) definition for OpenABE cryptographic library
+
+package openabe:crypto@1.0.0;
+
+/// Common types and errors
+interface types {
+    /// Cryptographic scheme types
+    enum scheme-type {
+        cp-abe,      // Ciphertext-Policy ABE
+        kp-abe,      // Key-Policy ABE
+        ma-abe,      // Multi-Authority ABE
+    }
+
+    /// Elliptic curve types for PKE
+    enum curve-type {
+        nist-p256,   // NIST P-256 (secp256r1)
+        nist-p384,   // NIST P-384 (secp384r1)
+        nist-p521,   // NIST P-521 (secp521r1)
+    }
+
+    /// Error types
+    variant crypto-error {
+        initialization-failed,
+        invalid-context,
+        key-generation-failed,
+        encryption-failed,
+        decryption-failed,
+        invalid-policy,
+        invalid-attributes,
+        buffer-too-small,
+        import-failed,
+        export-failed,
+        unknown-error(string),
+    }
+
+    /// Result type for operations
+    type result<T> = result<T, crypto-error>;
+}
+
+/// Attribute-Based Encryption (ABE) interface
+interface abe {
+    use types.{scheme-type, crypto-error, result};
+
+    /// ABE context handle
+    resource context {
+        /// Create a new ABE context
+        constructor(scheme: scheme-type);
+
+        /// Generate system parameters
+        generate-params: func() -> result<_>;
+
+        /// Generate a key with optional authority information
+        /// For CP-ABE: attributes is pipe-separated list (e.g., "role:admin|dept:eng")
+        /// For KP-ABE: attributes is the policy (e.g., "role:admin and dept:eng")
+        /// For MA-ABE: provide auth-id and optional gid
+        keygen: func(
+            attributes: string,
+            key-id: string,
+            auth-id: option<string>,
+            gid: option<string>
+        ) -> result<_>;
+
+        /// Encrypt data
+        /// For CP-ABE: policy is the access policy (e.g., "role:admin and dept:eng")
+        /// For KP-ABE: policy is attribute list (e.g., "role:admin|dept:eng")
+        encrypt: func(policy: string, plaintext: list<u8>) -> result<list<u8>>;
+
+        /// Decrypt data
+        decrypt: func(key-id: string, ciphertext: list<u8>) -> result<list<u8>>;
+
+        /// Export public parameters
+        export-public-params: func() -> result<list<u8>>;
+
+        /// Import public parameters
+        import-public-params: func(params: list<u8>) -> result<_>;
+
+        /// Export secret parameters
+        export-secret-params: func() -> result<list<u8>>;
+
+        /// Import secret parameters
+        import-secret-params: func(params: list<u8>) -> result<_>;
+
+        /// Delete a key
+        delete-key: func(key-id: string) -> result<bool>;
+    }
+}
+
+/// Multi-Authority ABE interface
+interface ma-abe {
+    use types.{crypto-error, result};
+    use abe.{context};
+
+    /// Multi-authority specific operations
+    resource ma-context {
+        /// Create MA-ABE context
+        constructor();
+
+        /// Get the underlying ABE context
+        get-context: func() -> context;
+
+        /// Export global parameters (MA-ABE specific)
+        export-global-params: func() -> result<list<u8>>;
+
+        /// Import global parameters (MA-ABE specific)
+        import-global-params: func(params: list<u8>) -> result<_>;
+
+        /// Import public parameters for a specific authority
+        import-public-params-with-authority: func(
+            auth-id: string,
+            params: list<u8>
+        ) -> result<_>;
+
+        /// Import secret parameters for a specific authority
+        import-secret-params-with-authority: func(
+            auth-id: string,
+            params: list<u8>
+        ) -> result<_>;
+
+        /// Export user key
+        export-user-key: func(key-id: string) -> result<list<u8>>;
+
+        /// Import user key
+        import-user-key: func(key-id: string, key-blob: list<u8>) -> result<_>;
+    }
+}
+
+/// Public-Key Encryption (PKE) interface
+interface pke {
+    use types.{curve-type, crypto-error, result};
+
+    /// PKE context handle
+    resource context {
+        /// Create a new PKE context with specified elliptic curve
+        constructor(curve: curve-type);
+
+        /// Generate a keypair
+        keygen: func(key-id: string) -> result<_>;
+
+        /// Encrypt data to a receiver's public key
+        encrypt: func(receiver-id: string, plaintext: list<u8>) -> result<list<u8>>;
+
+        /// Decrypt data with receiver's private key
+        decrypt: func(receiver-id: string, ciphertext: list<u8>) -> result<list<u8>>;
+
+        /// Export public key
+        export-public-key: func(key-id: string) -> result<list<u8>>;
+
+        /// Import public key
+        import-public-key: func(key-id: string, key-blob: list<u8>) -> result<_>;
+
+        /// Export private key
+        export-private-key: func(key-id: string) -> result<list<u8>>;
+
+        /// Import private key
+        import-private-key: func(key-id: string, key-blob: list<u8>) -> result<_>;
+    }
+}
+
+/// Digital signature interface (PKSIG)
+interface pksig {
+    use types.{curve-type, crypto-error, result};
+
+    /// Digital signature context
+    resource context {
+        /// Create a new signature context
+        constructor(curve: curve-type);
+
+        /// Generate a signing keypair
+        keygen: func(key-id: string) -> result<_>;
+
+        /// Sign a message
+        sign: func(key-id: string, message: list<u8>) -> result<list<u8>>;
+
+        /// Verify a signature
+        verify: func(key-id: string, message: list<u8>, signature: list<u8>) -> result<bool>;
+
+        /// Export public key (verification key)
+        export-public-key: func(key-id: string) -> result<list<u8>>;
+
+        /// Import public key
+        import-public-key: func(key-id: string, key-blob: list<u8>) -> result<_>;
+
+        /// Export private key (signing key)
+        export-private-key: func(key-id: string) -> result<list<u8>>;
+
+        /// Import private key
+        import-private-key: func(key-id: string, key-blob: list<u8>) -> result<_>;
+    }
+}
+
+/// Symmetric key encryption interface
+interface ske {
+    use types.{crypto-error, result};
+
+    /// Symmetric encryption algorithms
+    enum ske-algorithm {
+        aes-128-gcm,
+        aes-256-gcm,
+    }
+
+    /// Symmetric key context
+    resource context {
+        /// Create a new symmetric encryption context
+        constructor(algorithm: ske-algorithm);
+
+        /// Encrypt data with authenticated encryption
+        encrypt: func(key: list<u8>, plaintext: list<u8>) -> result<list<u8>>;
+
+        /// Decrypt and verify data
+        decrypt: func(key: list<u8>, ciphertext: list<u8>) -> result<list<u8>>;
+
+        /// Generate a random symmetric key
+        generate-key: func() -> result<list<u8>>;
+    }
+}
+
+/// Key derivation and management
+interface key-mgmt {
+    use types.{crypto-error, result};
+
+    /// Key derivation function types
+    enum kdf-type {
+        hkdf-sha256,
+        pbkdf2-sha256,
+    }
+
+    /// Derive a key from input material
+    derive-key: func(
+        kdf: kdf-type,
+        input: list<u8>,
+        salt: list<u8>,
+        info: list<u8>,
+        output-length: u32
+    ) -> result<list<u8>>;
+
+    /// Generate cryptographically secure random bytes
+    random-bytes: func(length: u32) -> result<list<u8>>;
+}
+
+/// Main OpenABE world
+world openabe {
+    /// Library initialization
+    export init: func() -> result<_, string>;
+    export shutdown: func();
+
+    /// Export all interfaces
+    export abe;
+    export ma-abe;
+    export pke;
+    export pksig;
+    export ske;
+    export key-mgmt;
+}
+
+/// Client world for using OpenABE
+world openabe-client {
+    /// Import OpenABE interfaces
+    import abe;
+    import ma-abe;
+    import pke;
+    import pksig;
+    import ske;
+    import key-mgmt;
+}

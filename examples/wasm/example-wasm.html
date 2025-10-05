@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenABE WebAssembly Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .output {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            min-height: 60px;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OpenABE WebAssembly Demo</h1>
+
+        <div class="section">
+            <h2>Setup</h2>
+            <button id="initBtn" onclick="initializeOpenABE()">Initialize OpenABE</button>
+            <button id="generateParamsBtn" onclick="generateParams()" disabled>Generate Parameters</button>
+            <p id="statusMsg" class="info">Click "Initialize OpenABE" to start</p>
+        </div>
+
+        <div class="section">
+            <h2>Key Generation (CP-ABE)</h2>
+            <label for="attributes">Attributes (pipe-separated):</label>
+            <input type="text" id="attributes" placeholder="department:engineering|role:developer|clearance:secret" value="department:engineering|role:developer">
+
+            <label for="keyId">Key ID:</label>
+            <input type="text" id="keyId" placeholder="user-key-1" value="user-key-1">
+
+            <button onclick="generateKey()" disabled id="genKeyBtn">Generate Key</button>
+            <p id="keyGenMsg"></p>
+        </div>
+
+        <div class="section">
+            <h2>Encryption</h2>
+            <label for="policy">Access Policy:</label>
+            <input type="text" id="policy" placeholder="department:engineering and role:developer" value="department:engineering and role:developer">
+
+            <label for="plaintext">Plaintext:</label>
+            <textarea id="plaintext" rows="3" placeholder="Enter message to encrypt">This is a secret message protected by ABE!</textarea>
+
+            <button onclick="encryptData()" disabled id="encryptBtn">Encrypt</button>
+
+            <label>Ciphertext (Base64):</label>
+            <div id="ciphertext" class="output">Ciphertext will appear here...</div>
+        </div>
+
+        <div class="section">
+            <h2>Decryption</h2>
+            <label for="decKeyId">Key ID for Decryption:</label>
+            <input type="text" id="decKeyId" placeholder="user-key-1" value="user-key-1">
+
+            <button onclick="decryptData()" disabled id="decryptBtn">Decrypt</button>
+
+            <label>Decrypted Plaintext:</label>
+            <div id="decrypted" class="output">Decrypted message will appear here...</div>
+        </div>
+
+        <div class="section">
+            <h2>Export/Import</h2>
+            <button onclick="exportPublicParams()" disabled id="exportPubBtn">Export Public Parameters</button>
+            <button onclick="exportSecretParams()" disabled id="exportSecBtn">Export Secret Parameters</button>
+
+            <label>Exported Parameters (Base64):</label>
+            <div id="exportedParams" class="output">Exported parameters will appear here...</div>
+        </div>
+    </div>
+
+    <script src="openabe-wrapper.js"></script>
+    <script>
+        let wasmModule = null;
+        let cpabe = null;
+        let currentCiphertext = null;
+
+        async function initializeOpenABE() {
+            try {
+                document.getElementById('statusMsg').textContent = 'Loading WASM module...';
+
+                // Load the WASM module
+                const response = await fetch('openabe.wasm');
+                const wasmBytes = await response.arrayBuffer();
+                const wasmResult = await WebAssembly.instantiate(wasmBytes);
+
+                wasmModule = wasmResult.instance.exports;
+
+                // Initialize OpenABE
+                initOpenABE(wasmModule);
+
+                // Create CP-ABE context
+                cpabe = new OpenABEContext(wasmModule, 'CP-ABE');
+
+                document.getElementById('statusMsg').textContent = 'OpenABE initialized successfully!';
+                document.getElementById('statusMsg').className = 'success';
+                document.getElementById('generateParamsBtn').disabled = false;
+                document.getElementById('initBtn').disabled = true;
+
+            } catch (error) {
+                document.getElementById('statusMsg').textContent = 'Error: ' + error.message;
+                document.getElementById('statusMsg').className = 'error';
+            }
+        }
+
+        function generateParams() {
+            try {
+                cpabe.generateParams();
+                document.getElementById('statusMsg').textContent = 'System parameters generated!';
+                document.getElementById('statusMsg').className = 'success';
+
+                // Enable key generation and encryption
+                document.getElementById('genKeyBtn').disabled = false;
+                document.getElementById('encryptBtn').disabled = false;
+                document.getElementById('exportPubBtn').disabled = false;
+                document.getElementById('exportSecBtn').disabled = false;
+                document.getElementById('generateParamsBtn').disabled = true;
+
+            } catch (error) {
+                document.getElementById('statusMsg').textContent = 'Error: ' + error.message;
+                document.getElementById('statusMsg').className = 'error';
+            }
+        }
+
+        function generateKey() {
+            try {
+                const attributes = document.getElementById('attributes').value;
+                const keyId = document.getElementById('keyId').value;
+
+                if (!attributes || !keyId) {
+                    alert('Please enter attributes and key ID');
+                    return;
+                }
+
+                cpabe.keygen(attributes, keyId);
+
+                document.getElementById('keyGenMsg').textContent =
+                    `Key "${keyId}" generated successfully with attributes: ${attributes}`;
+                document.getElementById('keyGenMsg').className = 'success';
+                document.getElementById('decryptBtn').disabled = false;
+
+            } catch (error) {
+                document.getElementById('keyGenMsg').textContent = 'Error: ' + error.message;
+                document.getElementById('keyGenMsg').className = 'error';
+            }
+        }
+
+        function encryptData() {
+            try {
+                const policy = document.getElementById('policy').value;
+                const plaintext = document.getElementById('plaintext').value;
+
+                if (!policy || !plaintext) {
+                    alert('Please enter policy and plaintext');
+                    return;
+                }
+
+                const ciphertext = cpabe.encrypt(policy, plaintext);
+                currentCiphertext = ciphertext;
+
+                // Convert to base64 for display
+                const base64 = btoa(String.fromCharCode.apply(null, ciphertext));
+                document.getElementById('ciphertext').textContent = base64;
+
+            } catch (error) {
+                document.getElementById('ciphertext').textContent = 'Error: ' + error.message;
+                document.getElementById('ciphertext').className = 'output error';
+            }
+        }
+
+        function decryptData() {
+            try {
+                const keyId = document.getElementById('decKeyId').value;
+
+                if (!keyId || !currentCiphertext) {
+                    alert('Please encrypt data first and provide a key ID');
+                    return;
+                }
+
+                const plaintext = cpabe.decrypt(keyId, currentCiphertext);
+
+                if (plaintext === null) {
+                    document.getElementById('decrypted').textContent =
+                        'Decryption failed: Key does not satisfy policy';
+                    document.getElementById('decrypted').className = 'output error';
+                } else {
+                    const text = new TextDecoder().decode(plaintext);
+                    document.getElementById('decrypted').textContent = text;
+                    document.getElementById('decrypted').className = 'output success';
+                }
+
+            } catch (error) {
+                document.getElementById('decrypted').textContent = 'Error: ' + error.message;
+                document.getElementById('decrypted').className = 'output error';
+            }
+        }
+
+        function exportPublicParams() {
+            try {
+                const params = cpabe.exportPublicParams();
+                const base64 = btoa(String.fromCharCode.apply(null, params));
+                document.getElementById('exportedParams').textContent =
+                    'Public Parameters (Base64):\n' + base64;
+            } catch (error) {
+                document.getElementById('exportedParams').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        function exportSecretParams() {
+            try {
+                const params = cpabe.exportSecretParams();
+                const base64 = btoa(String.fromCharCode.apply(null, params));
+                document.getElementById('exportedParams').textContent =
+                    'Secret Parameters (Base64):\n' + base64;
+            } catch (error) {
+                document.getElementById('exportedParams').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (cpabe) {
+                cpabe.destroy();
+                shutdownOpenABE(wasmModule);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -96,9 +96,14 @@ else
     endif
     ifeq ($(OS_NAME), Darwin)
        RELIC_OS = MACOSX
-       # Force x86_64 architecture for Rosetta compatibility
-       ARCH_FLAG = x86_64
-       RELIC_ARCH = X64
+       # Detect native architecture (arm64 or x86_64)
+       # Can be overridden: make ARCH_FLAG=x86_64 for Rosetta builds
+       ARCH_FLAG := $(shell uname -m)
+       ifeq ($(ARCH_FLAG), arm64)
+           RELIC_ARCH = ARM
+       else
+           RELIC_ARCH = X64
+       endif
        SHFLAGS = -dynamiclib -current_version 1.0 -compatibility_version 1.0 -arch $(ARCH_FLAG)
        SHLIB = dylib
        GTESTEXT = 0.$(SHLIB)
@@ -109,12 +114,20 @@ else
        # include the clang C++ standard library (as a result, enable TR1_TUPLE flag)
        CXXFLAGS += -stdlib=libc++ -DGTEST_USE_OWN_TR1_TUPLE=1 -Wno-deprecated
        # (Option to use GMP with OpenSSL?): -DOPENSSL_USE_GMP -lgmp
-       # OpenSSL 1.1.1 doesn't have darwin64-arm64-cc, but darwin64-x86_64-cc works
-       # when combined with the native clang compiler which auto-detects arm64
+       # OpenSSL 1.1.1 doesn't have darwin64-arm64-cc target
+       # Use darwin64-x86_64-cc with appropriate -arch flag
        OPENSSL_CONFIG := Configure darwin64-x86_64-cc no-asm shared
        ADD_CFLAGS += -Wno-implicit-function-declaration -Wno-macro-redefined
     endif
-    # TODO: add check for ARM, etc
+endif
+
+# WebAssembly/WASI target configuration
+# Note: For WASM builds, use the dedicated build-deps-wasm.sh, build-openabe-wasm.sh,
+# and build-cli-wasm.sh scripts instead of the standard Makefile system.
+# WASM uses WASI-SDK toolchain and requires different compiler/linker flags.
+ifeq ($(ARCH_TARGET), wasm)
+    $(info Building for WebAssembly/WASI - use build-*-wasm.sh scripts)
+    RELIC_ARCH = WASM
 endif
 
 PTHREAD_LIB = -lpthread

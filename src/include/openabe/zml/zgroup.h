@@ -34,7 +34,11 @@
 #ifndef __ZGROUP_H__
 #define __ZGROUP_H__
 
+#ifdef __wasm__
+#include <gmp.h>
+#else
 #include <gmpxx.h>
+#endif
 
 ///
 /// @class  ZGroup

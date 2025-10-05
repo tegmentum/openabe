@@ -32,10 +32,13 @@ void zml_init() {
 }
 
 void zml_clean() {
-#if !defined(BP_WITH_OPENSSL)
+#if !defined(BP_WITH_OPENSSL) && !defined(__wasm__)
   core_clean();
-  ec_core_clean();
+  /* ec_core_clean() doesn't exist in RELIC 0.5.0 */
 #endif
+  // WASM FIX: Skip RELIC cleanup in WASM builds
+  // In WASM, the entire module instance is destroyed after execution,
+  // so explicit cleanup is unnecessary and causes traps
 }
 
 #if !defined(BP_WITH_OPENSSL)

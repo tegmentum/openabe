@@ -110,10 +110,18 @@ typedef enum _zGroupType {
 
 // Macros
 
+#ifdef __wasm__
+// WASM-compatible versions without exceptions
+#define ASSERT_GROUP(G, A, B)   if ( (A) != (G) ||  (B) != (G) ) { fprintf(stderr, "%s:%s:%d: ASSERT_GROUP failed\n", __FILE__, __FUNCTION__, __LINE__); abort(); }
+#define ASSERT_RNG(R)			if ( (R) < 1 ) { fprintf(stderr, "%s:%s:%d: ASSERT_RNG failed\n", __FILE__, __FUNCTION__, __LINE__); abort(); }
+#define ASSERT_PAIRING(P)       if ( (P) == NULL ) { fprintf(stderr, "%s:%s:%d: ASSERT_PAIRING failed\n", __FILE__, __FUNCTION__, __LINE__); abort(); }
+#define ASSERT_NOTNULL(A)		if ( (A) == NULL ) { fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL failed\n", __FILE__, __FUNCTION__, __LINE__); abort(); }
+#else
 #define ASSERT_GROUP(G, A, B)   if ( (A) != (G) ||  (B) != (G) ) throw oabe::OpenABE_ERROR_WRONG_GROUP;
 #define ASSERT_RNG(R)			if ( (R) < 1 ) throw oabe::OpenABE_ERROR_RAND_INSUFFICIENT;
 #define ASSERT_PAIRING(P)       if ( (P) == NULL ) throw oabe::OpenABE_ERROR_WRONG_GROUP;
 #define ASSERT_NOTNULL(A)		if ( (A) == NULL ) throw oabe::OpenABE_ERROR_INVALID_INPUT;
+#endif
 #define ASSERT_MESSAGE(A, B, C)  if ( (A) == false ) { string tmp_s = B; fprintf(stderr, "%s:%s:%d: %s - '%s'\n", __FILE__, __FUNCTION__, __LINE__, tmp_s.c_str(), OpenABE_errorToString(C)); throw C; }
 #define ASSERT(A, B)			if ( (A) == false ) { fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(B)); throw B; }
 #define THROW_ERROR(B)          fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(B)); throw B;

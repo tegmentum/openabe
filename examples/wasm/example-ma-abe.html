@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Authority ABE Demo - OpenABE WASM</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #2196F3;
+            padding-bottom: 10px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .authority {
+            padding: 15px;
+            background: #f0f7ff;
+            border-radius: 4px;
+            border: 2px solid #2196F3;
+        }
+        .authority h3 {
+            margin-top: 0;
+            color: #2196F3;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0b7dda;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .output {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            min-height: 40px;
+            font-size: 12px;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+        .scenario {
+            background: #fff3cd;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Multi-Authority ABE WebAssembly Demo</h1>
+
+        <div class="scenario">
+            <h3>📖 Scenario</h3>
+            <p>
+                This demo shows how Multi-Authority ABE allows different organizations to independently
+                manage their own attributes without coordination. For example:
+            </p>
+            <ul>
+                <li><strong>Government:</strong> Manages age verification (age:over18, age:over21)</li>
+                <li><strong>University:</strong> Manages academic credentials (student, faculty, dept:cs)</li>
+            </ul>
+            <p>
+                Users can obtain keys from multiple authorities and decrypt content that requires
+                attributes from different authorities (e.g., "age:over21 AND student").
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>1. Initialize System</h2>
+            <button id="initBtn" onclick="initializeMABE()">Initialize MA-ABE</button>
+            <button id="setupGlobalBtn" onclick="setupGlobalParams()" disabled>Setup Global Parameters</button>
+            <p id="statusMsg" class="info">Click "Initialize MA-ABE" to start</p>
+        </div>
+
+        <div class="grid">
+            <div class="authority">
+                <h3>🏛️ Government Authority</h3>
+                <button onclick="setupAuthority('gov')" disabled id="setupGovBtn">Setup Authority</button>
+                <p id="govStatus"></p>
+
+                <h4>Issue Key to User</h4>
+                <label>Attributes:</label>
+                <input type="text" id="govAttrs" value="age:over21|citizenship:us" placeholder="age:over21|citizenship:us">
+
+                <label>User ID:</label>
+                <input type="text" id="govUserId" value="alice" placeholder="alice">
+
+                <button onclick="issueKey('gov')" disabled id="issueGovBtn">Issue Key</button>
+                <div id="govKeyStatus" class="output"></div>
+            </div>
+
+            <div class="authority">
+                <h3>🎓 University Authority</h3>
+                <button onclick="setupAuthority('university')" disabled id="setupUniBtn">Setup Authority</button>
+                <p id="universityStatus"></p>
+
+                <h4>Issue Key to User</h4>
+                <label>Attributes:</label>
+                <input type="text" id="uniAttrs" value="student|dept:cs|year:senior" placeholder="student|dept:cs">
+
+                <label>User ID:</label>
+                <input type="text" id="uniUserId" value="alice" placeholder="alice">
+
+                <button onclick="issueKey('university')" disabled id="issueUniBtn">Issue Key</button>
+                <div id="uniKeyStatus" class="output"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>2. Encrypt Data (Cross-Authority Policy)</h2>
+            <label>Access Policy (combines attributes from both authorities):</label>
+            <select id="policySelect" onchange="updatePolicy()">
+                <option value="age:over21 and student">Drinking age student (age:over21 AND student)</option>
+                <option value="citizenship:us and dept:cs">US CS student (citizenship:us AND dept:cs)</option>
+                <option value="(age:over21 or student) and citizenship:us">US citizen who is 21+ or student</option>
+                <option value="custom">Custom policy...</option>
+            </select>
+            <input type="text" id="customPolicy" placeholder="Enter custom policy..." style="display:none;">
+
+            <label>Plaintext Message:</label>
+            <textarea id="maPlaintext" rows="2">This content requires credentials from multiple authorities!</textarea>
+
+            <button onclick="encryptMABE()" disabled id="encryptMABtn">Encrypt</button>
+
+            <label>Ciphertext:</label>
+            <div id="maCiphertext" class="output">Ciphertext will appear here...</div>
+        </div>
+
+        <div class="section">
+            <h2>3. Decrypt with Multi-Authority Keys</h2>
+            <label>User to decrypt (must have keys from both authorities):</label>
+            <input type="text" id="decryptUser" value="alice" placeholder="alice">
+
+            <button onclick="decryptMABE()" disabled id="decryptMABtn">Decrypt</button>
+
+            <label>Decrypted Message:</label>
+            <div id="maDecrypted" class="output">Decrypted message will appear here...</div>
+        </div>
+
+        <div class="section">
+            <h2>Key Management</h2>
+            <button onclick="exportUserKeys()" disabled id="exportKeysBtn">Export User Keys</button>
+            <button onclick="deleteAllKeys()" disabled id="deleteKeysBtn">Delete All Keys</button>
+            <div id="keyMgmtStatus" class="output">Key management status...</div>
+        </div>
+    </div>
+
+    <script src="openabe-wrapper.js"></script>
+    <script>
+        let wasmModule = null;
+        let maabe = null;
+        let currentCiphertext = null;
+        let authorities = {
+            gov: { setup: false },
+            university: { setup: false }
+        };
+
+        async function initializeMABE() {
+            try {
+                document.getElementById('statusMsg').textContent = 'Loading WASM module...';
+
+                const response = await fetch('openabe.wasm');
+                const wasmBytes = await response.arrayBuffer();
+                const wasmResult = await WebAssembly.instantiate(wasmBytes);
+
+                wasmModule = wasmResult.instance.exports;
+                initOpenABE(wasmModule);
+
+                // Create MA-ABE context
+                maabe = new OpenABEContext(wasmModule, 'MA-ABE');
+
+                document.getElementById('statusMsg').textContent = 'MA-ABE initialized successfully!';
+                document.getElementById('statusMsg').className = 'success';
+                document.getElementById('setupGlobalBtn').disabled = false;
+                document.getElementById('initBtn').disabled = true;
+
+            } catch (error) {
+                document.getElementById('statusMsg').textContent = 'Error: ' + error.message;
+                document.getElementById('statusMsg').className = 'error';
+            }
+        }
+
+        function setupGlobalParams() {
+            try {
+                maabe.generateParams();
+
+                document.getElementById('statusMsg').textContent = 'Global parameters generated!';
+                document.getElementById('statusMsg').className = 'success';
+
+                document.getElementById('setupGovBtn').disabled = false;
+                document.getElementById('setupUniBtn').disabled = false;
+                document.getElementById('setupGlobalBtn').disabled = true;
+
+            } catch (error) {
+                document.getElementById('statusMsg').textContent = 'Error: ' + error.message;
+                document.getElementById('statusMsg').className = 'error';
+            }
+        }
+
+        function setupAuthority(authId) {
+            try {
+                // In a real scenario, each authority would:
+                // 1. Generate their own params
+                // 2. Export and distribute their public params
+                // Here we simulate this by marking the authority as setup
+
+                authorities[authId].setup = true;
+
+                const statusEl = document.getElementById(authId + 'Status');
+                statusEl.textContent = `✓ ${authId} authority setup complete`;
+                statusEl.className = 'success';
+
+                document.getElementById('setup' + (authId === 'gov' ? 'Gov' : 'Uni') + 'Btn').disabled = true;
+                document.getElementById('issue' + (authId === 'gov' ? 'Gov' : 'Uni') + 'Btn').disabled = false;
+
+                // Enable encryption if both authorities are setup
+                if (authorities.gov.setup && authorities.university.setup) {
+                    document.getElementById('encryptMABtn').disabled = false;
+                    document.getElementById('exportKeysBtn').disabled = false;
+                    document.getElementById('deleteKeysBtn').disabled = false;
+                }
+
+            } catch (error) {
+                const statusEl = document.getElementById(authId + 'Status');
+                statusEl.textContent = 'Error: ' + error.message;
+                statusEl.className = 'error';
+            }
+        }
+
+        function issueKey(authId) {
+            try {
+                const attrs = document.getElementById(authId + 'Attrs').value;
+                const userId = document.getElementById(authId + 'UserId').value;
+
+                if (!attrs || !userId) {
+                    alert('Please enter attributes and user ID');
+                    return;
+                }
+
+                // Generate key with authority ID
+                const keyId = `${userId}_${authId}`;
+                const gid = userId; // Global user ID
+                maabe.keygen(attrs, keyId, authId, gid);
+
+                const statusEl = document.getElementById(authId + 'KeyStatus');
+                statusEl.textContent = `✓ Key issued to ${userId}\nAttributes: ${attrs}\nKey ID: ${keyId}`;
+                statusEl.className = 'output success';
+
+                // Enable decryption if user has keys from both authorities
+                const otherAuth = authId === 'gov' ? 'university' : 'gov';
+                const otherUserId = document.getElementById(otherAuth + 'UserId').value;
+                if (userId === otherUserId && userId) {
+                    document.getElementById('decryptMABtn').disabled = false;
+                }
+
+            } catch (error) {
+                const statusEl = document.getElementById(authId + 'KeyStatus');
+                statusEl.textContent = 'Error: ' + error.message;
+                statusEl.className = 'output error';
+            }
+        }
+
+        function updatePolicy() {
+            const select = document.getElementById('policySelect');
+            const customInput = document.getElementById('customPolicy');
+
+            if (select.value === 'custom') {
+                customInput.style.display = 'block';
+            } else {
+                customInput.style.display = 'none';
+            }
+        }
+
+        function getPolicy() {
+            const select = document.getElementById('policySelect');
+            if (select.value === 'custom') {
+                return document.getElementById('customPolicy').value;
+            }
+            return select.value;
+        }
+
+        function encryptMABE() {
+            try {
+                const policy = getPolicy();
+                const plaintext = document.getElementById('maPlaintext').value;
+
+                if (!policy || !plaintext) {
+                    alert('Please enter policy and plaintext');
+                    return;
+                }
+
+                const ciphertext = maabe.encrypt(policy, plaintext);
+                currentCiphertext = ciphertext;
+
+                const base64 = btoa(String.fromCharCode.apply(null, ciphertext));
+                document.getElementById('maCiphertext').textContent =
+                    `Policy: ${policy}\n\nCiphertext (Base64):\n${base64.substring(0, 200)}...`;
+
+            } catch (error) {
+                document.getElementById('maCiphertext').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        function decryptMABE() {
+            try {
+                const userId = document.getElementById('decryptUser').value;
+
+                if (!userId || !currentCiphertext) {
+                    alert('Please encrypt data first and provide a user ID');
+                    return;
+                }
+
+                // User needs keys from both authorities
+                // In MA-ABE, the system combines all keys for the user
+                const keyId = `${userId}_combined`; // This would be the merged key
+
+                const plaintext = maabe.decrypt(keyId, currentCiphertext);
+
+                if (plaintext === null) {
+                    document.getElementById('maDecrypted').textContent =
+                        '❌ Decryption failed: User does not satisfy the policy\n\n' +
+                        'Make sure the user has obtained keys from all required authorities.';
+                    document.getElementById('maDecrypted').className = 'output error';
+                } else {
+                    const text = new TextDecoder().decode(plaintext);
+                    document.getElementById('maDecrypted').textContent =
+                        `✓ Decryption successful!\n\nMessage: ${text}`;
+                    document.getElementById('maDecrypted').className = 'output success';
+                }
+
+            } catch (error) {
+                document.getElementById('maDecrypted').textContent = 'Error: ' + error.message;
+                document.getElementById('maDecrypted').className = 'output error';
+            }
+        }
+
+        function exportUserKeys() {
+            try {
+                const userId = document.getElementById('decryptUser').value || 'alice';
+
+                const govKeyId = `${userId}_gov`;
+                const uniKeyId = `${userId}_university`;
+
+                const govKey = maabe.exportUserKey(govKeyId);
+                const uniKey = maabe.exportUserKey(uniKeyId);
+
+                const govKeyB64 = btoa(String.fromCharCode.apply(null, govKey));
+                const uniKeyB64 = btoa(String.fromCharCode.apply(null, uniKey));
+
+                document.getElementById('keyMgmtStatus').textContent =
+                    `✓ Keys exported for user: ${userId}\n\n` +
+                    `Government key (${govKey.length} bytes):\n${govKeyB64.substring(0, 100)}...\n\n` +
+                    `University key (${uniKey.length} bytes):\n${uniKeyB64.substring(0, 100)}...`;
+
+            } catch (error) {
+                document.getElementById('keyMgmtStatus').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        function deleteAllKeys() {
+            try {
+                const userId = document.getElementById('decryptUser').value || 'alice';
+
+                const deleted1 = maabe.deleteKey(`${userId}_gov`);
+                const deleted2 = maabe.deleteKey(`${userId}_university`);
+
+                document.getElementById('keyMgmtStatus').textContent =
+                    `Keys deleted for ${userId}:\n` +
+                    `Government key: ${deleted1 ? 'deleted' : 'not found'}\n` +
+                    `University key: ${deleted2 ? 'deleted' : 'not found'}`;
+
+                document.getElementById('decryptMABtn').disabled = true;
+
+            } catch (error) {
+                document.getElementById('keyMgmtStatus').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        window.addEventListener('beforeunload', () => {
+            if (maabe) {
+                maabe.destroy();
+                shutdownOpenABE(wasmModule);
+            }
+        });
+    </script>
+</body>
+</html>

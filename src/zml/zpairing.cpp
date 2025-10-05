@@ -150,7 +150,13 @@ OpenABEPairing::OpenABEPairing(const OpenABEPairing &copyFrom) : ZObject()
  */
 OpenABEPairing::~OpenABEPairing()
 {
+#ifndef __wasm__
   zml_bignum_free(order);
+#else
+  // WASM FIX: Skip RELIC bignum cleanup in WASM builds
+  // The entire WASM module instance is destroyed after execution,
+  // so explicit cleanup is unnecessary and causes traps
+#endif
   this->bpgroup.reset();
 }
 
