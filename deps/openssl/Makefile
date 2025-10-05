@@ -13,7 +13,7 @@ DEST_INCLUDEDIR := $(DEPS_INSTALL_ZROOT)/include
 openssl-${VERSION}/.built: openssl-${VERSION}
 	cd $<; \
 	./${OPENSSL_CONFIG} --prefix=$(DEPS_INSTALL_ZROOT) && \
-	make && \
+	make CNF_CFLAGS="-arch arm64" && \
 	make install_sw && \
 	touch .built
 

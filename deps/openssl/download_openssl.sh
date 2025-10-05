@@ -2,9 +2,9 @@
 
 CMD=$1
 FORMAT=tar.gz
-# commit as of 4/13/2018
-# comment 'make update'
-COMMIT=560096f804a3712eea161726a8f085beefe8838a
+# Use OpenSSL 1.1.1 release tag (has HKDF KDF support)
+# Updated for arm64 support
+COMMIT=OpenSSL_1_1_1
 
 # openssl with BP support
 if [[ $CMD == "with-bp" ]]; then
