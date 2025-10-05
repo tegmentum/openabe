@@ -8,6 +8,8 @@ LDLIBS ?= -lgtest -lpthread
 DEPS_INSTALL_ZROOT = $(ZROOT)/deps/root
 OABE_LIB_ROOT = $(ZROOT)/root/lib
 INCLUDE_ROOT = $(ZROOT)/root/include
+# For x86_64 builds, don't use Homebrew (which may be ARM64)
+# Instead, libraries should be built from source in deps/
 LOCAL_LIB_ROOT ?= /usr/local/lib
 LOCAL_INCLUDE ?= /usr/local/include
 LOCAL_INSTALL_BIN ?= /usr/local/bin
@@ -42,7 +44,8 @@ else
 endif
 
 # Set shared lib extension for each OS
-DEPS_PACKAGES = $(if $(USE_DEPS),$(USE_DEPS),relic openssl gtest)
+# Note: gmp must be built before relic
+DEPS_PACKAGES = $(if $(USE_DEPS),$(USE_DEPS),gmp relic openssl gtest)
 ADD_CFLAGS :=
 OS_CXXFLAGS :=
 WITH_BP := 
@@ -88,12 +91,15 @@ else
     endif
     ifeq ($(OS_NAME), Darwin)
        RELIC_OS = MACOSX
-       SHFLAGS = -dynamiclib -current_version 1.0 -compatibility_version 1.0
+       # Force x86_64 architecture for Rosetta compatibility
+       ARCH_FLAG = x86_64
+       RELIC_ARCH = X64
+       SHFLAGS = -dynamiclib -current_version 1.0 -compatibility_version 1.0 -arch $(ARCH_FLAG)
        SHLIB = dylib
        GTESTEXT = 0.$(SHLIB)
        # pull in headers installed via brew (for gmp/relic/openssl)
-       CCFLAGS += -fPIC
-       CXXFLAGS += -I$(LOCAL_INCLUDE) $(OS_CXXFLAGS)
+       CCFLAGS += -fPIC -arch $(ARCH_FLAG)
+       CXXFLAGS += -I$(LOCAL_INCLUDE) $(OS_CXXFLAGS) -arch $(ARCH_FLAG)
        # include the clang C++ standard library (as a result, enable TR1_TUPLE flag)
        CXXFLAGS += -stdlib=libc++ -DGTEST_USE_OWN_TR1_TUPLE=1 -Wno-deprecated
        # (Option to use GMP with OpenSSL?): -DOPENSSL_USE_GMP -lgmp
@@ -124,6 +130,9 @@ CXXFLAGS += -g -O2
 # CXX="afl-clang++"
 
 LDFLAGS += -L$(DEPS_INSTALL_ZROOT)/lib -L$(OABE_LIB_ROOT) -L$(LOCAL_LIB_ROOT)
+ifeq ($(OS_NAME), Darwin)
+  LDFLAGS += -arch $(ARCH_FLAG)
+endif
 
 # Zeutro Math library config: RELIC vs OPENSSL
 # Look for environment variable ZML_LIB=with_openssl
