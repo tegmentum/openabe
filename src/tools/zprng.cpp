@@ -65,16 +65,16 @@ static void AesEvpBlockEncrypt(const EVP_CIPHER *cipher, const uint8_t* key,
     // note that cipher AND key must be in sync (key len should be appropriate input size of
     // cipher (e.g., 128-bits by default)
     EVP_EncryptInit_ex (ctx, cipher, NULL, (uint8_t*)key, NULL);
-    
-    int olen = 512, tmp_len, out_len;
+
+    int olen = 512, tmp_len = 0, out_len = 0;
     uint8_t out[olen];
     memset(out, 0, olen);
     EVP_EncryptUpdate(ctx, out, &tmp_len, (uint8_t*) pl_ptr, (int)pl_len);
 
     EVP_EncryptFinal_ex(ctx, out + tmp_len, &out_len);
-    // check that tmp_len == out_len
-    // copy back the output ciphertext
-    memcpy(ct_ptr, out, out_len);
+    // Total encrypted bytes is tmp_len + out_len
+    // For ECB with no padding and block-aligned data, out_len will be 0
+    memcpy(ct_ptr, out, tmp_len + out_len);
     // cleanup memory
     EVP_CIPHER_CTX_free(ctx);
 }

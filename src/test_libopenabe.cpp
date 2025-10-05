@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <assert.h>
@@ -1161,6 +1162,15 @@ bool CTR_DRBG_NIST_Test(int count, const uint8_t *entropy_source_nopr,
     return true;
   } else {
     cerr << "FAILED: did not get expected drbg output!" << endl;
+    cerr << "Expected: ";
+    for (int i = 0; i < 16; i++) {
+      cerr << std::hex << std::setfill('0') << std::setw(2) << (int)result_nopr[i];
+    }
+    cerr << endl << "Got:      ";
+    for (int i = 0; i < 16; i++) {
+      cerr << std::hex << std::setfill('0') << std::setw(2) << (int)buf[i];
+    }
+    cerr << std::dec << endl;
     return false;
   }
 }
