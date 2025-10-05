@@ -68,8 +68,12 @@ OpenABEPKey::OpenABEPKey(const EC_KEY *ec_key, bool isPrivate, EC_GROUP *group)
   // check whether private or public key
   if (this->isPrivate) {
     // set as the EC_KEY (private key) of the pkey
-    // no need to copy since it'll be owned by the pkey
-    EVP_PKEY_assign_EC_KEY(this->pkey, ec_key);
+    // EVP_PKEY_set1_EC_KEY increments reference count
+    // Note: const_cast needed because OpenSSL 3.x API requires non-const EC_KEY*
+    if (!EVP_PKEY_set1_EC_KEY(this->pkey, const_cast<EC_KEY*>(ec_key))) {
+      error_msg = "EVP_PKEY_set1_EC_KEY";
+      goto error;
+    }
   } else {
     ASSERT_NOTNULL(group);
     // create a new EC_GROUP from the group of eckey, this
@@ -95,7 +99,12 @@ OpenABEPKey::OpenABEPKey(const EC_KEY *ec_key, bool isPrivate, EC_GROUP *group)
     }
 
     // set the EC_KEY field of the EVP_PKEY
-    EVP_PKEY_assign_EC_KEY(this->pkey, new_eckey);
+    if (!EVP_PKEY_set1_EC_KEY(this->pkey, new_eckey)) {
+      error_msg = "EVP_PKEY_set1_EC_KEY";
+      goto error;
+    }
+    // Free new_eckey since set1 increments reference count
+    EC_KEY_free(new_eckey);
     if (new_group != NULL) {
       EC_GROUP_free(new_group);
     }
