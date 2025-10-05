@@ -91,12 +91,16 @@ void g1_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 #endif
 }
 
-void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p) {
+void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p, uint8_t curve_id) {
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
 #if defined(BP_WITH_OPENSSL)
   G1_ELEM_oct2point(group, p, xstr, xstr_len, NULL);
 #else
+  // Ensure correct RELIC curve parameters are set before deserialization
+  if (curve_id != 0) {
+    bp_ensure_curve_params(curve_id);
+  }
   g1_elem_in(p, xstr, xstr_len);
   ASSERT(oabe::checkRelicError(), oabe::OpenABE_ERROR_SERIALIZATION_FAILED);
 #endif
@@ -162,12 +166,16 @@ void g2_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 #endif
 }
 
-void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p) {
+void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p, uint8_t curve_id) {
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
 #if defined(BP_WITH_OPENSSL)
   G2_ELEM_oct2point(group, p, xstr, xstr_len, NULL);
 #else
+  // Ensure correct RELIC curve parameters are set before deserialization
+  if (curve_id != 0) {
+    bp_ensure_curve_params(curve_id);
+  }
   g2_elem_in(p, xstr, xstr_len);
   ASSERT(oabe::checkRelicError(), oabe::OpenABE_ERROR_SERIALIZATION_FAILED);
 #endif
@@ -191,12 +199,16 @@ void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s, gt_p
 #endif
 }
 
-void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p) {
+void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p, uint8_t curve_id) {
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
 #if defined(BP_WITH_OPENSSL)
   GT_ELEM_oct2elem(group, p, xstr, xstr_len, NULL);
 #else
+  // Ensure correct RELIC curve parameters are set before deserialization
+  if (curve_id != 0) {
+    bp_ensure_curve_params(curve_id);
+  }
   gt_elem_in(p, xstr, xstr_len);
   ASSERT(oabe::checkRelicError(), oabe::OpenABE_ERROR_SERIALIZATION_FAILED);
 #endif
@@ -855,7 +867,7 @@ void G1::deserialize(OpenABEByteString &input) {
       if (is_elem_null(this->m_G1)) {
         g1_init(GET_BP_GROUP(this->bgroup), &this->m_G1);
       }
-      g1_convert_to_point(GET_BP_GROUP(this->bgroup), g1_bytes, this->m_G1);
+      g1_convert_to_point(GET_BP_GROUP(this->bgroup), g1_bytes, this->m_G1, this->bgroup->getCurveID());
       return;
     }
   }
@@ -1064,7 +1076,7 @@ G2::deserialize(OpenABEByteString &input)
             if (is_elem_null(this->m_G2)) {
                 g2_init(GET_BP_GROUP(this->bgroup), &this->m_G2);
             }
-            g2_convert_to_point(GET_BP_GROUP(this->bgroup), g2_bytes, this->m_G2);
+            g2_convert_to_point(GET_BP_GROUP(this->bgroup), g2_bytes, this->m_G2, this->bgroup->getCurveID());
             return;
         }
     }
@@ -1273,7 +1285,7 @@ GT::deserialize(OpenABEByteString &input)
             if (is_elem_null(this->m_GT)) {
                 gt_init(GET_BP_GROUP(this->bgroup), &this->m_GT);
             }
-            gt_convert_to_point(GET_BP_GROUP(this->bgroup), gt_bytes, this->m_GT);
+            gt_convert_to_point(GET_BP_GROUP(this->bgroup), gt_bytes, this->m_GT, this->bgroup->getCurveID());
             return;
         }
     }

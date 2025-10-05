@@ -509,6 +509,35 @@ int bp_group_init(bp_group_t *group, uint8_t id) {
   return 0;
 }
 
+/* Helper function to ensure correct curve parameters are set for RELIC operations */
+void bp_ensure_curve_params(uint8_t id) {
+#if !defined(BP_WITH_OPENSSL)
+  int twist = EP_DTYPE;
+  /* Clear any previous RELIC error state */
+  ctx_t *ctx = core_get();
+  if (ctx != NULL) {
+    ctx->code = STS_OK;
+  }
+  /* Set the correct curve parameters */
+  switch (id) {
+  case OpenABE_BN_P254_ID:
+    ep_param_set(BN_P254);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BN_P256_ID:
+    ep_param_set(BN_P256);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BN_P382_ID:
+    ep_param_set(BN_P382);
+    ep2_curve_set_twist(twist);
+    break;
+  default:
+      break;
+  }
+#endif
+}
+
 void bp_get_order(bp_group_t group, bignum_t order) {
 #if defined(BP_WITH_OPENSSL)
   BP_GROUP_get_order(group, order, NULL);

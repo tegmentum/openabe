@@ -302,6 +302,7 @@ typedef fp12_t gt_ptr;
 // C helper functions to handle (OpenSSL/RELIC)
 int bp_group_init(bp_group_t *group, uint8_t id);
 void bp_get_order(bp_group_t group, bignum_t order);
+void bp_ensure_curve_params(uint8_t id);
 
 // ZML abstract methods for G1
 void g1_init(bp_group_t group, g1_ptr *e);

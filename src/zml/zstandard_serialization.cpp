@@ -264,7 +264,7 @@ void StandardPairingSerializer::deserializeG1(G1& point, OpenABEByteString& in, 
             break;
         default:
             // Legacy format
-            g1_convert_to_point(GET_BP_GROUP(point.bgroup), data, point.m_G1);
+            g1_convert_to_point(GET_BP_GROUP(point.bgroup), data, point.m_G1, point.bgroup->getCurveID());
     }
 }
 
@@ -1054,7 +1054,7 @@ void LegacySerializer::convertLegacyG1(OpenABEByteString& out, const OpenABEByte
     // Create temporary G1, deserialize from legacy, serialize to standard
     G1 temp(bgroup);
     OpenABEByteString legacy_data = in;
-    g1_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_G1);
+    g1_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_G1, bgroup->getCurveID());
     StandardPairingSerializer::serializeG1(out, temp, AUTO, true);
 }
 
@@ -1062,7 +1062,7 @@ void LegacySerializer::convertLegacyG2(OpenABEByteString& out, const OpenABEByte
                                        std::shared_ptr<BPGroup> bgroup) {
     G2 temp(bgroup);
     OpenABEByteString legacy_data = in;
-    g2_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_G2);
+    g2_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_G2, bgroup->getCurveID());
     StandardPairingSerializer::serializeG2(out, temp, AUTO, true);
 }
 
@@ -1070,7 +1070,7 @@ void LegacySerializer::convertLegacyGT(OpenABEByteString& out, const OpenABEByte
                                        std::shared_ptr<BPGroup> bgroup) {
     GT temp(bgroup);
     OpenABEByteString legacy_data = in;
-    gt_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_GT);
+    gt_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_GT, bgroup->getCurveID());
     StandardPairingSerializer::serializeGT(out, temp, GT_CYCLOTOMIC_COMPRESSED, true);
 }
 
