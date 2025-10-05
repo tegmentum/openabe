@@ -150,9 +150,9 @@ OpenABEContextPKSIG::sign(OpenABEPKey *privKey, OpenABEByteString *message, Open
     ASSERT_NOTNULL(message);
     ASSERT_NOTNULL(signature);
 
-    md = EVP_MD_CTX_create();
+    md = EVP_MD_CTX_new();
     if (!md) {
-        error_msg = "EVP_MD_CTX_create";
+        error_msg = "EVP_MD_CTX_new";
         goto out;
     }
 
@@ -191,7 +191,7 @@ OpenABEContextPKSIG::sign(OpenABEPKey *privKey, OpenABEByteString *message, Open
     signature->appendArray(sig, siglen);
 out:
     if (md) {
-        EVP_MD_CTX_destroy(md);
+        EVP_MD_CTX_free(md);
     }
 
     if(error_msg != "") {
@@ -216,9 +216,9 @@ OpenABEContextPKSIG::verify(OpenABEPKey *pubKey, OpenABEByteString *message, Ope
     ASSERT_NOTNULL(message);
     ASSERT_NOTNULL(signature);
 
-    md = EVP_MD_CTX_create();
+    md = EVP_MD_CTX_new();
     if (!md) {
-        error_msg = "EVP_MD_CTX_create";
+        error_msg = "EVP_MD_CTX_new";
         goto out;
     }
 
@@ -240,7 +240,7 @@ OpenABEContextPKSIG::verify(OpenABEPKey *pubKey, OpenABEByteString *message, Ope
 
 out:
     if (md) {
-        EVP_MD_CTX_destroy(md);
+        EVP_MD_CTX_free(md);
     }
 
     if(error_msg != "") {

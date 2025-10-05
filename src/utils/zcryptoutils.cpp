@@ -90,7 +90,7 @@ string OpenABEHashKey(const string attr_key) {
 
 void OpenABEComputeHash(OpenABEByteString& key, OpenABEByteString& input, OpenABEByteString& output) {
   string digest, error_msg = "";
-  EVP_MD_CTX *md_ctx = EVP_MD_CTX_create();
+  EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
   const EVP_MD *md = EVP_sha256();
   size_t digest_size;
 
@@ -100,7 +100,7 @@ void OpenABEComputeHash(OpenABEByteString& key, OpenABEByteString& input, OpenAB
   }
 
   if (!md_ctx) {
-	error_msg = "EVP_MD_CTX_create";
+	error_msg = "EVP_MD_CTX_new";
 	goto out;
   }
 
@@ -135,7 +135,7 @@ void OpenABEComputeHash(OpenABEByteString& key, OpenABEByteString& input, OpenAB
   output = digest;
 out:
   if (md_ctx) {
-    EVP_MD_CTX_destroy(md_ctx);
+    EVP_MD_CTX_free(md_ctx);
   }
   if (error_msg != "") {
    throw CryptoException(error_msg);
@@ -298,7 +298,7 @@ void sha256(string &digest, uint8_t *val, size_t val_len) {
 
 void sha256(string &digest, const string &value) {
   string error_msg = "";
-  EVP_MD_CTX *md_ctx = EVP_MD_CTX_create();
+  EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
   const EVP_MD *md = EVP_sha256();
   size_t digest_size;
 
@@ -337,7 +337,7 @@ void sha256(string &digest, const string &value) {
 
 out:
   if (md_ctx) {
-    EVP_MD_CTX_destroy(md_ctx);
+    EVP_MD_CTX_free(md_ctx);
   }
   if (error_msg != "") {
     throw CryptoException(error_msg);
