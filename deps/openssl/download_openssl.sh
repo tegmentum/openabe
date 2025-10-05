@@ -2,25 +2,13 @@
 
 CMD=$1
 FORMAT=tar.gz
-# Use OpenSSL 1.1.1 release tag (has HKDF KDF support)
-# Updated for arm64 support
-COMMIT=OpenSSL_1_1_1
+# Use OpenSSL 3.3.2 LTS release (has working EC support and HKDF)
+VERSION=3.3.2
+LINK=https://github.com/openssl/openssl
 
-# openssl with BP support
-if [[ $CMD == "with-bp" ]]; then
-   LINK=https://github.com/zeutro/openssl
-   VERSION=1.1.1-dev-bp
-   echo "Clone github repo @ ${LINK}"
-   git clone -b patch ${LINK} openssl-${VERSION}.git
-   cd openssl-${VERSION}.git
-else
-   LINK=https://github.com/openssl/openssl
-   VERSION=1.1.1-dev
-   echo "Clone github repo @ ${LINK}"
-   git clone ${LINK} openssl-${VERSION}.git
-   cd openssl-${VERSION}.git
-   git reset --hard ${COMMIT}
-fi
+echo "Downloading OpenSSL ${VERSION} from ${LINK}"
+git clone --depth 1 --branch openssl-${VERSION} ${LINK} openssl-${VERSION}.git
+cd openssl-${VERSION}.git
 
 OPENSSL=openssl-${VERSION}
 if [[ ! -f ./${OPENSSL}.${FORMAT} ]]; then

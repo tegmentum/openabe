@@ -14,30 +14,7 @@ LOCAL_LIB_ROOT ?= /usr/local/lib
 LOCAL_INCLUDE ?= /usr/local/include
 LOCAL_INSTALL_BIN ?= /usr/local/bin
 
-# Option to use system OpenSSL instead of building from deps/
-# Set USE_SYSTEM_OPENSSL=1 to use Homebrew/system OpenSSL (fixes EC curve issues)
-USE_SYSTEM_OPENSSL ?= 1
-
 # Include locations
-ifeq ($(USE_SYSTEM_OPENSSL), 1)
-#  When using system OpenSSL, prioritize it over deps
-#  Common includes (C/C++)
-CCFLAGS = -I$(INCLUDE_ROOT) -I$(LOCAL_INCLUDE)
-CXXFLAGS := -I$(INCLUDE_ROOT) -I$(LOCAL_INCLUDE)
-#  Local includes (for generated headers from bison/flex)
-CXXFLAGS += -I$(ZROOT)/src
-# On macOS, use Homebrew OpenSSL (has working EC support)
-ifeq ($(shell uname -s), Darwin)
-	CCFLAGS += -I/opt/homebrew/opt/openssl@3/include
-	CXXFLAGS += -I/opt/homebrew/opt/openssl@3/include
-	CCFLAGS += -I/opt/homebrew/opt/gmp/include
-	CXXFLAGS += -I/opt/homebrew/opt/gmp/include
-	SYSTEM_OPENSSL_LIBDIR = /opt/homebrew/opt/openssl@3/lib
-endif
-#  Dependencies (non-OpenSSL)
-CCFLAGS += -I$(DEPS_INSTALL_ZROOT)/include
-CXXFLAGS += -I$(DEPS_INSTALL_ZROOT)/include
-else
 #  Dependencies (C/C++) - MUST come first to override system headers (especially OpenSSL)
 CCFLAGS = -I$(DEPS_INSTALL_ZROOT)/include
 CXXFLAGS := -I$(DEPS_INSTALL_ZROOT)/include
@@ -46,11 +23,10 @@ CXXFLAGS += -I$(ZROOT)/src
 #  Common includes (C/C++)
 CCFLAGS += -I$(INCLUDE_ROOT) -I$(LOCAL_INCLUDE)
 CXXFLAGS += -I$(INCLUDE_ROOT) -I$(LOCAL_INCLUDE)
-# On macOS, add GMP from Homebrew but explicitly block OpenSSL headers from Homebrew
+# On macOS, add GMP from Homebrew
 ifeq ($(shell uname -s), Darwin)
 	CCFLAGS += -I/opt/homebrew/opt/gmp/include
 	CXXFLAGS += -I/opt/homebrew/opt/gmp/include
-endif
 endif
 
 RELIC_LIB = -lrelic -lrelic_ec
@@ -59,8 +35,8 @@ GMP_LIB = -lgmp
 SSL_LIB = -lssl
 CRYPTO_LIB = -lcrypto
 RELIC_G =
-# commit: 1e3f62a3823f7e3db9d403f724fd9d66f5b04cf8 (as of 7/18/17)
-OPENSSL_VERSION := 1.1.1-dev
+# OpenSSL 3.3.2 LTS (has working EC support, HKDF, and is actively maintained)
+OPENSSL_VERSION := 3.3.2
 
 # Set flags for C++ 11
 OLD_GPP = $(shell g++ --version | grep -q 4.6 && echo 1)
@@ -73,12 +49,8 @@ else
 endif
 
 # Set shared lib extension for each OS
-# Note: gmp must be built before relic
-ifeq ($(USE_SYSTEM_OPENSSL), 1)
-DEPS_PACKAGES = $(if $(USE_DEPS),$(USE_DEPS),gmp relic gtest)
-else
-DEPS_PACKAGES = $(if $(USE_DEPS),$(USE_DEPS),gmp relic openssl gtest)
-endif
+# Note: gmp must be built before relic, and openssl before relic
+DEPS_PACKAGES = $(if $(USE_DEPS),$(USE_DEPS),gmp openssl relic gtest)
 ADD_CFLAGS :=
 OS_CXXFLAGS :=
 WITH_BP := 
@@ -178,20 +150,9 @@ CXXFLAGS += -g -O2
 # CC="afl-clang" # for mac
 # CXX="afl-clang++"
 
-ifeq ($(USE_SYSTEM_OPENSSL), 1)
-# When using system OpenSSL, prioritize system lib paths over deps
-LDFLAGS += -L$(OABE_LIB_ROOT)
-ifeq ($(OS_NAME), Darwin)
-  LDFLAGS += -L$(SYSTEM_OPENSSL_LIBDIR)
-  LDFLAGS += -arch $(ARCH_FLAG)
-endif
-LDFLAGS += -L$(LOCAL_LIB_ROOT) -L/opt/homebrew/lib
-LDFLAGS += -L$(DEPS_INSTALL_ZROOT)/lib
-else
 LDFLAGS += -L$(DEPS_INSTALL_ZROOT)/lib -L$(OABE_LIB_ROOT) -L$(LOCAL_LIB_ROOT) -L/opt/homebrew/lib
 ifeq ($(OS_NAME), Darwin)
   LDFLAGS += -arch $(ARCH_FLAG)
-endif
 endif
 
 # Zeutro Math library config: RELIC vs OPENSSL
