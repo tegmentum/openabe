@@ -400,11 +400,78 @@ Header size: 9 bytes
 All tests completed
 ```
 
+## Point Decompression
+
+### Overview
+
+Point decompression allows recovering the full (x, y) coordinates of an elliptic curve point from its compressed representation, which stores only the x-coordinate and a single bit indicating the sign of y.
+
+### Implementation
+
+The library implements point decompression using the Tonelli-Shanks algorithm via RELIC's `fp_srt()` function:
+
+**For G1 points** (over Fp):
+1. Given compressed point: `[prefix][x]`
+2. Compute `y² = x³ + b` (for BN curves where a=0, b=3)
+3. Find `y = √(y²)` using `fp_srt()`
+4. Select correct root based on prefix:
+   - `0x02`: even y (or lexicographically smallest)
+   - `0x03`: odd y (or lexicographically largest)
+
+**For G2 points** (over Fp2):
+1. Same process but working in Fp2
+2. Uses `fp2_srt()` for square root in extension field
+3. Sign determined by imaginary component of y
+
+### Bandwidth Savings
+
+| Element | Curve | Uncompressed | Compressed | Savings |
+|---------|-------|--------------|------------|---------|
+| G1 | BN254 | 65 bytes | 33 bytes | 49% |
+| G1 | BLS12-381 | 96 bytes | 48 bytes | 50% |
+| G2 | BLS12-381 | 192 bytes | 96 bytes | 50% |
+
+### Usage Example
+
+```cpp
+// Serialize with compression
+OpenABEByteString compressed;
+StandardPairingSerializer::serializeG1_SEC1(compressed, point, true);
+// compressed.size() == 33 bytes for BN254
+
+// Decompress automatically
+G1 recovered(bgroup);
+StandardPairingSerializer::deserializeG1_SEC1(recovered, compressed);
+// recovered == point (full y-coordinate recovered)
+
+// Works with all formats
+StandardPairingSerializer::serializeG1_ZCash(compressed, point, true);
+StandardPairingSerializer::deserializeG1_ZCash(recovered, compressed);
+```
+
+### Supported Formats
+
+Point decompression is implemented for:
+- ✅ **SEC1 format**: G1 and G2 decompression
+- ✅ **ZCash BLS12-381**: G1 and G2 decompression with lexicographic ordering
+- ⚠️ **Ethereum BN254**: Uncompressed only (no compression in Ethereum format)
+
+### Technical Details
+
+**Parity vs Lexicographic Ordering:**
+- **SEC1**: Uses parity of y (even/odd)
+- **ZCash**: Uses lexicographic ordering (y > (p-1)/2 is "largest")
+
+**Algorithm**: Tonelli-Shanks square root modulo prime p
+- Time complexity: O(log² p)
+- Always succeeds for points on the curve
+- Returns `false` for invalid compressed points (x not on curve)
+
 ## Future Enhancements
 
 ### Planned Features
 
-1. **Point Decompression**: Full implementation for compressed formats
+1. ✅ **Point Decompression**: **COMPLETED** - Full implementation for SEC1 and ZCash formats
 2. **GT Cyclotomic Decompression**: Frobenius map for reconstruction
 3. **Additional Backends**: MCL, BLST support
 4. **Batch Serialization**: Optimized multi-element serialization

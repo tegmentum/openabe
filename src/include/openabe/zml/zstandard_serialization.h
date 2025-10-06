@@ -46,7 +46,7 @@ typedef enum _SerializationFormat {
     ZCASH_BLS12 = 0x02,          ///< ZCash format (for BLS12-381)
     ETHEREUM_BN254 = 0x03,       ///< Ethereum format (for BN254)
     IETF_PAIRING = 0x04,         ///< IETF draft (general pairing curves)
-    AUTO = 0xFF                  ///< Auto-select based on curve
+    FORMAT_AUTO = 0xFF           ///< Auto-select based on curve
 } SerializationFormat;
 
 /// \brief GT serialization mode
@@ -78,7 +78,7 @@ struct SerializationHeader {
 
     SerializationHeader();
     SerializationHeader(OpenABEElementType type, OpenABECurveID curve,
-                       SerializationFormat fmt = AUTO, uint8_t f = 0);
+                       SerializationFormat fmt = FORMAT_AUTO, uint8_t f = 0);
 
     void serialize(OpenABEByteString& out) const;
     bool deserialize(OpenABEByteString& in, size_t* index);
@@ -96,7 +96,7 @@ public:
                                       size_t field_size, bool big_endian = true);
 
     /// Convert big-endian bytes to field element
-    static void bytes_to_field_element(bignum_t elem, const OpenABEByteString& in,
+    static void bytes_to_field_element(bignum_t elem, OpenABEByteString& in,
                                       size_t offset = 0, bool big_endian = true);
 
     /// Get field size in bytes for curve
@@ -109,7 +109,7 @@ public:
 
     /// Serialize G1 with automatic format selection
     static void serializeG1(OpenABEByteString& out, const G1& point,
-                           SerializationFormat format = AUTO, bool with_header = true);
+                           SerializationFormat format = FORMAT_AUTO, bool with_header = true);
 
     /// Deserialize G1
     static void deserializeG1(G1& point, OpenABEByteString& in, bool has_header = true);
@@ -130,7 +130,7 @@ public:
 
     /// Serialize G2 with automatic format selection
     static void serializeG2(OpenABEByteString& out, const G2& point,
-                           SerializationFormat format = AUTO, bool with_header = true);
+                           SerializationFormat format = FORMAT_AUTO, bool with_header = true);
 
     /// Deserialize G2
     static void deserializeG2(G2& point, OpenABEByteString& in, bool has_header = true);
@@ -198,6 +198,14 @@ private:
     // Fp12 tower extraction/reconstruction
     static void extractFp12Tower(const GT& gt, bignum_t tower[12]);
     static void setGTFromFp12Tower(GT& gt, const bignum_t tower[12]);
+
+    // Point decompression helpers
+    /// Compute y from x using curve equation: y^2 = x^3 + ax + b
+    /// Returns true if successful, false if no square root exists
+    static bool decompressG1Point(const G1& point, const bignum_t x, bignum_t y, bool y_bit);
+
+    /// Compute y from x for G2 (Fp2) using curve equation
+    static bool decompressG2Point(const G2& point, const bignum_t x[2], bignum_t y[2], bool y_bit);
 };
 
 /// \brief Legacy compatibility layer

@@ -171,6 +171,74 @@ void test_gt_serialization_sizes() {
     cout << endl;
 }
 
+void test_point_compression_decompression() {
+    cout << "=== Testing Point Compression/Decompression ===" << endl;
+
+    try {
+        InitializeOpenABE();
+
+        OpenABEPairing pairing("BN254");
+
+        // Test G1 compression/decompression with SEC1 format
+        cout << "Testing G1 SEC1 compression/decompression..." << endl;
+        G1 g1_original = pairing.randomG1(nullptr);
+
+        // Serialize with compression
+        OpenABEByteString compressed_g1;
+        StandardPairingSerializer::serializeG1_SEC1(compressed_g1, g1_original, true);
+        cout << "  Compressed size: " << compressed_g1.size() << " bytes" << endl;
+        cout << "  Compressed hex (first 10 bytes): " << compressed_g1.toHex().substr(0, 20) << "..." << endl;
+
+        // Deserialize
+        G1 g1_decompressed(g1_original.bgroup);
+        StandardPairingSerializer::deserializeG1_SEC1(g1_decompressed, compressed_g1);
+
+        // Compare
+        bool g1_match = (g1_original == g1_decompressed);
+        cout << "  Round-trip match: " << (g1_match ? "SUCCESS ✓" : "FAILED ✗") << endl;
+
+        // Test uncompressed for comparison
+        OpenABEByteString uncompressed_g1;
+        StandardPairingSerializer::serializeG1_SEC1(uncompressed_g1, g1_original, false);
+        cout << "  Uncompressed size: " << uncompressed_g1.size() << " bytes" << endl;
+        cout << "  Compression ratio: " << (100.0 * compressed_g1.size() / uncompressed_g1.size()) << "%" << endl;
+        cout << endl;
+
+        // Test G1 with ZCash format
+        cout << "Testing G1 ZCash compression/decompression..." << endl;
+        OpenABEByteString zcash_compressed;
+        StandardPairingSerializer::serializeG1_ZCash(zcash_compressed, g1_original, true);
+        cout << "  ZCash compressed size: " << zcash_compressed.size() << " bytes" << endl;
+
+        G1 g1_zcash_decompressed(g1_original.bgroup);
+        StandardPairingSerializer::deserializeG1_ZCash(g1_zcash_decompressed, zcash_compressed);
+
+        bool zcash_match = (g1_original == g1_zcash_decompressed);
+        cout << "  ZCash round-trip match: " << (zcash_match ? "SUCCESS ✓" : "FAILED ✗") << endl;
+        cout << endl;
+
+        // Test G2 compression/decompression with SEC1 format
+        cout << "Testing G2 SEC1 uncompressed serialization..." << endl;
+        G2 g2_original = pairing.randomG2(nullptr);
+
+        OpenABEByteString g2_serialized;
+        StandardPairingSerializer::serializeG2_SEC1(g2_serialized, g2_original, false);
+        cout << "  G2 uncompressed size: " << g2_serialized.size() << " bytes" << endl;
+
+        G2 g2_decompressed(g2_original.bgroup);
+        StandardPairingSerializer::deserializeG2_SEC1(g2_decompressed, g2_serialized);
+
+        bool g2_match = (g2_original == g2_decompressed);
+        cout << "  G2 round-trip match: " << (g2_match ? "SUCCESS ✓" : "FAILED ✗") << endl;
+        cout << endl;
+
+        ShutdownOpenABE();
+
+    } catch (OpenABE_ERROR err) {
+        cout << "Error: " << OpenABE_errorToString(err) << endl;
+    }
+}
+
 void test_cross_format_info() {
     cout << "=== Cross-Format Compatibility Information ===" << endl;
     cout << endl;
@@ -214,6 +282,7 @@ int main(int argc, char **argv) {
     test_field_element_conversion();
     test_legacy_detection();
     test_g1_ethereum_format();
+    test_point_compression_decompression();
     test_gt_serialization_sizes();
     test_cross_format_info();
 

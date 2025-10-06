@@ -51,18 +51,18 @@ SerializationHeader::SerializationHeader(OpenABEElementType type, OpenABECurveID
 void SerializationHeader::serialize(OpenABEByteString& out) const {
     // Magic bytes
     for (int i = 0; i < 4; i++) {
-        out.appendByte(MAGIC[i]);
+        out.push_back(MAGIC[i]);
     }
     // Version
-    out.appendByte(version);
+    out.push_back(version);
     // Element type
-    out.appendByte(static_cast<uint8_t>(elementType));
+    out.push_back(static_cast<uint8_t>(elementType));
     // Curve ID
-    out.appendByte(static_cast<uint8_t>(curveID));
+    out.push_back(static_cast<uint8_t>(curveID));
     // Format
-    out.appendByte(static_cast<uint8_t>(format));
+    out.push_back(static_cast<uint8_t>(format));
     // Flags
-    out.appendByte(flags);
+    out.push_back(flags);
 }
 
 bool SerializationHeader::deserialize(OpenABEByteString& in, size_t* index) {
@@ -116,7 +116,7 @@ void StandardPairingSerializer::field_element_to_bytes(const bignum_t elem,
 }
 
 void StandardPairingSerializer::bytes_to_field_element(bignum_t elem,
-                                                       const OpenABEByteString& in,
+                                                       OpenABEByteString& in,
                                                        size_t offset,
                                                        bool big_endian) {
     size_t len = in.size() - offset;
@@ -159,8 +159,7 @@ bool StandardPairingSerializer::y_is_lexicographically_largest(const bignum_t y,
     // Y is lexicographically largest if y > (p-1)/2
     bignum_t half_p;
     zml_bignum_init(&half_p);
-    zml_bignum_copy(half_p, p);
-    zml_bignum_rshift(half_p, 1);  // half_p = p >> 1
+    zml_bignum_rshift(half_p, p, 1);  // half_p = p >> 1
 
     int result = zml_bignum_cmp(y, half_p);
     zml_bignum_free(half_p);
@@ -211,7 +210,7 @@ void StandardPairingSerializer::serializeG1(OpenABEByteString& out, const G1& po
                                            SerializationFormat format, bool with_header) {
     out.clear();
 
-    if (format == AUTO) {
+    if (format == oabe::FORMAT_AUTO) {
         format = selectFormat(point.bgroup->getCurveID());
     }
 
@@ -264,14 +263,14 @@ void StandardPairingSerializer::deserializeG1(G1& point, OpenABEByteString& in, 
             break;
         default:
             // Legacy format
-            g1_convert_to_point(GET_BP_GROUP(point.bgroup), data, point.m_G1, point.bgroup->getCurveID());
+            g1_convert_to_point(GET_BP_GROUP(point.bgroup), data, point.m_G1);
     }
 }
 
 void StandardPairingSerializer::serializeG1_SEC1(OpenABEByteString& out, const G1& point,
                                                  bool compressed) {
     if (isG1AtInfinity(point)) {
-        out.appendByte(0x00);  // Point at infinity
+        out.push_back(0x00);  // Point at infinity
         return;
     }
 
@@ -288,14 +287,14 @@ void StandardPairingSerializer::serializeG1_SEC1(OpenABEByteString& out, const G
         zml_bignum_init(&p);
         point.bgroup->getGroupOrder(p);
 
-        bool y_is_even = (zml_bignum_is_even(y) == 1);
-        out.appendByte(y_is_even ? 0x02 : 0x03);
+        bool y_is_even = (bn_is_even(y) == 1);
+        out.push_back(y_is_even ? 0x02 : 0x03);
 
         field_element_to_bytes(x, out, field_size, true);
         zml_bignum_free(p);
     } else {
         // Uncompressed: 0x04 + x + y
-        out.appendByte(0x04);
+        out.push_back(0x04);
         field_element_to_bytes(x, out, field_size, true);
         field_element_to_bytes(y, out, field_size, true);
     }
@@ -306,7 +305,7 @@ void StandardPairingSerializer::serializeG1_SEC1(OpenABEByteString& out, const G
 
 void StandardPairingSerializer::deserializeG1_SEC1(G1& point, OpenABEByteString& in) {
     if (in.size() == 0) {
-        throw OpenABE_ERROR_SERIALIZATION_FAILED;
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
     }
 
     uint8_t prefix = in.at(0);
@@ -327,7 +326,7 @@ void StandardPairingSerializer::deserializeG1_SEC1(G1& point, OpenABEByteString&
         if (in.size() != 1 + 2 * field_size) {
             zml_bignum_free(x);
             zml_bignum_free(y);
-            throw OpenABE_ERROR_SERIALIZATION_FAILED;
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
         }
 
         OpenABEByteString x_bytes, y_bytes;
@@ -338,25 +337,29 @@ void StandardPairingSerializer::deserializeG1_SEC1(G1& point, OpenABEByteString&
         bytes_to_field_element(y, y_bytes, 0, true);
 
     } else if (prefix == 0x02 || prefix == 0x03) {
-        // Compressed - need to decompress (compute y from x)
+        // Compressed - decompress (compute y from x)
         if (in.size() != 1 + field_size) {
             zml_bignum_free(x);
             zml_bignum_free(y);
-            throw OpenABE_ERROR_SERIALIZATION_FAILED;
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
         }
 
         OpenABEByteString x_bytes;
         x_bytes.appendArray(in.getInternalPtr() + 1, field_size);
         bytes_to_field_element(x, x_bytes, 0, true);
 
-        // Compute y from curve equation: y^2 = x^3 + ax + b
-        // For BN curves: y^2 = x^3 + 3
-        // TODO: Implement point decompression
-        throw OpenABE_ERROR_NOT_IMPLEMENTED;
+        // Decompress: compute y from curve equation
+        // prefix 0x02 = even y, 0x03 = odd y
+        bool y_should_be_odd = (prefix == 0x03);
+        if (!decompressG1Point(point, x, y, y_should_be_odd)) {
+            zml_bignum_free(x);
+            zml_bignum_free(y);
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        }
     } else {
         zml_bignum_free(x);
         zml_bignum_free(y);
-        throw OpenABE_ERROR_SERIALIZATION_FAILED;
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
     }
 
     setG1FromCoordinates(point, x, y);
@@ -372,9 +375,9 @@ void StandardPairingSerializer::serializeG1_ZCash(OpenABEByteString& out, const 
     if (isG1AtInfinity(point)) {
         // Compressed infinity: flags=0xC0, rest zeros
         uint8_t flags = SerializationFlags::COMPRESSION_FLAG | SerializationFlags::INFINITY_FLAG;
-        out.appendByte(flags);
+        out.push_back(flags);
         for (size_t i = 1; i < field_size; i++) {
-            out.appendByte(0x00);
+            out.push_back(0x00);
         }
         return;
     }
@@ -415,7 +418,7 @@ void StandardPairingSerializer::deserializeG1_ZCash(G1& point, OpenABEByteString
     size_t field_size = get_field_size(point.bgroup->getCurveID());
 
     if (in.size() < field_size) {
-        throw OpenABE_ERROR_SERIALIZATION_FAILED;
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
     }
 
     uint8_t flags = in.at(0);
@@ -433,18 +436,40 @@ void StandardPairingSerializer::deserializeG1_ZCash(G1& point, OpenABEByteString
         x_bytes.appendArray(in.getInternalPtr(), field_size);
         x_bytes.data()[0] &= 0x1F;  // Mask off top 3 bits
 
-        bignum_t x;
+        bignum_t x, y;
         zml_bignum_init(&x);
+        zml_bignum_init(&y);
         bytes_to_field_element(x, x_bytes, 0, true);
 
-        // TODO: Decompress point (compute y from x)
-        // For now, throw error
+        // Decompress point
+        // Y_SIGN_FLAG indicates lexicographically largest y
+        bool y_is_largest = (flags & SerializationFlags::Y_SIGN_FLAG) != 0;
+        if (!decompressG1Point(point, x, y, y_is_largest)) {
+            zml_bignum_free(x);
+            zml_bignum_free(y);
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        }
+
+        // Verify y is correctly selected
+        bignum_t p;
+        zml_bignum_init(&p);
+        point.bgroup->getGroupOrder(p);
+        bool result_is_largest = y_is_lexicographically_largest(y, p);
+
+        if (result_is_largest != y_is_largest) {
+            // Need to use the other root
+            zml_bignum_sub(y, p, y);
+        }
+
+        setG1FromCoordinates(point, x, y);
+
+        zml_bignum_free(p);
         zml_bignum_free(x);
-        throw OpenABE_ERROR_NOT_IMPLEMENTED;
+        zml_bignum_free(y);
     } else {
         // Uncompressed
         if (in.size() != 2 * field_size) {
-            throw OpenABE_ERROR_SERIALIZATION_FAILED;
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
         }
 
         bignum_t x, y;
@@ -471,7 +496,7 @@ void StandardPairingSerializer::serializeG1_Ethereum(OpenABEByteString& out, con
     if (isG1AtInfinity(point)) {
         // (0, 0) represents infinity
         for (size_t i = 0; i < 64; i++) {
-            out.appendByte(0x00);
+            out.push_back(0x00);
         }
         return;
     }
@@ -492,7 +517,7 @@ void StandardPairingSerializer::serializeG1_Ethereum(OpenABEByteString& out, con
 
 void StandardPairingSerializer::deserializeG1_Ethereum(G1& point, OpenABEByteString& in) {
     if (in.size() != 64) {
-        throw OpenABE_ERROR_SERIALIZATION_FAILED;
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
     }
 
     bignum_t x, y;
@@ -523,7 +548,7 @@ void StandardPairingSerializer::serializeG2(OpenABEByteString& out, const G2& po
                                            SerializationFormat format, bool with_header) {
     out.clear();
 
-    if (format == AUTO) {
+    if (format == oabe::FORMAT_AUTO) {
         format = selectFormat(point.bgroup->getCurveID());
     }
 
@@ -544,7 +569,7 @@ void StandardPairingSerializer::serializeG2(OpenABEByteString& out, const G2& po
             break;
         default:
             // Fallback to legacy
-            g2_convert_to_bytestring(GET_BP_GROUP(point.bgroup), out, point.m_G2);
+            g2_convert_to_bytestring(GET_BP_GROUP(point.bgroup), out, const_cast<G2&>(point).m_G2);
     }
 }
 
@@ -585,7 +610,7 @@ void StandardPairingSerializer::serializeG2_SEC1(OpenABEByteString& out, const G
     // G2 is over Fp2, so coordinates are pairs of field elements
     // For now, use uncompressed format
     if (isG2AtInfinity(point)) {
-        out.appendByte(0x00);
+        out.push_back(0x00);
         return;
     }
 
@@ -598,7 +623,7 @@ void StandardPairingSerializer::serializeG2_SEC1(OpenABEByteString& out, const G
     extractG2Coordinates(point, x, y);
     size_t field_size = get_field_size(point.bgroup->getCurveID());
 
-    out.appendByte(0x04);  // Uncompressed
+    out.push_back(0x04);  // Uncompressed
     // Serialize x = x0 + x1*u
     field_element_to_bytes(x[1], out, field_size, true);  // x1 first (ZCash convention)
     field_element_to_bytes(x[0], out, field_size, true);  // x0 second
@@ -613,44 +638,95 @@ void StandardPairingSerializer::serializeG2_SEC1(OpenABEByteString& out, const G
 }
 
 void StandardPairingSerializer::deserializeG2_SEC1(G2& point, OpenABEByteString& in) {
-    // Simplified G2 deserialization - uncompressed only
-    if (in.at(0) == 0x00) {
+    if (in.size() == 0) {
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+    }
+
+    uint8_t prefix = in.at(0);
+
+    if (prefix == 0x00) {
         setG2ToInfinity(point);
         return;
     }
 
     size_t field_size = get_field_size(point.bgroup->getCurveID());
-    if (in.size() != 1 + 4 * field_size) {
-        throw OpenABE_ERROR_SERIALIZATION_FAILED;
-    }
-
     bignum_t x[2], y[2];
     for (int i = 0; i < 2; i++) {
         zml_bignum_init(&x[i]);
         zml_bignum_init(&y[i]);
     }
 
-    size_t offset = 1;
-    OpenABEByteString temp;
+    if (prefix == 0x04) {
+        // Uncompressed format
+        if (in.size() != 1 + 4 * field_size) {
+            for (int i = 0; i < 2; i++) {
+                zml_bignum_free(x[i]);
+                zml_bignum_free(y[i]);
+            }
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        }
 
-    // Read x1, x0, y1, y0
-    temp.appendArray(in.getInternalPtr() + offset, field_size);
-    bytes_to_field_element(x[1], temp, 0, true);
-    offset += field_size;
+        size_t offset = 1;
+        OpenABEByteString temp;
 
-    temp.clear();
-    temp.appendArray(in.getInternalPtr() + offset, field_size);
-    bytes_to_field_element(x[0], temp, 0, true);
-    offset += field_size;
+        // Read x1, x0, y1, y0
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(x[1], temp, 0, true);
+        offset += field_size;
 
-    temp.clear();
-    temp.appendArray(in.getInternalPtr() + offset, field_size);
-    bytes_to_field_element(y[1], temp, 0, true);
-    offset += field_size;
+        temp.clear();
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(x[0], temp, 0, true);
+        offset += field_size;
 
-    temp.clear();
-    temp.appendArray(in.getInternalPtr() + offset, field_size);
-    bytes_to_field_element(y[0], temp, 0, true);
+        temp.clear();
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(y[1], temp, 0, true);
+        offset += field_size;
+
+        temp.clear();
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(y[0], temp, 0, true);
+
+    } else if (prefix == 0x02 || prefix == 0x03) {
+        // Compressed format
+        if (in.size() != 1 + 2 * field_size) {
+            for (int i = 0; i < 2; i++) {
+                zml_bignum_free(x[i]);
+                zml_bignum_free(y[i]);
+            }
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        }
+
+        OpenABEByteString temp;
+        size_t offset = 1;
+
+        // Read x1, x0
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(x[1], temp, 0, true);
+        offset += field_size;
+
+        temp.clear();
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(x[0], temp, 0, true);
+
+        // Decompress: compute y from x
+        bool y_should_be_odd = (prefix == 0x03);
+        if (!decompressG2Point(point, x, y, y_should_be_odd)) {
+            for (int i = 0; i < 2; i++) {
+                zml_bignum_free(x[i]);
+                zml_bignum_free(y[i]);
+            }
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        }
+
+    } else {
+        for (int i = 0; i < 2; i++) {
+            zml_bignum_free(x[i]);
+            zml_bignum_free(y[i]);
+        }
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+    }
 
     setG2FromCoordinates(point, x, y);
 
@@ -668,14 +744,123 @@ void StandardPairingSerializer::serializeG2_ZCash(OpenABEByteString& out, const 
 }
 
 void StandardPairingSerializer::deserializeG2_ZCash(G2& point, OpenABEByteString& in) {
-    deserializeG2_SEC1(point, in);
+    size_t field_size = get_field_size(point.bgroup->getCurveID());
+
+    if (in.size() < 2 * field_size) {
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+    }
+
+    uint8_t flags = in.at(0);
+    bool compressed = (flags & SerializationFlags::COMPRESSION_FLAG) != 0;
+    bool at_infinity = (flags & SerializationFlags::INFINITY_FLAG) != 0;
+
+    if (at_infinity) {
+        setG2ToInfinity(point);
+        return;
+    }
+
+    bignum_t x[2], y[2];
+    for (int i = 0; i < 2; i++) {
+        zml_bignum_init(&x[i]);
+        zml_bignum_init(&y[i]);
+    }
+
+    if (compressed) {
+        // Compressed: x in Fp2 with flags in first byte
+        if (in.size() != 2 * field_size) {
+            for (int i = 0; i < 2; i++) {
+                zml_bignum_free(x[i]);
+                zml_bignum_free(y[i]);
+            }
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        }
+
+        // Extract x with flags masked
+        OpenABEByteString x_bytes;
+        x_bytes.appendArray(in.getInternalPtr(), 2 * field_size);
+        x_bytes.data()[0] &= 0x1F;  // Mask off top 3 bits
+
+        // Read x1, x0
+        OpenABEByteString temp;
+        temp.appendArray(x_bytes.getInternalPtr(), field_size);
+        bytes_to_field_element(x[1], temp, 0, true);
+
+        temp.clear();
+        temp.appendArray(x_bytes.getInternalPtr() + field_size, field_size);
+        bytes_to_field_element(x[0], temp, 0, true);
+
+        // Decompress point
+        bool y_is_largest = (flags & SerializationFlags::Y_SIGN_FLAG) != 0;
+        if (!decompressG2Point(point, x, y, y_is_largest)) {
+            for (int i = 0; i < 2; i++) {
+                zml_bignum_free(x[i]);
+                zml_bignum_free(y[i]);
+            }
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        }
+
+        // Verify y is correctly selected
+        bignum_t p;
+        zml_bignum_init(&p);
+        point.bgroup->getGroupOrder(p);
+        bool result_is_largest = y_is_lexicographically_largest(y[1], p);
+
+        if (result_is_largest != y_is_largest) {
+            // Need to negate: (y0, y1) -> (p - y0, p - y1)
+            zml_bignum_sub(y[0], p, y[0]);
+            zml_bignum_sub(y[1], p, y[1]);
+        }
+
+        setG2FromCoordinates(point, x, y);
+
+        zml_bignum_free(p);
+
+    } else {
+        // Uncompressed: x || y (each in Fp2)
+        if (in.size() != 4 * field_size) {
+            for (int i = 0; i < 2; i++) {
+                zml_bignum_free(x[i]);
+                zml_bignum_free(y[i]);
+            }
+            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        }
+
+        OpenABEByteString temp;
+        size_t offset = 0;
+
+        // Read x1, x0, y1, y0
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(x[1], temp, 0, true);
+        offset += field_size;
+
+        temp.clear();
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(x[0], temp, 0, true);
+        offset += field_size;
+
+        temp.clear();
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(y[1], temp, 0, true);
+        offset += field_size;
+
+        temp.clear();
+        temp.appendArray(in.getInternalPtr() + offset, field_size);
+        bytes_to_field_element(y[0], temp, 0, true);
+
+        setG2FromCoordinates(point, x, y);
+    }
+
+    for (int i = 0; i < 2; i++) {
+        zml_bignum_free(x[i]);
+        zml_bignum_free(y[i]);
+    }
 }
 
 void StandardPairingSerializer::serializeG2_Ethereum(OpenABEByteString& out, const G2& point) {
     if (isG2AtInfinity(point)) {
         // (0,0,0,0) for G2 infinity
         for (size_t i = 0; i < 128; i++) {
-            out.appendByte(0x00);
+            out.push_back(0x00);
         }
         return;
     }
@@ -702,7 +887,7 @@ void StandardPairingSerializer::serializeG2_Ethereum(OpenABEByteString& out, con
 
 void StandardPairingSerializer::deserializeG2_Ethereum(G2& point, OpenABEByteString& in) {
     if (in.size() != 128) {
-        throw OpenABE_ERROR_SERIALIZATION_FAILED;
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
     }
 
     bignum_t x[2], y[2];
@@ -784,10 +969,10 @@ void StandardPairingSerializer::deserializeGT(GT& gt, OpenABEByteString& in, boo
 
 void StandardPairingSerializer::serializeGT_Full(OpenABEByteString& out, const GT& gt) {
     if (isGTIdentity(gt)) {
-        out.appendByte(SerializationFlags::INFINITY_FLAG);
+        out.push_back(SerializationFlags::INFINITY_FLAG);
         size_t field_size = get_field_size(gt.bgroup->getCurveID());
         for (size_t i = 1; i < 12 * field_size; i++) {
-            out.appendByte(0x00);
+            out.push_back(0x00);
         }
         return;
     }
@@ -815,7 +1000,7 @@ void StandardPairingSerializer::deserializeGT_Full(GT& gt, OpenABEByteString& in
     size_t field_size = get_field_size(gt.bgroup->getCurveID());
 
     if (in.size() < 12 * field_size) {
-        throw OpenABE_ERROR_SERIALIZATION_FAILED;
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
     }
 
     // Check for identity
@@ -845,10 +1030,10 @@ void StandardPairingSerializer::deserializeGT_Full(GT& gt, OpenABEByteString& in
 
 void StandardPairingSerializer::serializeGT_Cyclotomic(OpenABEByteString& out, const GT& gt) {
     if (isGTIdentity(gt)) {
-        out.appendByte(SerializationFlags::INFINITY_FLAG);
+        out.push_back(SerializationFlags::INFINITY_FLAG);
         size_t field_size = get_field_size(gt.bgroup->getCurveID());
         for (size_t i = 1; i < 8 * field_size; i++) {
-            out.appendByte(0x00);
+            out.push_back(0x00);
         }
         return;
     }
@@ -877,7 +1062,7 @@ void StandardPairingSerializer::deserializeGT_Cyclotomic(GT& gt, OpenABEByteStri
     size_t field_size = get_field_size(gt.bgroup->getCurveID());
 
     if (in.size() < 8 * field_size) {
-        throw OpenABE_ERROR_SERIALIZATION_FAILED;
+        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
     }
 
     if ((in.at(0) & SerializationFlags::INFINITY_FLAG) != 0) {
@@ -899,11 +1084,168 @@ void StandardPairingSerializer::deserializeGT_Cyclotomic(GT& gt, OpenABEByteStri
 
     // TODO: Reconstruct indices 0-3 using g^(p^6) = g^(-1) relation
     // For now, this is a placeholder - full implementation requires Frobenius map
-    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
 
     for (int i = 0; i < 12; i++) {
         zml_bignum_free(tower[i]);
     }
+}
+
+// ===== Point Decompression Implementation =====
+
+bool StandardPairingSerializer::decompressG1Point(const G1& point, const bignum_t x,
+                                                   bignum_t y, bool y_bit) {
+#if defined(BP_WITH_OPENSSL)
+    // OpenSSL implementation
+    // TODO: Implement for OpenSSL backend
+    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
+#else
+    // RELIC implementation
+    // For BN curves: y^2 = x^3 + b (where b=3 for BN254/BN256, varies for others)
+    // For general curves: y^2 = x^3 + ax + b
+
+    // Convert x to RELIC fp_t
+    fp_t x_fp, y_squared_fp, y_fp;
+    fp_new(x_fp);
+    fp_new(y_squared_fp);
+    fp_new(y_fp);
+
+    // Convert bignum x to fp
+    fp_prime_conv(x_fp, x);
+
+    // Compute y^2 = x^3 + b (BN curves have a=0)
+    fp_t x_cubed;
+    fp_new(x_cubed);
+    fp_sqr(x_cubed, x_fp);      // x^2
+    fp_mul(x_cubed, x_cubed, x_fp);  // x^3
+
+    // Add curve parameter b
+    // For BN curves, b = 3
+    fp_t b;
+    fp_new(b);
+    fp_set_dig(b, 3);  // BN254/BN256 use b=3
+
+    fp_add(y_squared_fp, x_cubed, b);  // y^2 = x^3 + 3
+
+    // Compute square root
+    int result = fp_srt(y_fp, y_squared_fp);
+
+    fp_free(x_fp);
+    fp_free(x_cubed);
+    fp_free(b);
+    fp_free(y_squared_fp);
+
+    if (result == 0) {
+        // No square root exists - invalid point
+        fp_free(y_fp);
+        return false;
+    }
+
+    // Select correct root based on y_bit
+    // y_bit determines parity or lexicographic ordering depending on format
+    bignum_t y_candidate;
+    zml_bignum_init(&y_candidate);
+    fp_prime_back(y_candidate, y_fp);
+
+    // Check if we need to negate
+    // bn_is_even returns 1 for even, 0 for odd
+    // y_bit: true = odd (0x03), false = even (0x02)
+    bool candidate_is_odd = (bn_is_even(y_candidate) == 0);
+    if (candidate_is_odd != y_bit) {
+        // Need to negate: y = p - y
+        bignum_t p;
+        zml_bignum_init(&p);
+        point.bgroup->getGroupOrder(p);
+        zml_bignum_sub(y, p, y_candidate);
+        zml_bignum_free(p);
+    } else {
+        zml_bignum_copy(y, y_candidate);
+    }
+
+    zml_bignum_free(y_candidate);
+    fp_free(y_fp);
+    return true;
+#endif
+}
+
+bool StandardPairingSerializer::decompressG2Point(const G2& point, const bignum_t x[2],
+                                                   bignum_t y[2], bool y_bit) {
+#if defined(BP_WITH_OPENSSL)
+    // OpenSSL implementation
+    // TODO: Implement for OpenSSL backend
+    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
+#else
+    // RELIC implementation for Fp2
+    // Similar to G1 but working in Fp2
+
+    fp2_t x_fp2, y_squared_fp2, y_fp2;
+    fp2_new(x_fp2);
+    fp2_new(y_squared_fp2);
+    fp2_new(y_fp2);
+
+    // Convert bignum array to fp2
+    fp_prime_conv(x_fp2[0], x[0]);
+    fp_prime_conv(x_fp2[1], x[1]);
+
+    // Compute y^2 = x^3 + b (for BN curves)
+    fp2_t x_cubed;
+    fp2_new(x_cubed);
+    fp2_sqr(x_cubed, x_fp2);      // x^2
+    fp2_mul(x_cubed, x_cubed, x_fp2);  // x^3
+
+    // For G2 on BN curves, the curve is y^2 = x^3 + b/xi where xi is the sextic twist parameter
+    // For simplicity, we use the standard b value (this varies by curve)
+    // BN254 G2: y^2 = x^3 + 3/(9+u) = x^3 + (3*9-3u)/(81+1) = x^3 + (27-3u)/82
+    // For now, use simplified b = 3 in Fp2 as (3, 0)
+    fp2_t b;
+    fp2_new(b);
+    fp_set_dig(b[0], 3);
+    fp_zero(b[1]);
+
+    fp2_add(y_squared_fp2, x_cubed, b);  // y^2 = x^3 + b
+
+    // Compute square root in Fp2
+    int result = fp2_srt(y_fp2, y_squared_fp2);
+
+    fp2_free(x_fp2);
+    fp2_free(x_cubed);
+    fp2_free(b);
+    fp2_free(y_squared_fp2);
+
+    if (result == 0) {
+        // No square root exists
+        fp2_free(y_fp2);
+        return false;
+    }
+
+    // Convert back to bignum and select correct root
+    bignum_t y_candidate[2];
+    zml_bignum_init(&y_candidate[0]);
+    zml_bignum_init(&y_candidate[1]);
+    fp_prime_back(y_candidate[0], y_fp2[0]);
+    fp_prime_back(y_candidate[1], y_fp2[1]);
+
+    // For Fp2, use lexicographic ordering on the imaginary part (y[1])
+    bignum_t p;
+    zml_bignum_init(&p);
+    point.bgroup->getGroupOrder(p);
+
+    bool current_bit = y_is_lexicographically_largest(y_candidate[1], p);
+    if (current_bit != y_bit) {
+        // Negate: (y0, y1) -> (p - y0, p - y1)
+        zml_bignum_sub(y[0], p, y_candidate[0]);
+        zml_bignum_sub(y[1], p, y_candidate[1]);
+    } else {
+        zml_bignum_copy(y[0], y_candidate[0]);
+        zml_bignum_copy(y[1], y_candidate[1]);
+    }
+
+    zml_bignum_free(p);
+    zml_bignum_free(y_candidate[0]);
+    zml_bignum_free(y_candidate[1]);
+    fp2_free(y_fp2);
+    return true;
+#endif
 }
 
 // ===== Helper Functions (stubs to be implemented based on backend) =====
@@ -914,9 +1256,13 @@ void StandardPairingSerializer::extractG1Coordinates(const G1& point, bignum_t x
     G1_ELEM_get_affine_coordinates(GET_BP_GROUP(point.bgroup), point.m_G1, &x, &y, NULL);
 #else
     // RELIC implementation
-    ep_norm(const_cast<ep_t>(point.m_G1), point.m_G1);
-    fp_prime_back(x, point.m_G1->x);
-    fp_prime_back(y, point.m_G1->y);
+    ep_t temp;
+    ep_new(temp);
+    ep_copy(temp, const_cast<G1&>(point).m_G1);
+    ep_norm(temp, temp);
+    fp_prime_back(x, temp->x);
+    fp_prime_back(y, temp->y);
+    ep_free(temp);
 #endif
 }
 
@@ -928,7 +1274,7 @@ void StandardPairingSerializer::setG1FromCoordinates(G1& point, const bignum_t x
     fp_prime_conv(point.m_G1->x, x);
     fp_prime_conv(point.m_G1->y, y);
     fp_set_dig(point.m_G1->z, 1);
-    point.m_G1->coord = BASIC;
+    point.m_G1->norm = 1;  // Set to normalized (affine)
 #endif
 }
 
@@ -953,11 +1299,15 @@ void StandardPairingSerializer::extractG2Coordinates(const G2& point, bignum_t x
     G2_ELEM_get_affine_coordinates(GET_BP_GROUP(point.bgroup), point.m_G2, x, y, NULL);
 #else
     // RELIC implementation for ep2
-    ep2_norm(const_cast<ep2_t>(point.m_G2), point.m_G2);
-    fp_prime_back(x[0], point.m_G2->x[0]);
-    fp_prime_back(x[1], point.m_G2->x[1]);
-    fp_prime_back(y[0], point.m_G2->y[0]);
-    fp_prime_back(y[1], point.m_G2->y[1]);
+    ep2_t temp;
+    ep2_new(temp);
+    ep2_copy(temp, const_cast<G2&>(point).m_G2);
+    ep2_norm(temp, temp);
+    fp_prime_back(x[0], temp->x[0]);
+    fp_prime_back(x[1], temp->x[1]);
+    fp_prime_back(y[0], temp->y[0]);
+    fp_prime_back(y[1], temp->y[1]);
+    ep2_free(temp);
 #endif
 }
 
@@ -971,7 +1321,7 @@ void StandardPairingSerializer::setG2FromCoordinates(G2& point, const bignum_t x
     fp_prime_conv(point.m_G2->y[0], y[0]);
     fp_prime_conv(point.m_G2->y[1], y[1]);
     fp2_set_dig(point.m_G2->z, 1);
-    point.m_G2->coord = BASIC;
+    point.m_G2->norm = 1;  // Set to normalized (affine)
 #endif
 }
 
@@ -979,7 +1329,7 @@ bool StandardPairingSerializer::isG2AtInfinity(const G2& point) {
 #if defined(BP_WITH_OPENSSL)
     return G2_ELEM_is_at_infinity(GET_BP_GROUP(point.bgroup), point.m_G2);
 #else
-    return ep2_is_infty(point.m_G2);
+    return ep2_is_infty(const_cast<G2&>(point).m_G2);
 #endif
 }
 
@@ -995,7 +1345,7 @@ bool StandardPairingSerializer::isGTIdentity(const GT& gt) {
 #if defined(BP_WITH_OPENSSL)
     return GT_is_unity(GET_BP_GROUP(gt.bgroup), gt.m_GT);
 #else
-    return fp12_is_zero(gt.m_GT) || gt_is_unity(gt.m_GT);
+    return gt_is_unity(const_cast<GT&>(gt).m_GT);
 #endif
 }
 
@@ -1018,7 +1368,7 @@ void StandardPairingSerializer::extractFp12Tower(const GT& gt, bignum_t tower[12
     }
 #else
     // OpenSSL implementation - TODO
-    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
 #endif
 }
 
@@ -1034,7 +1384,7 @@ void StandardPairingSerializer::setGTFromFp12Tower(GT& gt, const bignum_t tower[
     }
 #else
     // OpenSSL implementation - TODO
-    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
 #endif
 }
 
@@ -1054,23 +1404,23 @@ void LegacySerializer::convertLegacyG1(OpenABEByteString& out, const OpenABEByte
     // Create temporary G1, deserialize from legacy, serialize to standard
     G1 temp(bgroup);
     OpenABEByteString legacy_data = in;
-    g1_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_G1, bgroup->getCurveID());
-    StandardPairingSerializer::serializeG1(out, temp, AUTO, true);
+    g1_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_G1);
+    StandardPairingSerializer::serializeG1(out, temp, oabe::FORMAT_AUTO, true);
 }
 
 void LegacySerializer::convertLegacyG2(OpenABEByteString& out, const OpenABEByteString& in,
                                        std::shared_ptr<BPGroup> bgroup) {
     G2 temp(bgroup);
     OpenABEByteString legacy_data = in;
-    g2_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_G2, bgroup->getCurveID());
-    StandardPairingSerializer::serializeG2(out, temp, AUTO, true);
+    g2_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_G2);
+    StandardPairingSerializer::serializeG2(out, temp, oabe::FORMAT_AUTO, true);
 }
 
 void LegacySerializer::convertLegacyGT(OpenABEByteString& out, const OpenABEByteString& in,
                                        std::shared_ptr<BPGroup> bgroup) {
     GT temp(bgroup);
     OpenABEByteString legacy_data = in;
-    gt_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_GT, bgroup->getCurveID());
+    gt_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_GT);
     StandardPairingSerializer::serializeGT(out, temp, GT_CYCLOTOMIC_COMPRESSED, true);
 }
 
