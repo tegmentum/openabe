@@ -28,9 +28,9 @@
 
 #if !defined(BP_WITH_OPENSSL) && defined(__wasm__)
 // WASM RNG callback using OpenSSL RAND_bytes
-static void wasm_rng_callback(uint8_t *buf, int size, void *args) {
+static void wasm_rng_callback(uint8_t *buf, size_t size, void *args) {
   (void)args; // unused
-  if (RAND_bytes(buf, size) != 1) {
+  if (RAND_bytes(buf, (int)size) != 1) {
     // RAND_bytes failed - fill with zeros as fallback
     memset(buf, 0, size);
   }
@@ -513,11 +513,41 @@ int bp_group_init(bp_group_t *group, uint8_t id) {
 void bp_ensure_curve_params(uint8_t id) {
 #if !defined(BP_WITH_OPENSSL)
   int twist = EP_DTYPE;
-  /* Clear any previous RELIC error state */
   ctx_t *ctx = core_get();
+
+  /* WASM FIX: Check if curve is already initialized to prevent state corruption
+   * In WASM, multiple operations run in the same module instance, sharing global
+   * RELIC state. Re-calling ep_param_set() invalidates precomputation tables
+   * without rebuilding them, causing CCA deterministic re-encryption to fail.
+   *
+   * ctx->ep_id is set by ep_param_set() and indicates which curve is active.
+   * If the requested curve is already set, skip re-initialization.
+   */
+#ifdef __wasm__
+  if (ctx != NULL && ctx->ep_id != 0) {
+    // Curve already initialized - verify it matches requested curve
+    int expected_id = 0;
+    switch (id) {
+      case OpenABE_BN_P254_ID: expected_id = BN_P254; break;
+      case OpenABE_BN_P256_ID: expected_id = BN_P256; break;
+      case OpenABE_BN_P382_ID: expected_id = BN_P382; break;
+    }
+
+    if (ctx->ep_id == expected_id) {
+      // Already initialized with correct curve - skip re-initialization
+      // Just clear error state and return
+      ctx->code = STS_OK;
+      return;
+    }
+    // else: Different curve requested - need to re-initialize (shouldn't happen in practice)
+  }
+#endif
+
+  /* Clear any previous RELIC error state */
   if (ctx != NULL) {
     ctx->code = STS_OK;
   }
+
   /* Set the correct curve parameters */
   switch (id) {
   case OpenABE_BN_P254_ID:
@@ -816,7 +846,7 @@ void ep_copy_const(ep_t r, const ep_t p) {
     fp_copy_const(r->x, p->x);
     fp_copy_const(r->y, p->y);
     fp_copy_const(r->z, p->z);
-    r->norm = p->norm;
+    // Note: .norm field removed in RELIC 0.7.0
 }
 
 void fp_copy_const(fp_t c, const fp_t a) {
@@ -830,7 +860,7 @@ void ep2_copy_const(ep2_t r, const ep2_t p) {
     fp2_copy_const(r->x, p->x);
     fp2_copy_const(r->y, p->y);
     fp2_copy_const(r->z, p->z);
-    r->norm = p->norm;
+    // Note: .norm field removed in RELIC 0.7.0
 }
 
 void fp2_copy_const(fp2_t c, const fp2_t a) {

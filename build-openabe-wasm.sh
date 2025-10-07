@@ -24,13 +24,15 @@ export AR="$WASI_SDK_PATH/bin/llvm-ar"
 export RANLIB="$WASI_SDK_PATH/bin/llvm-ranlib"
 
 # WASM target and sysroot
-# Note: Using wasm32-wasi for library build (static library is target-agnostic)
-# The final CLI executables will use wasm32-wasip2 (configured in cli-wasm/Makefile)
+# Note: Using wasm32-wasi-threads for pthread support
+# This matches the RELIC build configuration
 WASM_SYSROOT="$WASI_SDK_PATH/share/wasi-sysroot"
-WASM_TARGET="wasm32-wasi"
+WASM_TARGET="wasm32-wasi-threads"
 
 # Compiler flags for building static library
 # Add setjmp/longjmp support for OpenABE's RELIC error handling
+# Add pthread support for thread-local storage (__thread) to fix CCA verification
+# Add atomics and bulk-memory for pthread shared memory support
 CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT"
 CFLAGS="$CFLAGS -O2 -g"
 CFLAGS="$CFLAGS -D__wasm__"
@@ -41,6 +43,7 @@ CFLAGS="$CFLAGS -I$WASM_SYSROOT/include"
 CFLAGS="$CFLAGS -I/Library/Developer/CommandLineTools/usr/include"
 CFLAGS="$CFLAGS -fPIC"
 CFLAGS="$CFLAGS -mllvm -wasm-enable-sjlj"
+CFLAGS="$CFLAGS -pthread -matomics -mbulk-memory"
 
 CXXFLAGS="$CFLAGS -std=c++11"
 CXXFLAGS="$CXXFLAGS -Wall -Wsign-compare -fstrict-overflow"
@@ -111,6 +114,7 @@ OABE_CORE_SRC=(
     "zsymcrypto.cpp"
     "openssl_init.cpp"
     "wasm_exception_stubs.cpp"  # WASM-only: exception runtime stubs
+    "wasm_safe_wrapper.cpp"     # WASM-only: exception-to-error-code wrappers
 )
 
 # Compile C file (zelement.c)

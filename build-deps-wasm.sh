@@ -19,15 +19,16 @@ export RANLIB="$WASI_SDK_PATH/bin/llvm-ranlib"
 export NM="$WASI_SDK_PATH/bin/llvm-nm"
 
 # WASM target and sysroot
-# Note: Using wasm32-wasi for dependencies since they are static libraries
-# The final CLI executables will use wasm32-wasip2 (configured in cli-wasm/Makefile)
-# Static libraries are target-agnostic - the wasip1/wasip2 choice matters only at final link time
+# Note: Using wasm32-wasi-threads for pthread support
+# This uses a special sysroot with libraries compiled with atomics+bulk-memory
 WASM_SYSROOT="$WASI_SDK_PATH/share/wasi-sysroot"
-WASM_TARGET="wasm32-wasi"
+WASM_TARGET="wasm32-wasi-threads"
 
 # Compiler flags for building static libraries
 # Add signal emulation for GMP compatibility
-export CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT -O2 -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_GETPID"
+# Add atomics and bulk-memory for pthread support (required for --shared-memory)
+# -pthread is added automatically by wasi-sdk-pthread.cmake toolchain
+export CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT -O2 -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_GETPID -matomics -mbulk-memory"
 export CXXFLAGS="$CFLAGS -std=c++11 -fno-exceptions -fno-rtti"
 export LDFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT -lwasi-emulated-signal -lwasi-emulated-getpid"
 
@@ -249,22 +250,18 @@ build_openssl() {
 
 # Build RELIC for WASM
 build_relic() {
-    info "Building RELIC for WebAssembly..."
+    info "Building RELIC 0.7.0 for WebAssembly..."
 
     cd "$WASM_DEPS_DIR"
 
-    # Check if already extracted
-    if [ ! -d "relic-toolkit-0.5.0" ]; then
-        if [ -f "$ZROOT/deps/relic/relic-toolkit-0.5.0.tar.gz" ]; then
-            cp "$ZROOT/deps/relic/relic-toolkit-0.5.0.tar.gz" .
-            tar xzf relic-toolkit-0.5.0.tar.gz
-        else
-            curl -LO https://github.com/relic-toolkit/relic/releases/download/0.5.0/relic-toolkit-0.5.0.tar.gz
-            tar xzf relic-toolkit-0.5.0.tar.gz
-        fi
+    # Use RELIC 0.7.0 which has better C99 compatibility and includes MIN/MAX macros
+    if [ ! -d "relic-0.7.0" ]; then
+        info "Downloading RELIC 0.7.0..."
+        curl -L https://github.com/relic-toolkit/relic/archive/refs/tags/0.7.0.tar.gz -o relic-0.7.0.tar.gz
+        tar xzf relic-0.7.0.tar.gz
     fi
 
-    cd relic-toolkit-0.5.0
+    cd relic-0.7.0
 
     # Patch CMakeLists.txt to use compatible CMake version
     sed -i.bak 's/cmake_minimum_required(VERSION 3.1)/cmake_minimum_required(VERSION 3.5)/' CMakeLists.txt
@@ -272,27 +269,62 @@ build_relic() {
     # Patch BLAKE2 to disable 64-byte alignment for WASM (alignment must divide element size)
     sed -i.bak 's/ALIGNME( 64 )//' src/md/blake2.h
 
-    # Rename bn_* symbols to relic_bn_* to avoid conflicts with OpenSSL
-    # Using Perl to rename ALL bn_* identifiers (comprehensive approach)
-    info "Patching RELIC to rename bn_* symbols..."
-    find include src -type f \( -name "*.h" -o -name "*.c" \) -exec perl -pi -e '
-        # Rename all bn_ identifiers to relic_bn_ except when inside comments or strings
-        # This matches: bn_<anything> where <anything> is alphanumeric or underscore
-        s/\bbn_([a-zA-Z0-9_]+)\b/relic_bn_$1/g;
-    ' {} \;
+    # Patch relic_rand_core.c to use WASI random API instead of /dev/urandom
+    info "Patching RELIC random seeding for WASM compatibility..."
+
+    # Add WASI header include and guard POSIX headers
+    sed -i.bak '/^#include "relic_err.h"/a\
+\
+#ifdef __wasm__\
+#include <wasi/api.h>\
+#endif
+' src/rand/relic_rand_core.c
+
+    sed -i.bak2 's/#if RAND == UDEV || SEED == UDEV/#if RAND == UDEV || SEED == UDEV\
+\
+#ifndef __wasm__/' src/rand/relic_rand_core.c
+
+    sed -i.bak3 '/^#include <unistd.h>/a\
+#endif
+' src/rand/relic_rand_core.c
+
+    # Replace /dev/urandom code with WASI random for WASM
+    sed -i.bak4 '/#elif SEED == DEV || SEED == UDEV/,/^#elif SEED == LIBC/{
+        /int fd, c, l;/a\
+\
+#ifdef __wasm__\
+	/* Use WASI random API for WebAssembly builds */\
+	__wasi_errno_t err = __wasi_random_get(buf, RLC_RAND_SEED);\
+	if (err != __WASI_ERRNO_SUCCESS) {\
+		RLC_THROW(ERR_NO_RAND);\
+		return;\
+	}\
+	/* Successfully seeded from WASI random */\
+#else
+        /close(fd);$/a\
+#endif
+    }' src/rand/relic_rand_core.c
+
+    # Fix rand_call signature mismatch (int -> size_t)
+    sed -i.bak 's/void (\*rand_call)(uint8_t \*, int, void \*);/void (*rand_call)(uint8_t *, size_t, void *);/' include/relic_core.h
+
+    # Note: RELIC 0.7.0 already has RLC_MIN/RLC_MAX defined in relic_util.h
 
     mkdir -p build-wasm
     cd build-wasm
 
     # Configure RELIC for WASM using CMake
     # Add setjmp/longjmp support for RELIC's error handling
+    # Add pthread support for thread-local storage (__thread) to fix CCA verification
     # RELIC's CMakeLists.txt uses $ENV{COMP} environment variable for compiler flags
-    export COMP="$CFLAGS -mllvm -wasm-enable-sjlj"
+    export COMP="$CFLAGS -mllvm -wasm-enable-sjlj -pthread"
 
     cmake .. \
-        -DCMAKE_TOOLCHAIN_FILE="$WASI_SDK_PATH/share/cmake/wasi-sdk.cmake" \
+        -DCMAKE_TOOLCHAIN_FILE="$WASI_SDK_PATH/share/cmake/wasi-sdk-pthread.cmake" \
         -DCMAKE_INSTALL_PREFIX="$WASM_PREFIX" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS="-matomics -mbulk-memory" \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,--shared-memory,--max-memory=4294967296" \
         -DSTATIC=on \
         -DSHLIB=off \
         -DARITH=easy \
@@ -301,13 +333,14 @@ build_relic() {
         -DBP_WITH_OPENSSL=on \
         -DSEED=ZERO \
         -DRAND=CALL \
+        -DMULTI=PTHREAD \
         -DCHECK=off \
         -DTESTS=0 \
         -DBENCH=0 \
-        -DFP_METHD="BASIC;COMBA;COMBA;MONTY;LOWER;SLIDE" \
+        -DFP_METHD="BASIC;COMBA;COMBA;MONTY;LOWER;JMPDS;SLIDE" \
         -DFPX_METHD="INTEG;INTEG;LAZYR" \
         -DPP_METHD="LAZYR;OATEP" \
-        -DEP_METHD="PROJC;LWNAF;COMBS;INTER"
+        -DEP_METHD="PROJC;LWNAF;COMBS;INTER;SSWUM"
 
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
     make install
