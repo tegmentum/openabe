@@ -55,6 +55,17 @@ const string print_point(char *x, int x_len, char *y, int y_len) {
 }
 
 const string g1_point_to_string(bp_group_t group, const g1_ptr p) {
+#if defined(BP_WITH_MCL)
+  char buf[1024];
+  size_t len = mclBnG1_getStr(buf, sizeof(buf), p, 10);
+  if (len == 0) {
+    return "[0,0]";
+  }
+  // MCL returns format like "1 x y" where 1 means valid point
+  // Parse to extract x and y coordinates
+  string s(buf, len);
+  return "[" + s + "]";
+#else
   bignum_t x, y;
   zml_bignum_init(&x);
   zml_bignum_init(&y);
@@ -74,11 +85,21 @@ const string g1_point_to_string(bp_group_t group, const g1_ptr p) {
   zml_bignum_free(x);
   zml_bignum_free(y);
   return s;
+#endif
 }
 
 void g1_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
                               const g1_ptr p) {
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+  uint8_t buf[MAX_BUFFER_SIZE];
+  memset(buf, 0, MAX_BUFFER_SIZE);
+  size_t len = mclBnG1_serialize(buf, MAX_BUFFER_SIZE, p);
+  if (len == 0) {
+    fprintf(stderr, "g1_convert_to_bytestring: mclBnG1_serialize failed\n");
+    return;
+  }
+  s.appendArray(buf, len);
+#elif defined(BP_WITH_OPENSSL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE);
   size_t len = G1_ELEM_point2oct(group, p, POINT_CONVERSION_COMPRESSED, buf,
@@ -94,7 +115,14 @@ void g1_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p, uint8_t curve_id) {
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+  size_t read = mclBnG1_deserialize(p, xstr, xstr_len);
+  if (read == 0) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
+            OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
+    return;
+  }
+#elif defined(BP_WITH_OPENSSL)
   G1_ELEM_oct2point(group, p, xstr, xstr_len, NULL);
 #else
   // Ensure correct RELIC curve parameters are set before deserialization
@@ -102,11 +130,27 @@ void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p,
     bp_ensure_curve_params(curve_id);
   }
   g1_elem_in(p, xstr, xstr_len);
-  ASSERT(oabe::checkRelicError(), oabe::OpenABE_ERROR_SERIALIZATION_FAILED);
+  if (!oabe::checkRelicError()) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED)); return; }
 #endif
 }
 
+// Wrapper for external callers without curve_id parameter
+void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p) {
+  g1_convert_to_point(group, s, p, 0);
+}
+
 const string g2_point_to_string(bp_group_t group, const g2_ptr p) {
+#if defined(BP_WITH_MCL)
+  char buf[2048];
+  size_t len = mclBnG2_getStr(buf, sizeof(buf), p, 10);
+  if (len == 0) {
+    return "[0,0],[0,0]";
+  }
+  // MCL returns format for G2 points
+  string s(buf, len);
+  return "[" + s + "]";
+#else
   bignum_t x[2], y[2];
   zml_bignum_init(&x[0]);
   zml_bignum_init(&y[0]);
@@ -144,11 +188,21 @@ const string g2_point_to_string(bp_group_t group, const g2_ptr p) {
   zml_bignum_free(y[1]);
 
   return s;
+#endif
 }
 
 void g2_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
                               g2_ptr p) {
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+  uint8_t buf[MAX_BUFFER_SIZE];
+  memset(buf, 0, MAX_BUFFER_SIZE);
+  size_t len = mclBnG2_serialize(buf, MAX_BUFFER_SIZE, p);
+  if (len == 0) {
+    fprintf(stderr, "g2_convert_to_bytestring: mclBnG2_serialize failed\n");
+    return;
+  }
+  s.appendArray(buf, len);
+#elif defined(BP_WITH_OPENSSL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE); // ideal => POINT_CONVERSION_COMPRESSED
   size_t len = G2_ELEM_point2oct(group, p, POINT_CONVERSION_UNCOMPRESSED, buf,
@@ -169,7 +223,14 @@ void g2_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p, uint8_t curve_id) {
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+  size_t read = mclBnG2_deserialize(p, xstr, xstr_len);
+  if (read == 0) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
+            OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
+    return;
+  }
+#elif defined(BP_WITH_OPENSSL)
   G2_ELEM_oct2point(group, p, xstr, xstr_len, NULL);
 #else
   // Ensure correct RELIC curve parameters are set before deserialization
@@ -177,13 +238,28 @@ void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p,
     bp_ensure_curve_params(curve_id);
   }
   g2_elem_in(p, xstr, xstr_len);
-  ASSERT(oabe::checkRelicError(), oabe::OpenABE_ERROR_SERIALIZATION_FAILED);
+  if (!oabe::checkRelicError()) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED)); return; }
 #endif
+}
+
+// Wrapper for external callers without curve_id parameter
+void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p) {
+  g2_convert_to_point(group, s, p, 0);
 }
 
 void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p,
                               int should_compress) {
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+  uint8_t buf[MAX_BUFFER_SIZE];
+  memset(buf, 0, MAX_BUFFER_SIZE);
+  size_t len = mclBnGT_serialize(buf, MAX_BUFFER_SIZE, p);
+  if (len == 0) {
+    fprintf(stderr, "gt_convert_to_bytestring: mclBnGT_serialize failed\n");
+    return;
+  }
+  s.appendArray(buf, len);
+#elif defined(BP_WITH_OPENSSL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE);
   size_t len = GT_ELEM_elem2oct(group, p, buf, MAX_BUFFER_SIZE, NULL);
@@ -202,7 +278,14 @@ void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s, gt_p
 void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p, uint8_t curve_id) {
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+  size_t read = mclBnGT_deserialize(p, xstr, xstr_len);
+  if (read == 0) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
+            OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
+    return;
+  }
+#elif defined(BP_WITH_OPENSSL)
   GT_ELEM_oct2elem(group, p, xstr, xstr_len, NULL);
 #else
   // Ensure correct RELIC curve parameters are set before deserialization
@@ -210,8 +293,14 @@ void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p,
     bp_ensure_curve_params(curve_id);
   }
   gt_elem_in(p, xstr, xstr_len);
-  ASSERT(oabe::checkRelicError(), oabe::OpenABE_ERROR_SERIALIZATION_FAILED);
+  if (!oabe::checkRelicError()) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED)); return; }
 #endif
+}
+
+// Wrapper for external callers without curve_id parameter
+void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p) {
+  gt_convert_to_point(group, s, p, 0);
 }
 
 
@@ -221,14 +310,37 @@ void multi_bp_map_op(const bp_group_t group, oabe::GT &gt,
     throw oabe::OpenABE_ERROR_INVALID_LENGTH;
   }
   const size_t n = g1.size();
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
+  #if defined(BP_WITH_OPENSSL)
   const G1_ELEM *ps[n];
   const G2_ELEM *qs[n];
+  #else /* BP_WITH_MCL */
+  g1_ptr ps[n];
+  g2_ptr qs[n];
+  #endif
   for (size_t i = 0; i < n; i++) {
     ps[i] = g1.at(i).m_G1;
     qs[i] = g2.at(i).m_G2;
   }
+  #if defined(BP_WITH_OPENSSL)
   GT_ELEMs_pairing(group, gt.m_GT, n, ps, qs, NULL);
+  #else /* BP_WITH_MCL */
+  // For MCL, compute multi-pairing
+  mclBnGT temp;
+  memset(&temp, 0, sizeof(temp));
+  if (n == 0) {
+    mclBnGT_clear(gt.m_GT);
+  } else {
+    for (size_t i = 0; i < n; i++) {
+      mclBn_pairing(&temp, ps[i], qs[i]);
+      if (i == 0) {
+        mclBnGT_copy(gt.m_GT, &temp);
+      } else {
+        mclBnGT_mul(gt.m_GT, gt.m_GT, &temp);
+      }
+    }
+  }
+  #endif
 #else
   g1_t g_1[n];
   g2_t g_2[n];
@@ -252,14 +364,15 @@ void multi_bp_map_op(const bp_group_t group, oabe::GT &gt,
  ********************************************************************************/
 
 void ro_error(void) {
-  cout << "Writing to read only object." << endl;
-  exit(0);
+  fprintf(stderr, "ERROR: Writing to read only object.\n");
+  // Cannot call exit() in WASM - just return and let caller handle undefined state
+  return;
 }
 
 namespace oabe {
 
 #if !defined(BP_WITH_OPENSSL)
-static void rng_trampoline(uint8_t *buf, int len, void *this_ptr) {
+static void rng_trampoline(uint8_t *buf, size_t len, void *this_ptr) {
   // cout << "calling our RNG!!!!" << endl;
   OpenABERNG *rng = static_cast<OpenABERNG *>(this_ptr);
   rng->getRandomBytes(buf, len);
@@ -442,7 +555,7 @@ ZP operator/(const ZP &x, const ZP &y) {
   ZP c;
   if (zml_bignum_is_zero(y.m_ZP)) {
     cout << "Divide by zero error!" << endl;
-    throw OpenABE_ERROR_DIVIDE_BY_ZERO;
+    return OpenABE_ERROR_DIVIDE_BY_ZERO;
   }
 
   ASSERT(x.isOrderSet || y.isOrderSet, OpenABE_ERROR_INVALID_INPUT);
@@ -491,7 +604,8 @@ bool ZP::ismember(void) {
 }
 
 void ZP::setOrder(const bignum_t o) {
-  ASSERT(isInit, OpenABE_ERROR_ELEMENT_NOT_INITIALIZED);
+  if (!isInit) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_ELEMENT_NOT_INITIALIZED)); return; }
   if (!isOrderSet) {
     zml_bignum_copy(order, o);
     isOrderSet = true;
@@ -499,7 +613,8 @@ void ZP::setOrder(const bignum_t o) {
 }
 
 void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
-  ASSERT(isInit, OpenABE_ERROR_ELEMENT_NOT_INITIALIZED);
+  if (!isInit) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_ELEMENT_NOT_INITIALIZED)); return; }
   // 1. get some number of bytes
   if (!this->isOrderSet) {
     this->isOrderSet = true;
@@ -509,19 +624,49 @@ void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
   // 2. call bignum_fromBin on the bytes obtained
   uint8_t buf[length];
   memset(buf, 0, length);
-#if defined(BP_WITH_OPENSSL) || defined(__wasm__)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL) || defined(__wasm__)
   rng->getRandomBytes(buf, length);
+
+  // DEBUG: Print first few bytes
+  static int call_count = 0;
+  if (call_count < 10) {
+    fprintf(stderr, "[ZP::setRandom #%d] Got %d bytes: %02x%02x%02x%02x...\n",
+            call_count, length, buf[0], buf[1], buf[2], buf[3]);
+  }
+
   zml_bignum_fromBin(this->m_ZP, buf, length);
+
+  // DEBUG: Print resulting ZP value
+  if (call_count < 10) {
+    int len = 0;
+    char *str = zml_bignum_toDec(this->m_ZP, &len);
+    fprintf(stderr, "[ZP::setRandom #%d] ZP value (before mod): %s\n", call_count, str);
+    zml_bignum_safe_free(str);
+    call_count++;
+  }
 #else
   oabe_rand_seed(&rng_trampoline, (void *)rng);
   zml_bignum_rand(this->m_ZP, this->order);
 #endif
   zml_bignum_mod(this->m_ZP, this->order);
+
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL) || defined(__wasm__)
+  // DEBUG: Print final ZP value after mod
+  static int final_count = 0;
+  if (final_count < 10) {
+    int len = 0;
+    char *str = zml_bignum_toDec(this->m_ZP, &len);
+    fprintf(stderr, "[ZP::setRandom #%d] ZP value (after mod): %s\n", final_count, str);
+    zml_bignum_safe_free(str);
+    final_count++;
+  }
+#endif
 }
 
 void ZP::setFrom(ZP &z, uint32_t index) {
   // hash z + index?
-  ASSERT(isInit, OpenABE_ERROR_ELEMENT_NOT_INITIALIZED);
+  if (!isInit) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_ELEMENT_NOT_INITIALIZED)); return; }
   zml_bignum_copy(this->m_ZP, z.m_ZP);
   *this = *this + index;
 }
@@ -575,7 +720,8 @@ ZP operator>>(const ZP &a, int b) {
 }
 
 void ZP::serialize(OpenABEByteString &result) const {
-  ASSERT(isInit, OpenABE_ERROR_ELEMENT_NOT_INITIALIZED);
+  if (!isInit) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_ELEMENT_NOT_INITIALIZED)); return; }
   result.clear();
   result.insertFirstByte(OpenABE_ELEMENT_ZP);
   this->getLengthAndByteString(result);
@@ -583,7 +729,8 @@ void ZP::serialize(OpenABEByteString &result) const {
 
 void ZP::deserialize(OpenABEByteString &input) {
   size_t inputSize = input.size(), hdrLen = 3;
-  ASSERT(isInit, OpenABE_ERROR_ELEMENT_NOT_INITIALIZED);
+  if (!isInit) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_ELEMENT_NOT_INITIALIZED)); return; }
 
   // first byte is the group type
   if (input.at(0) == OpenABE_ELEMENT_ZP && inputSize > hdrLen) {
@@ -591,7 +738,8 @@ void ZP::deserialize(OpenABEByteString &input) {
     // read 2 bytes from right to left
     len |= input.at(2);           // Moves to 0x00FF
     len |= (input.at(1) << 8);    // Moves to 0xFF00
-    ASSERT(input.size() == (len + hdrLen), OpenABE_ERROR_SERIALIZATION_FAILED);
+    if (!(input.size() == (len + hdrLen))) { fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_SERIALIZATION_FAILED)); return; }
 
     uint8_t *bstr = (input.getInternalPtr() + hdrLen);
     zml_bignum_fromBin(this->m_ZP, bstr, len);
@@ -655,7 +803,11 @@ G1::G1(const G1 &w) {
   if (w.bgroup != nullptr) {
     this->bgroup = w.bgroup;
   } else {
-    throw OpenABE_ERROR_INVALID_GROUP_PARAMS;
+    // Constructor can't return error, set invalid state
+    fprintf(stderr, "Invalid group parameters in G1 copy constructor\n");
+    this->bgroup = nullptr;
+    this->isInit = false;
+    return;
   }
   g1_init(GET_BP_GROUP(this->bgroup), &this->m_G1);
   g1_copy_const(this->m_G1, w.m_G1);
@@ -702,12 +854,6 @@ G1::~G1() {
 G1 operator*(const G1 &x, const G1 &y) {
   G1 z = x;
   g1_add_op(GET_GROUP(z.bgroup), z.m_G1, z.m_G1, y.m_G1);
-//#if defined(BP_WITH_OPENSSL)
-//  G1_ELEM_add(GET_BP_GROUP(z.bgroup), z.m_G1, z.m_G1, y.m_G1, NULL);
-//#else
-//  g1_add(z.m_G1, z.m_G1, y.m_G1);
-//  g1_norm(z.m_G1, z.m_G1);
-//#endif
   return z;
 }
 
@@ -775,6 +921,9 @@ bool G1::ismember(bignum_t order) {
   // 1 indicates that the element is on the curve
   result =
       (G1_ELEM_is_on_curve(GET_BP_GROUP(this->bgroup), this->m_G1, NULL) == 1);
+#elif defined(BP_WITH_MCL)
+  // MCL validates points on creation, so just check if initialized
+  result = mclBnG1_isValid(this->m_G1);
 #else
   g1_t r;
   g1_inits(r);
@@ -800,6 +949,29 @@ void G1::setRandom(OpenABERNG *rng) {
 #if defined(BP_WITH_OPENSSL)
     int rc = BP_GROUP_get_generator_G1(GET_BP_GROUP(this->bgroup), this->m_G1);
     ASSERT(rc == 1, OpenABE_ERROR_INVALID_INPUT);
+#elif defined(BP_WITH_MCL)
+    // FIX for Bug #2: Use provided RNG instead of MCL's internal CSPRNG
+    // Get group order
+    bignum_t order;
+    zml_bignum_init(&order);
+    bp_get_order(GET_BP_GROUP(this->bgroup), order);
+
+    // Generate random scalar from provided RNG
+    ZP random_scalar(order);
+    random_scalar.setRandom(rng, order);
+
+    // Get a fixed base point by hashing a known string (same as g1_rand)
+    int ret = mclBnG1_hashAndMapTo(this->m_G1, "OpenABE-G1-base", 15);
+    if (ret != 0) {
+      fprintf(stderr, "[G1::setRandom ERROR] mclBnG1_hashAndMapTo failed with code %d\n", ret);
+      zml_bignum_free(order);
+      return;
+    }
+
+    // Multiply by random scalar: g1 = base * random_scalar
+    mclBnG1_mul(this->m_G1, this->m_G1, random_scalar.m_ZP);
+
+    zml_bignum_free(order);
 #else
 #ifndef __wasm__
     oabe_rand_seed(&rng_trampoline, (void *)rng);
@@ -811,7 +983,7 @@ void G1::setRandom(OpenABERNG *rng) {
 }
 
 ostream &operator<<(ostream &os, const G1 &g1) {
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
   os << g1_point_to_string(GET_BP_GROUP(g1.bgroup), g1.m_G1);
 #else
   ep_write_ostream(os, const_cast<G1 &>(g1).m_G1, DEC);
@@ -871,7 +1043,8 @@ void G1::deserialize(OpenABEByteString &input) {
       return;
     }
   }
-  ASSERT(false, OpenABE_ERROR_SERIALIZATION_FAILED);
+  fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_SERIALIZATION_FAILED)); return;
 }
 
 bool G1::isEqual(ZObject *z) const {
@@ -899,7 +1072,11 @@ G2::G2(const G2& w)
     if (w.bgroup != nullptr) {
         this->bgroup = w.bgroup;
     } else {
-        throw OpenABE_ERROR_INVALID_GROUP_PARAMS;
+        // Constructor can't return error, set invalid state
+        fprintf(stderr, "Invalid group parameters in G2 copy constructor\n");
+        this->bgroup = nullptr;
+        this->isInit = false;
+        return;
     }
     g2_init(GET_BP_GROUP(this->bgroup), &this->m_G2);
     g2_copy_const(this->m_G2, w.m_G2);
@@ -1000,6 +1177,9 @@ bool G2::ismember(bignum_t order)
 #if defined(BP_WITH_OPENSSL)
     // 1 indicates that the element is on the curve
     result = (G2_ELEM_is_on_curve(GET_BP_GROUP(this->bgroup), this->m_G2, NULL) == 1);
+#elif defined(BP_WITH_MCL)
+    // MCL validates points on creation, so just check if initialized
+    result = mclBnG2_isValid(this->m_G2);
 #else
 	g2_t r;
 	fp12_inits(r);
@@ -1021,6 +1201,29 @@ void G2::setRandom(OpenABERNG *rng)
 #if defined(BP_WITH_OPENSSL)
         int rc = BP_GROUP_get_generator_G2(GET_BP_GROUP(this->bgroup), this->m_G2);
         ASSERT(rc == 1, OpenABE_ERROR_INVALID_INPUT);
+#elif defined(BP_WITH_MCL)
+		// FIX for Bug #2: Use provided RNG instead of MCL's internal CSPRNG
+		// Get group order
+		bignum_t order;
+		zml_bignum_init(&order);
+		bp_get_order(GET_BP_GROUP(this->bgroup), order);
+
+		// Generate random scalar from provided RNG
+		ZP random_scalar(order);
+		random_scalar.setRandom(rng, order);
+
+		// Get a fixed base point by hashing a known string (same as g2_rand)
+		int ret = mclBnG2_hashAndMapTo(this->m_G2, "OpenABE-G2-base", 15);
+		if (ret != 0) {
+			fprintf(stderr, "[G2::setRandom ERROR] mclBnG2_hashAndMapTo failed with code %d\n", ret);
+			zml_bignum_free(order);
+			return;
+		}
+
+		// Multiply by random scalar: g2 = base * random_scalar
+		mclBnG2_mul(this->m_G2, this->m_G2, random_scalar.m_ZP);
+
+		zml_bignum_free(order);
 #else
 		oabe_rand_seed(&rng_trampoline, (void *) rng);
 		g2_rand(this->m_G2);
@@ -1030,7 +1233,7 @@ void G2::setRandom(OpenABERNG *rng)
 
 ostream& operator<<(ostream& os, const G2& g2)
 {
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
     os << g2_point_to_string(GET_BP_GROUP(g2.bgroup), g2.m_G2);
 #else
 	g2_write_ostream(os, const_cast<G2&>(g2).m_G2, DEC);
@@ -1080,7 +1283,8 @@ G2::deserialize(OpenABEByteString &input)
             return;
         }
     }
-    ASSERT(false, OpenABE_ERROR_ELEMENT_NOT_INITIALIZED);
+    fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_ELEMENT_NOT_INITIALIZED)); return;
 }
 
 bool
@@ -1111,7 +1315,12 @@ GT::GT(const GT& w)
     if (w.bgroup != nullptr) {
         this->bgroup = w.bgroup;
     } else {
-        throw OpenABE_ERROR_INVALID_GROUP_PARAMS;
+        // Constructor can't return error, set invalid state
+        fprintf(stderr, "Invalid group parameters in GT copy constructor\n");
+        this->bgroup = nullptr;
+        this->isInit = false;
+        this->shouldCompress_ = false;
+        return;
     }
     gt_init(GET_BP_GROUP(this->bgroup), &this->m_GT);
     gt_copy_const(this->m_GT, w.m_GT);
@@ -1150,7 +1359,7 @@ GT::~GT()
 
 GT operator*(const GT& x,const GT& y)
 {
-	GT z = x; // , y1 = y;
+	GT z = x;
 	gt_mul_op(GET_BP_GROUP(z.bgroup), z.m_GT, z.m_GT, const_cast<GT&>(y).m_GT);
 	return z;
 }
@@ -1222,7 +1431,7 @@ bool GT::ismember(bignum_t order)
 
 ostream& operator<<(ostream& os, const GT& gt)
 {
-#if defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
     OpenABEByteString s;
     gt_convert_to_bytestring(GET_BP_GROUP(gt.bgroup), s, gt.m_GT, NO_COMPRESS);
     os << "(" << s.toHex() << ")";
@@ -1289,7 +1498,8 @@ GT::deserialize(OpenABEByteString &input)
             return;
         }
     }
-    ASSERT(false, OpenABE_ERROR_ELEMENT_NOT_INITIALIZED);
+    fprintf(stderr, "%s:%s:%d: '%s'\
+", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_ELEMENT_NOT_INITIALIZED)); return;
 }
 
 bool
@@ -1302,7 +1512,7 @@ GT::isEqual(ZObject *z) const
 	return false;
 }
 
-#if !defined(BP_WITH_OPENSSL)
+#if !defined(BP_WITH_OPENSSL) && !defined(BP_WITH_MCL)
 void fp12_write_ostream(ostream& os, fp12_t a, int radix) {
     os << "[(";
     fp6_write_ostream(os, a[0], radix);
