@@ -24,6 +24,11 @@ pass() { echo -e "${GREEN}✓${NC} $1"; ((TESTS_PASSED++)); }
 fail() { echo -e "${RED}✗${NC} $1"; ((TESTS_FAILED++)); }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
+# Wrapper for wasmtime with exceptions enabled
+run_wasm() {
+    wasmtime --wasm exceptions "$@"
+}
+
 ZROOT="$(pwd)"
 CLI_WASM_DIR="$ZROOT/cli-wasm"
 TEST_DIR="/tmp/openabe-wasm-test-$$"
@@ -34,12 +39,12 @@ check_prerequisites() {
     ((TESTS_RUN++))
 
     # Check wasmtime
-    if ! command -v wasmtime &> /dev/null; then
-        fail "wasmtime not found"
-        error "Please install wasmtime: brew install wasmtime (macOS) or curl https://wasmtime.dev/install.sh -sSf | bash (Linux)"
+    if ! command -v run_wasm &> /dev/null; then
+        fail "run_wasm not found"
+        error "Please install wasmtime: brew install run_wasm (macOS) or curl https://wasmtime.dev/install.sh -sSf | bash (Linux)"
         exit 1
     fi
-    pass "wasmtime is installed ($(wasmtime --version | head -1))"
+    pass "run_wasm is installed ($(run_wasm --version | head -1))"
 
     # Check WASM CLI tools exist
     ((TESTS_RUN++))
@@ -75,7 +80,7 @@ test_usage() {
     local tools=(oabe_setup oabe_keygen oabe_enc oabe_dec)
     for tool in "${tools[@]}"; do
         ((TESTS_RUN++))
-        if wasmtime "$CLI_WASM_DIR/${tool}.wasm" 2>&1 | grep -q "usage:"; then
+        if run_wasm "$CLI_WASM_DIR/${tool}.wasm" 2>&1 | grep -q "usage:"; then
             pass "${tool}: usage message displayed"
         else
             fail "${tool}: usage message not displayed"
@@ -95,7 +100,7 @@ test_cp_abe() {
     # Test 1: Setup (with file I/O access)
     ((TESTS_RUN++))
     info "Running: oabe_setup -s CP -p test (with --dir=.)"
-    if wasmtime --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s CP -p test 2>&1 | grep -q "writing.*bytes"; then
+    if run_wasm --wasm exceptions --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s CP -p test 2>&1 | grep -q "writing.*bytes"; then
         if [ -f "test.mpk.cpabe" ] && [ -f "test.msk.cpabe" ]; then
             pass "CP-ABE setup completed and files created"
         else
@@ -111,7 +116,7 @@ test_cp_abe() {
     # Test 2: Key generation (tests cryptographic operations)
     ((TESTS_RUN++))
     info "Running: oabe_keygen -s CP -p test -i 'dept:IT|role:admin' -o admin.key (with --dir=.)"
-    if wasmtime --dir=. "$CLI_WASM_DIR/oabe_keygen.wasm" -s CP -p test -i "dept:IT|role:admin" -o admin.key 2>&1 | grep -q "functional key input"; then
+    if run_wasm --dir=. "$CLI_WASM_DIR/oabe_keygen.wasm" -s CP -p test -i "dept:IT|role:admin" -o admin.key 2>&1 | grep -q "functional key input"; then
         if [ -f "admin.key" ]; then
             pass "CP-ABE keygen completed and key file created"
         else
@@ -128,7 +133,7 @@ test_cp_abe() {
     ((TESTS_RUN++))
     echo "Secret message for CP-ABE test" > plaintext.txt
     info "Running: oabe_enc -s CP -p test -e '(dept:IT and role:admin)' -i plaintext.txt -o ciphertext.cpabe (with --dir=.)"
-    if wasmtime --dir=. "$CLI_WASM_DIR/oabe_enc.wasm" -s CP -p test -e "(dept:IT and role:admin)" -i plaintext.txt -o ciphertext.cpabe 2>&1 | grep -q "encryption functional input"; then
+    if run_wasm --dir=. "$CLI_WASM_DIR/oabe_enc.wasm" -s CP -p test -e "(dept:IT and role:admin)" -i plaintext.txt -o ciphertext.cpabe 2>&1 | grep -q "encryption functional input"; then
         if [ -f "ciphertext.cpabe" ]; then
             pass "CP-ABE encryption completed and ciphertext created"
         else
@@ -142,7 +147,7 @@ test_cp_abe() {
     # Test 4: Decryption (known to have issues)
     ((TESTS_RUN++))
     info "Running: oabe_dec -s CP -p test -k admin.key -i ciphertext.cpabe -o decrypted.txt (with --dir=.)"
-    if wasmtime --dir=. "$CLI_WASM_DIR/oabe_dec.wasm" -s CP -p test -k admin.key -i ciphertext.cpabe -o decrypted.txt 2>&1 | grep -qv "unreachable"; then
+    if run_wasm --dir=. "$CLI_WASM_DIR/oabe_dec.wasm" -s CP -p test -k admin.key -i ciphertext.cpabe -o decrypted.txt 2>&1 | grep -qv "unreachable"; then
         if [ -f "decrypted.txt" ]; then
             pass "CP-ABE decryption completed"
         else
@@ -166,7 +171,7 @@ test_kp_abe() {
     # Test 1: Setup (with file I/O access)
     ((TESTS_RUN++))
     info "Running: oabe_setup -s KP -p test (with --dir=.)"
-    if wasmtime --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s KP -p test 2>&1 | grep -q "writing.*bytes"; then
+    if run_wasm --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s KP -p test 2>&1 | grep -q "writing.*bytes"; then
         if [ -f "test.mpk.kpabe" ] && [ -f "test.msk.kpabe" ]; then
             pass "KP-ABE setup completed and files created"
         else
@@ -182,7 +187,7 @@ test_kp_abe() {
     # Test 2: Key generation (with file I/O access)
     ((TESTS_RUN++))
     info "Running: oabe_keygen -s KP -p test -i '(dept:IT and role:admin)' -o policy.key (with --dir=.)"
-    if wasmtime --dir=. "$CLI_WASM_DIR/oabe_keygen.wasm" -s KP -p test -i "(dept:IT and role:admin)" -o policy.key 2>&1 | grep -q "functional key input"; then
+    if run_wasm --dir=. "$CLI_WASM_DIR/oabe_keygen.wasm" -s KP -p test -i "(dept:IT and role:admin)" -o policy.key 2>&1 | grep -q "functional key input"; then
         if [ -f "policy.key" ]; then
             pass "KP-ABE keygen completed and key file created"
         else
@@ -209,7 +214,7 @@ test_pk() {
     # Test 1: Setup (PK mode doesn't require setup - by design)
     ((TESTS_RUN++))
     info "Running: oabe_setup -s PK -p test (with --dir=.)"
-    local output=$(wasmtime --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s PK -p test 2>&1)
+    local output=$(run_wasm --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s PK -p test 2>&1)
     if echo "$output" | grep -q "does not require setup"; then
         pass "PK setup correctly reports no setup needed (by design)"
     elif echo "$output" | grep -q "writing.*bytes"; then
@@ -237,7 +242,7 @@ test_error_handling() {
 
     # Test 1: Invalid scheme
     ((TESTS_RUN++))
-    if wasmtime "$CLI_WASM_DIR/oabe_setup.wasm" -s INVALID -p test 2>&1 | grep -q "invalid scheme"; then
+    if run_wasm "$CLI_WASM_DIR/oabe_setup.wasm" -s INVALID -p test 2>&1 | grep -q "invalid scheme"; then
         pass "Invalid scheme handled correctly"
     else
         fail "Invalid scheme not handled correctly"
@@ -245,7 +250,7 @@ test_error_handling() {
 
     # Test 2: Missing required arguments
     ((TESTS_RUN++))
-    if wasmtime "$CLI_WASM_DIR/oabe_setup.wasm" -p test 2>&1 | grep -qE "(usage:|invalid|required)"; then
+    if run_wasm "$CLI_WASM_DIR/oabe_setup.wasm" -p test 2>&1 | grep -qE "(usage:|invalid|required)"; then
         pass "Missing arguments handled correctly"
     else
         fail "Missing arguments not handled correctly"
@@ -255,8 +260,8 @@ test_error_handling() {
     ((TESTS_RUN++))
     mkdir -p "$TEST_DIR/error"
     cd "$TEST_DIR/error"
-    if wasmtime --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s CP -p test 2>&1 | grep -q "writing.*bytes"; then
-        if ! wasmtime --dir=. "$CLI_WASM_DIR/oabe_keygen.wasm" -s CP -p test -i "(((" -o bad.key 2>&1 | grep -q "FATAL ERROR.*relic_rand"; then
+    if run_wasm --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s CP -p test 2>&1 | grep -q "writing.*bytes"; then
+        if ! run_wasm --dir=. "$CLI_WASM_DIR/oabe_keygen.wasm" -s CP -p test -i "(((" -o bad.key 2>&1 | grep -q "FATAL ERROR.*relic_rand"; then
             pass "Invalid policy handled without RNG errors"
         else
             fail "Invalid policy caused RNG errors"
@@ -279,7 +284,7 @@ test_crypto_operations() {
 
     ((TESTS_RUN++))
     info "Testing RNG initialization and crypto setup (with --dir=.)"
-    local output=$(wasmtime --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s CP -p cryptotest 2>&1)
+    local output=$(run_wasm --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s CP -p cryptotest 2>&1)
 
     if echo "$output" | grep -q "FATAL ERROR.*relic_rand"; then
         fail "RNG initialization failed (RELIC error)"
@@ -305,7 +310,7 @@ test_all_schemes() {
         mkdir -p "$TEST_DIR/scheme_$scheme"
         cd "$TEST_DIR/scheme_$scheme"
 
-        local output=$(wasmtime --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s "$scheme" -p "test_$scheme" 2>&1)
+        local output=$(run_wasm --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s "$scheme" -p "test_$scheme" 2>&1)
         if echo "$output" | grep -q "writing.*bytes"; then
             pass "$scheme scheme initialization successful"
         elif [ "$scheme" = "PK" ] && echo "$output" | grep -q "does not require setup"; then
@@ -331,7 +336,7 @@ test_stress() {
     info "Running 10 consecutive setup operations (with --dir=.)"
     local failures=0
     for i in {1..10}; do
-        if ! wasmtime --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s CP -p "stress$i" 2>&1 | grep -q "writing.*bytes"; then
+        if ! run_wasm --dir=. "$CLI_WASM_DIR/oabe_setup.wasm" -s CP -p "stress$i" 2>&1 | grep -q "writing.*bytes"; then
             ((failures++))
         fi
     done

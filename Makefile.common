@@ -50,7 +50,12 @@ endif
 
 # Set shared lib extension for each OS
 # Note: gmp must be built before relic, and openssl before relic
-DEPS_PACKAGES = $(if $(USE_DEPS),$(USE_DEPS),gmp openssl relic gtest)
+# MCL can be used instead of relic (no gmp dependency needed)
+ifeq ($(ZML_LIB), with_mcl)
+  DEPS_PACKAGES = $(if $(USE_DEPS),$(USE_DEPS),openssl mcl gtest)
+else
+  DEPS_PACKAGES = $(if $(USE_DEPS),$(USE_DEPS),gmp openssl relic gtest)
+endif
 ADD_CFLAGS :=
 OS_CXXFLAGS :=
 WITH_BP := 
@@ -155,24 +160,81 @@ ifeq ($(OS_NAME), Darwin)
   LDFLAGS += -arch $(ARCH_FLAG)
 endif
 
-# Zeutro Math library config: RELIC vs OPENSSL
-# Look for environment variable ZML_LIB=with_openssl
+# Zeutro Math library config: RELIC vs OPENSSL vs MCL
+# Look for environment variable ZML_LIB=with_openssl or ZML_LIB=with_mcl
 OPENSSL_ZML = -DSSL_LIB_INIT
 ifeq ($(ZML_LIB), with_openssl)
   # openssl-only build for math ops
   OPENSSL_ZML += -DBP_WITH_OPENSSL
   CXXFLAGS += $(OPENSSL_ZML)
   CCFLAGS += -g -O2 $(OPENSSL_ZML)
-else
-  # relic-only build for math ops
+else ifeq ($(ZML_LIB), with_mcl)
+  # MCL build for math ops (no GMP needed)
+  OPENSSL_ZML += -DBP_WITH_MCL
   CXXFLAGS += $(OPENSSL_ZML)
-  CCFLAGS += -g -O2 $(OPENSSL_ZML) $(ADD_CFLAGS) 
+  CCFLAGS += -g -O2 $(OPENSSL_ZML) $(ADD_CFLAGS)
+  OABELDLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a
+  OABELDSHLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a
+  # Add MCL ECDSA library if using MCL for EC operations
+  ifeq ($(EC_LIB), with_mcl)
+    OABELDLIBS += $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a
+    OABELDSHLIBS += $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a
+  else ifeq ($(EC_LIB),)
+    # Auto-detected: add ECDSA lib when using MCL for both pairing and EC
+    OABELDLIBS += $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a
+    OABELDSHLIBS += $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a
+  endif
+else
+  # relic-only build for math ops (default)
+  CXXFLAGS += $(OPENSSL_ZML)
+  CCFLAGS += -g -O2 $(OPENSSL_ZML) $(ADD_CFLAGS)
   OABELDLIBS = $(RELIC_LIB_STATIC)
   OABELDSHLIBS = $(RELIC_LIB)
 endif
+# Elliptic Curve library config: MCL secp256k1 vs OpenSSL
+# Look for environment variable EC_LIB=with_mcl or EC_LIB=with_openssl
+# IMPORTANT: MCL pairing backend (BP_WITH_MCL) cannot be combined with MCL EC backend (EC_WITH_MCL)
+# Default: Always use OpenSSL for EC when using MCL for pairings
+
+# Validate: Prevent invalid MCL+MCL combination
+ifeq ($(ZML_LIB), with_mcl)
+  ifeq ($(EC_LIB), with_mcl)
+    $(error ERROR: Cannot use EC_LIB=with_mcl with ZML_LIB=with_mcl!)
+    $(error MCL's pairing and EC backends are incompatible.)
+    $(error Please use: ZML_LIB=with_mcl EC_LIB=with_openssl)
+  endif
+endif
+
+ifeq ($(EC_LIB), with_mcl)
+  # Use MCL's secp256k1 for EC operations
+  CXXFLAGS += -DEC_WITH_MCL
+  CCFLAGS += -DEC_WITH_MCL
+else ifeq ($(EC_LIB), with_openssl)
+  # Use OpenSSL for EC operations (explicit)
+  CXXFLAGS += -DEC_WITH_OPENSSL
+  CCFLAGS += -DEC_WITH_OPENSSL
+else
+  # Auto-detect: When using MCL for pairings, MUST use OpenSSL for EC
+  # MCL's secp256k1 implementation is separate and doesn't work with pairing backend
+  ifeq ($(ZML_LIB), with_mcl)
+    # Automatically use OpenSSL for EC (correct configuration)
+    CXXFLAGS += -DEC_WITH_OPENSSL
+    CCFLAGS += -DEC_WITH_OPENSSL
+  else
+    CXXFLAGS += -DEC_WITH_OPENSSL
+    CCFLAGS += -DEC_WITH_OPENSSL
+  endif
+endif
+
 # remaining deps
-OABELDLIBS += $(SSL_LIB) $(CRYPTO_LIB) $(GMP_LIB)
-OABELDSHLIBS += $(SSL_LIB) $(CRYPTO_LIB) $(GMP_LIB)
+ifeq ($(ZML_LIB), with_mcl)
+  # MCL doesn't need GMP
+  OABELDLIBS += $(SSL_LIB) $(CRYPTO_LIB)
+  OABELDSHLIBS += $(SSL_LIB) $(CRYPTO_LIB)
+else
+  OABELDLIBS += $(SSL_LIB) $(CRYPTO_LIB) $(GMP_LIB)
+  OABELDSHLIBS += $(SSL_LIB) $(CRYPTO_LIB) $(GMP_LIB)
+endif
 
 SHLIB_PATH = $(LDFLAGS)
 

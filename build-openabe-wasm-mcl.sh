@@ -1,19 +1,28 @@
 #!/bin/bash
-# Build OpenABE library for WebAssembly using WASI-SDK
+# Build OpenABE library for WebAssembly using MCL (instead of RELIC)
+# This uses the wasi-sdk MCL build we created
 
 set -e
 
 # Configuration
 WASI_SDK_PATH="${WASI_SDK_PATH:-$HOME/wasi-sdk}"
 ZROOT="$(pwd)"
-WASM_BUILD_DIR="$ZROOT/build-wasm"
+WASM_BUILD_DIR="$ZROOT/build-wasm-mcl"
 WASM_OBJ_DIR="$WASM_BUILD_DIR/obj"
-WASM_PREFIX="$WASM_BUILD_DIR/install"
+WASM_PREFIX_MCL="$ZROOT/deps/root-wasm"  # MCL installation
+WASM_PREFIX_OTHER="$ZROOT/build-wasm/install"  # OpenSSL, GMP from RELIC build
 
 # Check if WASI SDK is installed
 if [ ! -f "$WASI_SDK_PATH/bin/clang" ]; then
     echo "Error: WASI SDK not found at $WASI_SDK_PATH"
-    echo "Please run ./build-deps-wasm.sh first to install WASI SDK and build dependencies"
+    echo "Please install wasi-sdk first"
+    exit 1
+fi
+
+# Check if MCL is built
+if [ ! -f "$WASM_PREFIX_MCL/lib/libmcl.a" ]; then
+    echo "Error: MCL not found at $WASM_PREFIX_MCL"
+    echo "Please run: cd deps/mcl && make -f Makefile.wasm install"
     exit 1
 fi
 
@@ -24,29 +33,30 @@ export AR="$WASI_SDK_PATH/bin/llvm-ar"
 export RANLIB="$WASI_SDK_PATH/bin/llvm-ranlib"
 
 # WASM target and sysroot
-# Note: Using wasm32-wasi-threads for pthread support
-# This matches the RELIC build configuration
 WASM_SYSROOT="$WASI_SDK_PATH/share/wasi-sysroot"
-WASM_TARGET="wasm32-wasi-threads"
+WASM_TARGET="wasm32-wasi"
 
-# Compiler flags for building static library
-# Add setjmp/longjmp support for OpenABE's RELIC error handling
-# Add pthread support for thread-local storage (__thread) to fix CCA verification
-# Add atomics and bulk-memory for pthread shared memory support
+# Compiler flags for building with MCL
 CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT"
 CFLAGS="$CFLAGS -O2 -g"
+CFLAGS="$CFLAGS -flto"  # Enable Link-Time Optimization to reduce code size
 CFLAGS="$CFLAGS -D__wasm__"
+CFLAGS="$CFLAGS -DBP_WITH_MCL"  # Enable MCL backend for pairings
+CFLAGS="$CFLAGS -DEC_WITH_OPENSSL"  # Use OpenSSL for EC operations (MCL pairing+EC don't work together)
 CFLAGS="$CFLAGS -DSSL_LIB_INIT"
 CFLAGS="$CFLAGS -I$ZROOT/src/include"
-CFLAGS="$CFLAGS -I$WASM_PREFIX/include"
+CFLAGS="$CFLAGS -I$WASM_PREFIX_MCL/include"  # MCL headers
+CFLAGS="$CFLAGS -I$WASM_PREFIX_OTHER/include"  # OpenSSL, GMP
 CFLAGS="$CFLAGS -I$WASM_SYSROOT/include"
-CFLAGS="$CFLAGS -I/Library/Developer/CommandLineTools/usr/include"
+CFLAGS="$CFLAGS -I/Library/Developer/CommandLineTools/usr/include"  # FlexLexer.h for parser
 CFLAGS="$CFLAGS -fPIC"
-CFLAGS="$CFLAGS -mllvm -wasm-enable-sjlj"
-CFLAGS="$CFLAGS -pthread -matomics -mbulk-memory"
+CFLAGS="$CFLAGS -mllvm -wasm-enable-sjlj"  # SJLJ exceptions
+CFLAGS="$CFLAGS -fexceptions"  # Enable C++ exceptions
 
 CXXFLAGS="$CFLAGS -std=c++11"
 CXXFLAGS="$CXXFLAGS -Wall -Wsign-compare -fstrict-overflow"
+CXXFLAGS="$CXXFLAGS -Wno-vla-cxx-extension"  # Suppress VLA warnings (C99 feature, works in Clang)
+CXXFLAGS="$CXXFLAGS -Wno-deprecated-declarations"  # Suppress OpenSSL 3.0 deprecation warnings
 
 # Colors
 GREEN='\033[0;32m'
@@ -61,13 +71,20 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # Create directories
 mkdir -p "$WASM_OBJ_DIR"
 
-# Source files
+# Source files (same as RELIC build)
 OABE_ZML_SRC=(
     "zml/zgroup.cpp"
     "zml/zpairing.cpp"
     "zml/zelliptic.cpp"
     "zml/zelement_ec.cpp"
     "zml/zelement_bp.cpp"
+)
+
+# EC implementation files (OpenSSL for EC when using MCL for pairings)
+OABE_EC_SRC=(
+    "zml/zecdsa_openssl.cpp"
+    "zml/zelement_ec_stubs.cpp"
+    "zml/zstandard_serialization.cpp"  # Serialization support
 )
 
 OABE_KEYS_SRC=(
@@ -118,7 +135,7 @@ OABE_CORE_SRC=(
     "wasm_safe_wrapper.cpp"     # WASM-only: exception-to-error-code wrappers
 )
 
-# Compile C file (zelement.c)
+# Compile C file (zelement_mcl.c for MCL backend)
 compile_c_file() {
     local src="$1"
     local obj="$WASM_OBJ_DIR/$(basename ${src%.c}.o)"
@@ -137,22 +154,6 @@ compile_cpp_file() {
         warn "Failed to compile $src, continuing..."
         return 1
     }
-}
-
-# Build parser and scanner (optional - may need bison/flex for WASM)
-build_parser() {
-    info "Building parser and scanner..."
-
-    if [ -x "$ZROOT/bin/bison" ]; then
-        cd "$ZROOT/src"
-        $ZROOT/bin/bison -d -v zparser.yy || warn "Bison failed"
-        $CXX $CXXFLAGS -c zparser.tab.cc -o "$WASM_OBJ_DIR/zparser.o" || warn "Parser compilation failed"
-
-        flex --outfile=zscanner.cpp zscanner.ll || warn "Flex failed"
-        $CXX $CXXFLAGS -c zscanner.cpp -o "$WASM_OBJ_DIR/zscanner.o" || warn "Scanner compilation failed"
-    else
-        warn "Bison not found, skipping parser generation"
-    fi
 }
 
 # Build parser and scanner
@@ -216,13 +217,13 @@ build_parser() {
 
 # Compile all sources
 compile_sources() {
-    info "Compiling OpenABE sources for WebAssembly..."
+    info "Compiling OpenABE sources for WebAssembly (MCL backend)..."
 
-    # Compile C file
-    compile_c_file "zml/zelement.c"
+    # Compile C file (MCL version, not RELIC zelement.c)
+    compile_c_file "zml/zelement_mcl.c"
 
-    # Compile all C++ sources
-    for src in "${OABE_ZML_SRC[@]}" "${OABE_KEYS_SRC[@]}" "${OABE_LOW_SRC[@]}" \
+    # Compile all C++ sources including EC implementation
+    for src in "${OABE_ZML_SRC[@]}" "${OABE_EC_SRC[@]}" "${OABE_KEYS_SRC[@]}" "${OABE_LOW_SRC[@]}" \
                "${OABE_TOOLS_SRC[@]}" "${OABE_UTILS_SRC[@]}" "${OABE_CORE_SRC[@]}"; do
         compile_cpp_file "$src" || true
     done
@@ -242,45 +243,34 @@ create_library() {
         error "No object files found!"
     fi
 
-    # Create static library
+    info "Found ${#OBJ_FILES[@]} object files to archive"
+
+    # Create static library using llvm-ar (no native dependencies)
     $AR rcs "$WASM_BUILD_DIR/libopenabe.a" "${OBJ_FILES[@]}"
+
+    # Verify archive was created correctly
+    ARCHIVED_COUNT=$($AR t "$WASM_BUILD_DIR/libopenabe.a" | grep '\.o' | wc -l | tr -d ' ')
+    info "Archive created with $ARCHIVED_COUNT object files"
+
+    if [ "$ARCHIVED_COUNT" -ne "${#OBJ_FILES[@]}" ]; then
+        warn "Warning: Archive has $ARCHIVED_COUNT files but expected ${#OBJ_FILES[@]}"
+    fi
 
     info "Static library created: $WASM_BUILD_DIR/libopenabe.a"
 }
 
-# Create WASM module
-create_wasm_module() {
-    info "Creating WebAssembly module..."
-
-    # Link into a WASM module
-    $CXX $CXXFLAGS \
-        -o "$WASM_BUILD_DIR/openabe.wasm" \
-        -Wl,--no-entry \
-        -Wl,--export-dynamic \
-        -Wl,--allow-undefined \
-        "$WASM_BUILD_DIR/libopenabe.a" \
-        -L"$WASM_PREFIX/lib" \
-        -lrelic_s -lcrypto -lgmp
-
-    info "WebAssembly module created: $WASM_BUILD_DIR/openabe.wasm"
-}
-
 # Main execution
 main() {
-    info "Building OpenABE for WebAssembly..."
-
-    # Create relic_ec symlink for compatibility (OpenABE expects relic_ec/relic.h)
-    if [ ! -e "$WASM_PREFIX/include/relic_ec" ]; then
-        info "Creating relic_ec symlink for compatibility..."
-        ln -s relic "$WASM_PREFIX/include/relic_ec"
-    fi
+    info "Building OpenABE for WebAssembly with MCL backend..."
+    info "MCL library: $WASM_PREFIX_MCL/lib/libmcl.a"
+    info "MCL headers: $WASM_PREFIX_MCL/include/mcl/"
 
     compile_sources
     create_library
-    # create_wasm_module
 
-    info "OpenABE WebAssembly build complete!"
+    info "OpenABE WebAssembly build complete (MCL backend)!"
     info "Output directory: $WASM_BUILD_DIR"
+    info "Library: $WASM_BUILD_DIR/libopenabe.a"
 }
 
 main "$@"

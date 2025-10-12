@@ -41,7 +41,7 @@ CXXFLAGS="$CFLAGS -std=c++11"
 CXXFLAGS="$CXXFLAGS -Wall -Wsign-compare -fstrict-overflow"
 CXXFLAGS="$CXXFLAGS -D__wasm__ -fexceptions"
 
-# C++ runtime library path (needed for exceptions, RTTI)
+# C++ runtime library path (needed for GMP C++ bindings)
 WASI_CXX_RT_PATH="$WASI_SDK_PATH/share/wasi-sysroot/lib/wasm32-wasi"
 
 # Linker flags
@@ -60,6 +60,9 @@ LIBS="$LIBS $WASI_CXX_RT_PATH/libc++.a $WASI_CXX_RT_PATH/libc++abi.a"
 
 # WASI emulated libraries for missing POSIX functions
 LIBS="$LIBS -lwasi-emulated-getpid -lwasi-emulated-signal"
+
+# setjmp/longjmp library (required for SJLJ exception handling)
+LIBS="$LIBS -lsetjmp"
 
 # Colors
 GREEN='\033[0;32m'

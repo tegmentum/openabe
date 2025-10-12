@@ -308,6 +308,16 @@ build_relic() {
     # Fix rand_call signature mismatch (int -> size_t)
     sed -i.bak 's/void (\*rand_call)(uint8_t \*, int, void \*);/void (*rand_call)(uint8_t *, size_t, void *);/' include/relic_core.h
 
+    # CRITICAL FIX: Patch fp2_srt to use old algorithm for WASM
+    # The new 2024 algorithm has bugs in WASM that corrupt G2 point decompression
+    info "Patching fp2_srt to use proven algorithm for WASM..."
+    sed -i.fp2fix 's/if (fp_prime_get_mod8() % 4 == 3) {/#ifdef __wasm__\
+		\/* WASM FIX: Force old algorithm - new 2024 algorithm has WASM bugs *\/\
+		if (0) {\
+#else\
+		if (fp_prime_get_mod8() % 4 == 3) {\
+#endif/' src/fpx/relic_fpx_srt.c
+
     # Note: RELIC 0.7.0 already has RLC_MIN/RLC_MAX defined in relic_util.h
 
     mkdir -p build-wasm
