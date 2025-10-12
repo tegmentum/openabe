@@ -47,7 +47,7 @@ extern "C" {
 
 namespace oabe {
 
-#if !defined(BP_WITH_OPENSSL)
+#if !defined(BP_WITH_OPENSSL) && !defined(BP_WITH_MCL)
 void fp12_write_ostream(std::ostream& os, fp12_t a, int radix);
 void fp6_write_ostream(std::ostream& os, fp6_t a, int radix);
 void fp2_write_ostream(std::ostream& os, fp2_t a, int radix);

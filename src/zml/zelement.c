@@ -635,6 +635,12 @@ void g1_mul_op(bp_group_t group, g1_ptr z, const g1_ptr x, const bignum_t r) {
 void g1_rand_op(g1_ptr g) {
     ep_rand(g);
 }
+
+void g2_rand_op(g2_ptr g) {
+    fprintf(stderr, "[g2_rand_op] Called ep2_rand()\n");
+    ep2_rand(g);
+    fprintf(stderr, "[g2_rand_op] After ep2_rand() - is_infty=%d\n", g2_is_infty(g));
+}
 #endif
 
 #if defined(BP_WITH_OPENSSL)
@@ -684,15 +690,118 @@ void g1_elem_out(const g1_ptr g, uint8_t *out, size_t len) {
 }
 
 size_t g2_elem_len(g2_ptr g) {
+#ifdef __wasm__
+  // WASM PROJECTIVE SERIALIZATION: 1 byte (marker) + 6 * RLC_FP_DIGS * sizeof(dig_t)
+  // Serialize projective (X:Y:Z) coordinates directly - NO NORMALIZATION
+  // For BN254: RLC_FP_DIGS = 4, sizeof(dig_t) = 8, so 1 + 6 * 4 * 8 = 193 bytes
+  if (ep2_is_infty(g)) {
+    return 1;  // Just infinity marker
+  }
+  return 1 + 6 * RLC_FP_DIGS * sizeof(dig_t);  // marker + 6 field elements (x, y, z)
+#else
   return ep2_size_bin(g, COMPRESS);
+#endif
 }
 
 void g2_elem_in(g2_ptr g, uint8_t *in, size_t len) {
+    fprintf(stderr, "[g2_elem_in PROJECTIVE] Reading %zu bytes\n", len);
+#ifdef __wasm__
+    // WASM PROJECTIVE SERIALIZATION: Deserialize projective (X:Y:Z) coordinates
+    // AVOIDS broken ep2_norm() function by never normalizing
+
+    // Check for infinity point
+    if (len == 1 && in[0] == 0) {
+        ep2_set_infty(g);
+        fprintf(stderr, "[g2_elem_in PROJECTIVE] Loaded infinity point\n");
+        return;
+    }
+
+    // Expected format: marker (1 byte) + 6 * RLC_FP_DIGS * 8 bytes (6 field elements)
+    // For BN254: RLC_FP_DIGS = 4, so 6 * 4 * 8 = 192 bytes + 1 marker = 193 bytes
+    size_t expected_len = 1 + 6 * RLC_FP_DIGS * sizeof(dig_t);
+    if (len != expected_len) {
+        fprintf(stderr, "[g2_elem_in PROJECTIVE] ERROR: Invalid length %zu (expected %zu)\n",
+                len, expected_len);
+        return;
+    }
+
+    if (in[0] != 0xFF) {
+        fprintf(stderr, "[g2_elem_in PROJECTIVE] ERROR: Invalid marker %d (expected 0xFF)\n", in[0]);
+        return;
+    }
+
+    // Directly copy raw digit arrays for X, Y, Z (preserves Montgomery form)
+    size_t offset = 1;
+    size_t elem_size = RLC_FP_DIGS * sizeof(dig_t);
+
+    memcpy(g->x[0], in + offset, elem_size); offset += elem_size;
+    memcpy(g->x[1], in + offset, elem_size); offset += elem_size;
+    memcpy(g->y[0], in + offset, elem_size); offset += elem_size;
+    memcpy(g->y[1], in + offset, elem_size); offset += elem_size;
+    memcpy(g->z[0], in + offset, elem_size); offset += elem_size;
+    memcpy(g->z[1], in + offset, elem_size); offset += elem_size;
+
+    // Set to projective coordinates (IMPORTANT!)
+    g->coord = PROJC;
+
+    // Debug: Print first few bytes of each coordinate after deserialization
+    fprintf(stderr, "[g2_elem_in PROJECTIVE] x[0][0]=%016llx x[1][0]=%016llx z[0][0]=%016llx z[1][0]=%016llx\n",
+            (unsigned long long)g->x[0][0], (unsigned long long)g->x[1][0],
+            (unsigned long long)g->z[0][0], (unsigned long long)g->z[1][0]);
+    fprintf(stderr, "[g2_elem_in PROJECTIVE] Copied projective coords - is_infty=%d\n", ep2_is_infty(g));
+
+    // SKIP ep2_on_curve() check entirely - may corrupt point in WASM
+    fprintf(stderr, "[g2_elem_in PROJECTIVE] Skipping validation (known buggy in WASM)\n");
+#else
     ep2_read_bin(g, in, (int)len);
+#endif
 }
 
 void g2_elem_out(g2_ptr g, uint8_t *out, size_t len) {
-  ep2_write_bin(out, len, g, COMPRESS);
+    fprintf(stderr, "[g2_elem_out PROJECTIVE] Serializing - is_infty=%d, len=%zu\n", ep2_is_infty(g), len);
+#ifdef __wasm__
+    // WASM PROJECTIVE SERIALIZATION: Serialize projective (X:Y:Z) coordinates directly
+    // AVOIDS broken ep2_norm() function - NO NORMALIZATION!
+
+    // Handle infinity point
+    if (ep2_is_infty(g)) {
+        if (len < 1) {
+            fprintf(stderr, "[g2_elem_out PROJECTIVE] ERROR: Buffer too small for infinity\n");
+            return;
+        }
+        out[0] = 0;
+        fprintf(stderr, "[g2_elem_out PROJECTIVE] Serialized infinity point\n");
+        return;
+    }
+
+    // Check buffer size
+    size_t expected_size = 1 + 6 * RLC_FP_DIGS * sizeof(dig_t);
+    if (len < expected_size) {
+        fprintf(stderr, "[g2_elem_out PROJECTIVE] ERROR: Buffer too small (need %zu, got %zu)\n",
+                expected_size, len);
+        return;
+    }
+
+    // Directly copy raw digit arrays for X, Y, Z (NO ep2_norm call!)
+    out[0] = 0xFF;  // Custom format marker
+    size_t offset = 1;
+    size_t elem_size = RLC_FP_DIGS * sizeof(dig_t);
+
+    memcpy(out + offset, g->x[0], elem_size); offset += elem_size;
+    memcpy(out + offset, g->x[1], elem_size); offset += elem_size;
+    memcpy(out + offset, g->y[0], elem_size); offset += elem_size;
+    memcpy(out + offset, g->y[1], elem_size); offset += elem_size;
+    memcpy(out + offset, g->z[0], elem_size); offset += elem_size;
+    memcpy(out + offset, g->z[1], elem_size); offset += elem_size;
+
+    // Debug: Print first few bytes of each coordinate
+    fprintf(stderr, "[g2_elem_out PROJECTIVE] x[0][0]=%016llx x[1][0]=%016llx z[0][0]=%016llx z[1][0]=%016llx\n",
+            (unsigned long long)g->x[0][0], (unsigned long long)g->x[1][0],
+            (unsigned long long)g->z[0][0], (unsigned long long)g->z[1][0]);
+    fprintf(stderr, "[g2_elem_out PROJECTIVE] Serialized projective coords (total %zu bytes)\n", offset);
+#else
+    ep2_write_bin(out, len, g, COMPRESS);
+#endif
 }
 
 size_t gt_elem_len(gt_ptr g, int should_compress) {

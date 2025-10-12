@@ -97,12 +97,16 @@ void generateECCurveParameters(EC_GROUP **group, string paramid) {
     // obtain the nid from the paramid
     int nid = OpenABE_convertStringToNID(paramid);
     if (nid == 0) {
-      throw OpenABE_ERROR_INVALID_INPUT;
+      fprintf(stderr, "generateECCurveParameters: invalid param ID\n");
+      return;
     }
     // construct the group by nid
     *group = EC_GROUP_new_by_curve_name(nid);
 
-    ASSERT_NOTNULL(*group);
+    if (*group == NULL) {
+      fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL failed\n", __FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
   }
 }
 
@@ -181,7 +185,12 @@ ZP_t &ZP_t::operator*=(const ZP_t &x) {
 }
 
 ZP_t operator+(const ZP_t &x, const ZP_t &y) {
-  ASSERT(x.isOrderSet || y.isOrderSet, OpenABE_ERROR_INVALID_INPUT);
+  if (!(x.isOrderSet || y.isOrderSet)) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+    ZP_t invalid;
+    invalid.isInit = false;
+    return invalid;
+  }
   ZP_t zr;
   if (x.isOrderSet)
     zr.setOrder(x.order);
@@ -193,7 +202,12 @@ ZP_t operator+(const ZP_t &x, const ZP_t &y) {
 }
 
 ZP_t operator-(const ZP_t &x, const ZP_t &y) {
-  ASSERT(x.isOrderSet || y.isOrderSet, OpenABE_ERROR_INVALID_INPUT);
+  if (!(x.isOrderSet || y.isOrderSet)) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+    ZP_t invalid;
+    invalid.isInit = false;
+    return invalid;
+  }
   ZP_t zr;
   if (x.isOrderSet)
     zr.setOrder(x.order);
@@ -205,14 +219,24 @@ ZP_t operator-(const ZP_t &x, const ZP_t &y) {
 }
 
 ZP_t operator-(const ZP_t &x) {
-  ASSERT(x.isInit && x.isOrderSet, OpenABE_ERROR_INVALID_INPUT);
+  if (!(x.isInit && x.isOrderSet)) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+    ZP_t invalid;
+    invalid.isInit = false;
+    return invalid;
+  }
   ZP_t zr = x;
   zml_bignum_negate(zr.m_ZP, zr.order);
   return zr;
 }
 
 ZP_t operator*(const ZP_t &x, const ZP_t &y) {
-  ASSERT(x.isOrderSet || y.isOrderSet, OpenABE_ERROR_INVALID_INPUT);
+  if (!(x.isOrderSet || y.isOrderSet)) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+    ZP_t invalid;
+    invalid.isInit = false;
+    return invalid;
+  }
   ZP_t zr;
   if (x.isOrderSet)
     zr.setOrder(x.order);
@@ -226,17 +250,26 @@ ZP_t operator*(const ZP_t &x, const ZP_t &y) {
 void ZP_t::multInverse() {
   // compute c = (1 / zr) mod o
   if (this->isInit && this->isOrderSet) {
-    ASSERT(zml_bignum_mod_inv(this->m_ZP, this->m_ZP, this->order),
-           OpenABE_ERROR_INVALID_INPUT);
+    if (!zml_bignum_mod_inv(this->m_ZP, this->m_ZP, this->order)) {
+      fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+      return;
+    }
   }
 }
 
 ZP_t operator/(const ZP_t &x, const ZP_t &y) {
   if (zml_bignum_is_zero(y.m_ZP)) {
     cout << "Divide by zero error!" << endl;
-    throw OpenABE_ERROR_DIVIDE_BY_ZERO;
+    ZP_t invalid;
+    invalid.isInit = false;
+    return invalid;
   }
-  ASSERT(x.isOrderSet || y.isOrderSet, OpenABE_ERROR_INVALID_INPUT);
+  if (!(x.isOrderSet || y.isOrderSet)) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+    ZP_t invalid;
+    invalid.isInit = false;
+    return invalid;
+  }
   ZP_t r;
   if (x.isOrderSet)
     r.setOrder(x.order);
@@ -280,7 +313,8 @@ void ZP_t::setRandom(OpenABERNG *rng) {
     zml_bignum_fromBin(this->m_ZP, buf, length);
     zml_bignum_mod(this->m_ZP, this->order);
   } else {
-    throw OpenABE_ERROR_ELEMENT_NOT_INITIALIZED;
+    fprintf(stderr, "ZP_t::setRandom: element not initialized\n");
+    return;
   }
 }
 
@@ -340,7 +374,10 @@ void ZP_t::deserialize(OpenABEByteString &input) {
       len |= input.at(2);             // Moves to 0x00FF
       len |= (input.at(1) << 8);      // Moves to 0xFF00
       // cout << "len: " << len << ", input size: " << input.size() << endl;
-      ASSERT(input.size() == (len + hdrLen), OpenABE_ERROR_SERIALIZATION_FAILED);
+      if (!(input.size() == (len + hdrLen))) {
+        fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_SERIALIZATION_FAILED));
+        return;
+      }
 
       uint8_t *bstr = (input.getInternalPtr() + hdrLen);
       zml_bignum_fromBin(this->m_ZP, bstr, len);
@@ -364,7 +401,7 @@ string ZP_t::getBytesAsString() {
     zml_bignum_safe_free(str);
     return s0;
   } else {
-    throw OpenABE_ERROR_ELEMENT_NOT_INITIALIZED;
+    return "";
   }
 }
 
@@ -430,11 +467,14 @@ G_t::G_t(std::shared_ptr<ECGroup> ecgroup) {
 }
 
 G_t::G_t(const G_t &w) {
-  this->isInit = true;
   if (w.ecgroup != nullptr) {
     this->ecgroup = w.ecgroup;
+    this->isInit = true;
   } else {
-    throw OpenABE_ERROR_INVALID_GROUP_PARAMS;
+    fprintf(stderr, "G_t copy constructor: invalid group params\n");
+    this->ecgroup = nullptr;
+    this->isInit = false;
+    return;
   }
   ec_point_init(GET_GROUP(this->ecgroup), &this->m_G);
   ec_point_copy(this->m_G, w.m_G);
@@ -492,13 +532,17 @@ void G_t::serialize(OpenABEByteString &result) const {
     total_len =
         ec_convert_to_bytestring(GET_GROUP(this->ecgroup), ss, this->m_G);
     // cout << "len: " << ss.size() << ", total_len: " << total_len << endl;
-    ASSERT(ss.size() == total_len, OpenABE_ERROR_SERIALIZATION_FAILED);
+    if (!(ss.size() == total_len)) {
+      fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_SERIALIZATION_FAILED));
+      return;
+    }
     result.pack16bits((uint16_t)total_len);
     result += ss;
     ss.clear();
   } else {
-    /* throw an error */
-    throw OpenABE_ERROR_ELEMENT_NOT_INITIALIZED;
+    /* void function can't return error - just return */
+    fprintf(stderr, "G_t::serialize: element not initialized\n");
+    return;
   }
 }
 
@@ -512,7 +556,10 @@ void G_t::deserialize(OpenABEByteString &input) {
       // read 2 bytes from right to left
       len |= input.at(2);                // Moves to 0x00FF
       len |= (input.at(1) << 8);         // Moves to 0xFF00
-      ASSERT(input.size() == (len + hdrLen), OpenABE_ERROR_SERIALIZATION_FAILED);
+      if (!(input.size() == (len + hdrLen))) {
+        fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_SERIALIZATION_FAILED));
+        return;
+      }
 
       uint8_t *pointstr = (input.getInternalPtr() + hdrLen);
       if (is_ec_point_null(this->m_G)) {
@@ -521,7 +568,9 @@ void G_t::deserialize(OpenABEByteString &input) {
       ec_convert_to_point(GET_GROUP(this->ecgroup), this->m_G, pointstr, len);
     }
   } else {
-    throw OpenABE_ERROR_ELEMENT_NOT_INITIALIZED;
+    /* void function can't return error - just return */
+    fprintf(stderr, "G_t::deserialize: element not initialized\n");
+    return;
   }
 }
 

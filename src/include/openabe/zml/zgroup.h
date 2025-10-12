@@ -34,9 +34,9 @@
 #ifndef __ZGROUP_H__
 #define __ZGROUP_H__
 
-#ifdef __wasm__
+#if defined(__wasm__)
 #include <gmp.h>
-#else
+#elif !defined(BP_WITH_MCL)
 #include <gmpxx.h>
 #endif
 

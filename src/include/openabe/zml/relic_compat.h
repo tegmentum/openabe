@@ -15,6 +15,11 @@
 
 #include <relic/relic.h>
 
+// CAT macro was renamed to RLC_CAT in RELIC 0.7.0
+#ifndef CAT
+#define CAT(A, B) RLC_CAT(A, B)
+#endif
+
 // Backward compatibility macros for RELIC 0.7.0+ API changes
 #ifndef BN_POS
 #define BN_POS RLC_POS
@@ -178,6 +183,14 @@
 // and can be used as-is from RELIC headers
 
 #endif // RELIC_RENAMED_SYMBOLS
+
+// Define type-to-implementation mappings for BP (Barreto-Paterson) pairing
+// These are needed by zelement.h macros that use CAT(G*_LOWER, function_name)
+#ifndef BP_WITH_OPENSSL
+#define G1_LOWER ep_
+#define G2_LOWER ep2_
+#define GT_LOWER fp12_
+#endif
 
 // OpenABE uses ec_* wrappers for RELIC functions (both native and WASM builds)
 // These wrappers provide a consistent interface

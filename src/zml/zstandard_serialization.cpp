@@ -305,7 +305,7 @@ void StandardPairingSerializer::serializeG1_SEC1(OpenABEByteString& out, const G
 
 void StandardPairingSerializer::deserializeG1_SEC1(G1& point, OpenABEByteString& in) {
     if (in.size() == 0) {
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     uint8_t prefix = in.at(0);
@@ -326,7 +326,7 @@ void StandardPairingSerializer::deserializeG1_SEC1(G1& point, OpenABEByteString&
         if (in.size() != 1 + 2 * field_size) {
             zml_bignum_free(x);
             zml_bignum_free(y);
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         OpenABEByteString x_bytes, y_bytes;
@@ -341,7 +341,7 @@ void StandardPairingSerializer::deserializeG1_SEC1(G1& point, OpenABEByteString&
         if (in.size() != 1 + field_size) {
             zml_bignum_free(x);
             zml_bignum_free(y);
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         OpenABEByteString x_bytes;
@@ -354,12 +354,12 @@ void StandardPairingSerializer::deserializeG1_SEC1(G1& point, OpenABEByteString&
         if (!decompressG1Point(point, x, y, y_should_be_odd)) {
             zml_bignum_free(x);
             zml_bignum_free(y);
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
     } else {
         zml_bignum_free(x);
         zml_bignum_free(y);
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     setG1FromCoordinates(point, x, y);
@@ -418,7 +418,7 @@ void StandardPairingSerializer::deserializeG1_ZCash(G1& point, OpenABEByteString
     size_t field_size = get_field_size(point.bgroup->getCurveID());
 
     if (in.size() < field_size) {
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     uint8_t flags = in.at(0);
@@ -447,7 +447,7 @@ void StandardPairingSerializer::deserializeG1_ZCash(G1& point, OpenABEByteString
         if (!decompressG1Point(point, x, y, y_is_largest)) {
             zml_bignum_free(x);
             zml_bignum_free(y);
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         // Verify y is correctly selected
@@ -469,7 +469,7 @@ void StandardPairingSerializer::deserializeG1_ZCash(G1& point, OpenABEByteString
     } else {
         // Uncompressed
         if (in.size() != 2 * field_size) {
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         bignum_t x, y;
@@ -517,7 +517,7 @@ void StandardPairingSerializer::serializeG1_Ethereum(OpenABEByteString& out, con
 
 void StandardPairingSerializer::deserializeG1_Ethereum(G1& point, OpenABEByteString& in) {
     if (in.size() != 64) {
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     bignum_t x, y;
@@ -639,7 +639,7 @@ void StandardPairingSerializer::serializeG2_SEC1(OpenABEByteString& out, const G
 
 void StandardPairingSerializer::deserializeG2_SEC1(G2& point, OpenABEByteString& in) {
     if (in.size() == 0) {
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     uint8_t prefix = in.at(0);
@@ -663,7 +663,7 @@ void StandardPairingSerializer::deserializeG2_SEC1(G2& point, OpenABEByteString&
                 zml_bignum_free(x[i]);
                 zml_bignum_free(y[i]);
             }
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         size_t offset = 1;
@@ -695,7 +695,7 @@ void StandardPairingSerializer::deserializeG2_SEC1(G2& point, OpenABEByteString&
                 zml_bignum_free(x[i]);
                 zml_bignum_free(y[i]);
             }
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         OpenABEByteString temp;
@@ -717,7 +717,7 @@ void StandardPairingSerializer::deserializeG2_SEC1(G2& point, OpenABEByteString&
                 zml_bignum_free(x[i]);
                 zml_bignum_free(y[i]);
             }
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
     } else {
@@ -725,7 +725,7 @@ void StandardPairingSerializer::deserializeG2_SEC1(G2& point, OpenABEByteString&
             zml_bignum_free(x[i]);
             zml_bignum_free(y[i]);
         }
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     setG2FromCoordinates(point, x, y);
@@ -747,7 +747,7 @@ void StandardPairingSerializer::deserializeG2_ZCash(G2& point, OpenABEByteString
     size_t field_size = get_field_size(point.bgroup->getCurveID());
 
     if (in.size() < 2 * field_size) {
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     uint8_t flags = in.at(0);
@@ -772,7 +772,7 @@ void StandardPairingSerializer::deserializeG2_ZCash(G2& point, OpenABEByteString
                 zml_bignum_free(x[i]);
                 zml_bignum_free(y[i]);
             }
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         // Extract x with flags masked
@@ -796,7 +796,7 @@ void StandardPairingSerializer::deserializeG2_ZCash(G2& point, OpenABEByteString
                 zml_bignum_free(x[i]);
                 zml_bignum_free(y[i]);
             }
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         // Verify y is correctly selected
@@ -822,7 +822,7 @@ void StandardPairingSerializer::deserializeG2_ZCash(G2& point, OpenABEByteString
                 zml_bignum_free(x[i]);
                 zml_bignum_free(y[i]);
             }
-            ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+            throw OpenABE_ERROR_SERIALIZATION_FAILED;
         }
 
         OpenABEByteString temp;
@@ -887,7 +887,7 @@ void StandardPairingSerializer::serializeG2_Ethereum(OpenABEByteString& out, con
 
 void StandardPairingSerializer::deserializeG2_Ethereum(G2& point, OpenABEByteString& in) {
     if (in.size() != 128) {
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     bignum_t x[2], y[2];
@@ -1000,7 +1000,7 @@ void StandardPairingSerializer::deserializeGT_Full(GT& gt, OpenABEByteString& in
     size_t field_size = get_field_size(gt.bgroup->getCurveID());
 
     if (in.size() < 12 * field_size) {
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     // Check for identity
@@ -1062,7 +1062,7 @@ void StandardPairingSerializer::deserializeGT_Cyclotomic(GT& gt, OpenABEByteStri
     size_t field_size = get_field_size(gt.bgroup->getCurveID());
 
     if (in.size() < 8 * field_size) {
-        ABORT_ERROR(OpenABE_ERROR_SERIALIZATION_FAILED);
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
 
     if ((in.at(0) & SerializationFlags::INFINITY_FLAG) != 0) {
@@ -1084,7 +1084,7 @@ void StandardPairingSerializer::deserializeGT_Cyclotomic(GT& gt, OpenABEByteStri
 
     // TODO: Reconstruct indices 0-3 using g^(p^6) = g^(-1) relation
     // For now, this is a placeholder - full implementation requires Frobenius map
-    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 
     for (int i = 0; i < 12; i++) {
         zml_bignum_free(tower[i]);
@@ -1098,7 +1098,11 @@ bool StandardPairingSerializer::decompressG1Point(const G1& point, const bignum_
 #if defined(BP_WITH_OPENSSL)
     // OpenSSL implementation
     // TODO: Implement for OpenSSL backend
-    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_MCL)
+    // MCL implementation
+    // TODO: Implement for MCL backend
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation
     // For BN curves: y^2 = x^3 + b (where b=3 for BN254/BN256, varies for others)
@@ -1173,7 +1177,11 @@ bool StandardPairingSerializer::decompressG2Point(const G2& point, const bignum_
 #if defined(BP_WITH_OPENSSL)
     // OpenSSL implementation
     // TODO: Implement for OpenSSL backend
-    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_MCL)
+    // MCL implementation
+    // TODO: Implement for MCL backend
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation for Fp2
     // Similar to G1 but working in Fp2
@@ -1254,6 +1262,45 @@ void StandardPairingSerializer::extractG1Coordinates(const G1& point, bignum_t x
     // Implementation depends on backend (RELIC vs OpenSSL)
 #if defined(BP_WITH_OPENSSL)
     G1_ELEM_get_affine_coordinates(GET_BP_GROUP(point.bgroup), point.m_G1, &x, &y, NULL);
+#elif defined(BP_WITH_MCL)
+    // MCL implementation
+    // MCL stores points in Jacobian coordinates (x, y, z)
+    // We need to normalize to affine: (x/z^2, y/z^3)
+    // However, MCL normalizes automatically when serializing
+    // Use MCL's serialize/deserialize to get affine coordinates
+
+    // Normalize point: MCL automatically returns normalized coordinates via getStr
+    // We'll use the Fp serialization to extract x and y
+    size_t fp_size = mclBn_getFpByteSize();
+    uint8_t buffer[fp_size * 3];  // x, y, z in Jacobian
+
+    // Serialize the whole G1 point
+    size_t written = mclBnG1_serialize(buffer, sizeof(buffer), point.m_G1);
+    if (written == 0) {
+        throw OpenABE_ERROR_SERIALIZATION_FAILED;
+    }
+
+    // MCL G1 serialization format: compressed or uncompressed
+    // We need affine coordinates, so deserialize to temp and extract
+    // For now, use MCL's Fp serialization on the x and y fields directly
+    mclBnG1 temp;
+    memcpy(&temp, point.m_G1, sizeof(mclBnG1));
+
+    // Normalize the point (convert Jacobian to affine)
+    // MCL provides normalized access via mclBnG1_normalize() - but it's not in public API
+    // Instead, serialize and deserialize which normalizes
+    uint8_t norm_buffer[256];
+    size_t norm_size = mclBnG1_serialize(norm_buffer, sizeof(norm_buffer), &temp);
+    mclBnG1_deserialize(&temp, norm_buffer, norm_size);
+
+    // Now extract x and y coordinates
+    // MCL stores as mclBnFp x, y, z
+    // After normalization z=1, so we can read x and y directly
+    size_t x_size = mclBnFp_serialize(buffer, fp_size, &temp.x);
+    zml_bignum_fromBin(x, buffer, x_size);
+
+    size_t y_size = mclBnFp_serialize(buffer, fp_size, &temp.y);
+    zml_bignum_fromBin(y, buffer, y_size);
 #else
     // RELIC implementation
     ep_t temp;
@@ -1269,18 +1316,23 @@ void StandardPairingSerializer::extractG1Coordinates(const G1& point, bignum_t x
 void StandardPairingSerializer::setG1FromCoordinates(G1& point, const bignum_t x, const bignum_t y) {
 #if defined(BP_WITH_OPENSSL)
     G1_ELEM_set_affine_coordinates(GET_BP_GROUP(point.bgroup), point.m_G1, x, y, NULL);
+#elif defined(BP_WITH_MCL)
+    // MCL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation
     fp_prime_conv(point.m_G1->x, x);
     fp_prime_conv(point.m_G1->y, y);
     fp_set_dig(point.m_G1->z, 1);
-    point.m_G1->norm = 1;  // Set to normalized (affine)
+    // Note: .norm field removed in RELIC 0.7.0
 #endif
 }
 
 bool StandardPairingSerializer::isG1AtInfinity(const G1& point) {
 #if defined(BP_WITH_OPENSSL)
     return G1_ELEM_is_at_infinity(GET_BP_GROUP(point.bgroup), point.m_G1);
+#elif defined(BP_WITH_MCL)
+    return mclBnG1_isZero(point.m_G1);
 #else
     return ep_is_infty(point.m_G1);
 #endif
@@ -1289,6 +1341,8 @@ bool StandardPairingSerializer::isG1AtInfinity(const G1& point) {
 void StandardPairingSerializer::setG1ToInfinity(G1& point) {
 #if defined(BP_WITH_OPENSSL)
     G1_ELEM_set_to_infinity(GET_BP_GROUP(point.bgroup), point.m_G1);
+#elif defined(BP_WITH_MCL)
+    mclBnG1_clear(point.m_G1);
 #else
     ep_set_infty(point.m_G1);
 #endif
@@ -1297,6 +1351,9 @@ void StandardPairingSerializer::setG1ToInfinity(G1& point) {
 void StandardPairingSerializer::extractG2Coordinates(const G2& point, bignum_t x[2], bignum_t y[2]) {
 #if defined(BP_WITH_OPENSSL)
     G2_ELEM_get_affine_coordinates(GET_BP_GROUP(point.bgroup), point.m_G2, x, y, NULL);
+#elif defined(BP_WITH_MCL)
+    // MCL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation for ep2
     ep2_t temp;
@@ -1314,6 +1371,9 @@ void StandardPairingSerializer::extractG2Coordinates(const G2& point, bignum_t x
 void StandardPairingSerializer::setG2FromCoordinates(G2& point, const bignum_t x[2], const bignum_t y[2]) {
 #if defined(BP_WITH_OPENSSL)
     G2_ELEM_set_affine_coordinates(GET_BP_GROUP(point.bgroup), point.m_G2, x, y, NULL);
+#elif defined(BP_WITH_MCL)
+    // MCL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation
     fp_prime_conv(point.m_G2->x[0], x[0]);
@@ -1321,13 +1381,15 @@ void StandardPairingSerializer::setG2FromCoordinates(G2& point, const bignum_t x
     fp_prime_conv(point.m_G2->y[0], y[0]);
     fp_prime_conv(point.m_G2->y[1], y[1]);
     fp2_set_dig(point.m_G2->z, 1);
-    point.m_G2->norm = 1;  // Set to normalized (affine)
+    // Note: .norm field removed in RELIC 0.7.0
 #endif
 }
 
 bool StandardPairingSerializer::isG2AtInfinity(const G2& point) {
 #if defined(BP_WITH_OPENSSL)
     return G2_ELEM_is_at_infinity(GET_BP_GROUP(point.bgroup), point.m_G2);
+#elif defined(BP_WITH_MCL)
+    return mclBnG2_isZero(point.m_G2);
 #else
     return ep2_is_infty(const_cast<G2&>(point).m_G2);
 #endif
@@ -1336,6 +1398,8 @@ bool StandardPairingSerializer::isG2AtInfinity(const G2& point) {
 void StandardPairingSerializer::setG2ToInfinity(G2& point) {
 #if defined(BP_WITH_OPENSSL)
     G2_ELEM_set_to_infinity(GET_BP_GROUP(point.bgroup), point.m_G2);
+#elif defined(BP_WITH_MCL)
+    mclBnG2_clear(point.m_G2);
 #else
     ep2_set_infty(point.m_G2);
 #endif
@@ -1344,6 +1408,8 @@ void StandardPairingSerializer::setG2ToInfinity(G2& point) {
 bool StandardPairingSerializer::isGTIdentity(const GT& gt) {
 #if defined(BP_WITH_OPENSSL)
     return GT_is_unity(GET_BP_GROUP(gt.bgroup), gt.m_GT);
+#elif defined(BP_WITH_MCL)
+    return gt_is_unity(const_cast<GT&>(gt).m_GT);
 #else
     return gt_is_unity(const_cast<GT&>(gt).m_GT);
 #endif
@@ -1356,7 +1422,13 @@ void StandardPairingSerializer::setGTToIdentity(GT& gt) {
 void StandardPairingSerializer::extractFp12Tower(const GT& gt, bignum_t tower[12]) {
     // Extract 12 Fp elements from Fp12
     // Fp12 structure depends on backend
-#if !defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+    // MCL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_OPENSSL)
+    // OpenSSL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#else
     // RELIC: Fp12 as 2 x Fp6, Fp6 as 3 x Fp2, Fp2 as 2 x Fp
     for (int i = 0; i < 2; i++) {      // Fp12 = Fp6[w]
         for (int j = 0; j < 3; j++) {  // Fp6 = Fp2[v]
@@ -1366,14 +1438,17 @@ void StandardPairingSerializer::extractFp12Tower(const GT& gt, bignum_t tower[12
             }
         }
     }
-#else
-    // OpenSSL implementation - TODO
-    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
 #endif
 }
 
 void StandardPairingSerializer::setGTFromFp12Tower(GT& gt, const bignum_t tower[12]) {
-#if !defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+    // MCL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_OPENSSL)
+    // OpenSSL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#else
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 3; j++) {
             for (int k = 0; k < 2; k++) {
@@ -1382,9 +1457,6 @@ void StandardPairingSerializer::setGTFromFp12Tower(GT& gt, const bignum_t tower[
             }
         }
     }
-#else
-    // OpenSSL implementation - TODO
-    ABORT_ERROR(OpenABE_ERROR_NOT_IMPLEMENTED);
 #endif
 }
 

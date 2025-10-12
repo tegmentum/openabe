@@ -34,19 +34,44 @@
 #ifndef __ZELEMENT_H__
 #define __ZELEMENT_H__
 
+// Bignum library: follows bilinear pairing library choice
 #if defined(BP_WITH_OPENSSL)
-#define EC_WITH_OPENSSL
 #define BN_WITH_OPENSSL
+#endif
+
+#if defined(BP_WITH_MCL)
+#define BN_WITH_MCL
+#endif
+
+// Elliptic Curve library: can be chosen independently via EC_WITH_MCL or EC_WITH_OPENSSL
+// EC_WITH_MCL and EC_WITH_OPENSSL are set by Makefile.common based on EC_LIB variable
+// If neither is explicitly set, default to OpenSSL for EC operations
+#if !defined(EC_WITH_MCL) && !defined(EC_WITH_OPENSSL)
+#define EC_WITH_OPENSSL
 #endif
 
 #if defined(BP_WITH_OPENSSL)
 #include <openssl/bp.h>
 #endif
 
-#if !defined(BP_WITH_OPENSSL)
+#if defined(BP_WITH_MCL)
+ /* MCL uses C API for BN254 pairing */
+ #define MCLBN_FP_UNIT_SIZE 4
+ #define MCLBN_FR_UNIT_SIZE 4
+ #include <mcl/bn.h>
+#endif
+
+#if !defined(BP_WITH_OPENSSL) && !defined(BP_WITH_MCL)
  #include <relic/relic.h>
  #include <relic_ec/relic.h>
  #include <openabe/zml/relic_compat.h>
+#endif
+
+// Include OpenSSL EC headers when using OpenSSL for EC operations
+#if defined(EC_WITH_OPENSSL)
+ #include <openssl/ec.h>
+ #include <openssl/bn.h>
+ #include <openssl/obj_mac.h>
 #endif
 
 /*************************** BN Definitions *********************/
@@ -85,9 +110,40 @@ typedef BIGNUM* bignum_t;
 
 /* END OpenSSL macro definitions */
 
+#elif defined(BN_WITH_MCL)
+
+/* BEGIN MCL macro definitions */
+
+typedef mclBnFr* bignum_t;
+
+#define zml_bignum_free(b)                mclBnFr_clear(b); free(b)
+#define zml_bignum_safe_free(b)           free(b)
+#define zml_bignum_is_zero(b)             mclBnFr_isZero(b)
+#define zml_bignum_is_one(b)              mclBnFr_isOne(b)
+
+#define BN_POSITIVE      0
+#define BN_NEGATIVE      1
+#define BN_CMP_LT       -1
+#define BN_CMP_EQ        0
+#define BN_CMP_GT        1
+#define G_CMP_EQ         BN_CMP_EQ
+#define CMP_EQ           0
+#define CMP_LT          -1
+#define CMP_GT           1
+
+// MCL function declarations (implemented in zelement_mcl.c)
+int zml_bignum_fromHex(bignum_t b, const char *str, size_t len);
+int zml_bignum_fromBin(bignum_t b, const uint8_t *buf, size_t len);
+size_t zml_bignum_toBin(const bignum_t b, uint8_t *buf, size_t max_len);
+void zml_bignum_setuint(bignum_t b, unsigned int x);
+void zml_bignum_rand(bignum_t a, bignum_t o);
+int zml_check_error();
+
+/* END MCL macro definitions */
+
 #else
 
-/* BEGIN RELIC macro definitions (default if BN_WITH_OEPNSSL not set) */
+/* BEGIN RELIC macro definitions (default if BN_WITH_OPENSSL or BN_WITH_MCL not set) */
 
 typedef bn_t bignum_t;
 
@@ -136,8 +192,22 @@ typedef EC_GROUP* ec_group_t;
 #define ec_get_ref(a)           a
 /* END of OpenSSL macro definitions */
 
+#elif defined(EC_WITH_MCL)
+
+/* BEGIN MCL EC macro definitions */
+typedef void* ec_point_t;
+typedef void* ec_group_t;
+
+#define ec_point_free(e)        free(e)
+#define ec_group_free(g)        g = NULL;
+#define ec_point_set_null(e)    e = nullptr
+#define is_ec_point_null(e)     (e == nullptr)
+#define ec_get_ref(a)           a
+
+/* END MCL EC macro definitions */
+
 #else
-/* if EC_WITH_OPENSSL not specifically defined,
+/* if EC_WITH_OPENSSL or EC_WITH_MCL not specifically defined,
  * then we use RELIC EC operations by default */
 
  /* BEGIN RELIC macro definitions */
@@ -230,8 +300,54 @@ typedef GT_ELEM* gt_ptr;
 
 #define is_elem_null(e) e == nullptr
 
+#elif defined(BP_WITH_MCL)
+
+/* BEGIN MCL macro definitions */
+
+typedef void* bp_group_t;  // MCL doesn't use group objects
+#define bp_group_free(g)   g = nullptr;
+
+typedef mclBnG1* g1_ptr;
+typedef mclBnG2* g2_ptr;
+typedef mclBnGT* gt_ptr;
+
+#define g_set_null(g)      g = nullptr
+#define g1_copy_const      mclBnG1_copy
+#define g2_copy_const      mclBnG2_copy
+#define gt_copy_const      mclBnGT_copy
+
+#define g1_element_free(e) mclBnG1_clear(e); free(e)
+#define g2_element_free(e) mclBnG2_clear(e); free(e)
+#define gt_element_free(e) mclBnGT_clear(e); free(e)
+
+#define is_elem_null(e)    (e == nullptr)
+
+// MCL helper function declarations
+void mclBnG1_copy(mclBnG1* y, const mclBnG1* x);
+void mclBnG2_copy(mclBnG2* y, const mclBnG2* x);
+void mclBnGT_copy(mclBnGT* y, const mclBnGT* x);
+
+// MCL pairing helper function declarations (for C++ layer compatibility)
+int g1_cmp(const g1_ptr a, const g1_ptr b);
+void g1_neg(g1_ptr r, const g1_ptr a);
+void g1_rand(g1_ptr g);
+void g2_add(g2_ptr r, const g2_ptr a, const g2_ptr b);
+void g2_sub(g2_ptr r, const g2_ptr a, const g2_ptr b);
+void g2_neg(g2_ptr r, const g2_ptr a);
+void g2_norm(g2_ptr r, const g2_ptr a);
+void g2_rand(g2_ptr g);
+int gt_cmp(const gt_ptr a, const gt_ptr b);
+void gt_exp(gt_ptr r, const gt_ptr a, const bignum_t b);
+void gt_inv(gt_ptr r, const gt_ptr a);
+void gt_set_unity(gt_ptr a);
+int gt_is_unity(const gt_ptr a);
+int bn_is_even(const bignum_t a);
+void oabe_rand_seed(unsigned char* buf, int buf_len);
+
+/* END MCL macro definitions */
+
 #else
-/* if BP_WITH_OPENSSL not specifically defined,
+/* if BP_WITH_OPENSSL or BP_WITH_MCL not specifically defined,
  * then we use RELIC EC operations by default */
 
  /* BEGIN RELIC macro definitions */
@@ -330,6 +446,7 @@ void g2_init(bp_group_t group, g2_ptr *e);
 void g2_set_to_infinity(bp_group_t group, g2_ptr *e);
 int g2_cmp_op(bp_group_t group, g2_ptr x, g2_ptr y);
 void g2_mul_op(bp_group_t group, g2_ptr z, g2_ptr x, bignum_t r);
+void g2_rand_op(g2_ptr g);
 
 // ZML abstract methods for GT
 void gt_init(const bp_group_t group, gt_ptr *e);

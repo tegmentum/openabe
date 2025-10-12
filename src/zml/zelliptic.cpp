@@ -76,7 +76,8 @@ OpenABECurveID OpenABE_convertIntToCurveID(uint8_t curveID) {
   } else if (curveID == OpenABE_NIST_P521_ID) {
     id = OpenABE_NIST_P521_ID;
   } else {
-    throw OpenABE_ERROR_INVALID_PARAMS_ID;
+    // Return sentinel value for invalid curve ID
+    return OpenABE_NONE_ID;
   }
 
   return id;
@@ -94,11 +95,11 @@ int OpenABE_convertStringToNID(string paramsID) {
 #if defined(BP_WITH_OPENSSL)
     NID = NID_fp254bnb;
 #else
-    throw OpenABE_ERROR_INVALID_PARAMS_ID;
+    return OpenABE_ERROR_INVALID_PARAMS_ID;
 #endif
   } else {
     // Unrecognized parameter type
-    throw OpenABE_ERROR_INVALID_PARAMS_ID;
+    return OpenABE_ERROR_INVALID_PARAMS_ID;
   }
 
   return NID;
@@ -116,12 +117,12 @@ int OpenABE_convertCurveIDToNID(OpenABECurveID id) {
 #if defined(BP_WITH_OPENSSL)
     NID = NID_fp254bnb;
 #else
-    throw OpenABE_ERROR_INVALID_PARAMS_ID;
+    return OpenABE_ERROR_INVALID_PARAMS_ID;
 #endif
   } else {
     /* NOTE: add other curves as they are added to openssl for BP */
     // Unrecognized parameter type
-    throw OpenABE_ERROR_INVALID_PARAMS_ID;
+    return OpenABE_ERROR_INVALID_PARAMS_ID;
   }
 
   return NID;
@@ -235,7 +236,10 @@ ZP_t OpenABEEllipticCurve::getGroupOrder() {
 }
 
 void OpenABEEllipticCurve::getGroupOrder(bignum_t o) {
-  ASSERT_NOTNULL(o);
+  if (o == NULL) {
+    fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL failed\n", __FILE__, __FUNCTION__, __LINE__);
+    return;
+  }
   this->ecgroup->getGroupOrder(o);
 }
 

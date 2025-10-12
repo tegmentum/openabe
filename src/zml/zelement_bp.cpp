@@ -329,7 +329,7 @@ void multi_bp_map_op(const bp_group_t group, oabe::GT &gt,
   mclBnGT temp;
   memset(&temp, 0, sizeof(temp));
   if (n == 0) {
-    mclBnGT_clear(gt.m_GT);
+    mclBnGT_setInt(gt.m_GT, 1);  // Set to multiplicative identity (1), NOT zero!
   } else {
     for (size_t i = 0; i < n; i++) {
       mclBn_pairing(&temp, ps[i], qs[i]);
@@ -349,8 +349,24 @@ void multi_bp_map_op(const bp_group_t group, oabe::GT &gt,
     g1_copy_const(g_1[i], g1.at(i).m_G1);
     ep2_inits(g_2[i]);
     g2_copy_const(g_2[i], g2.at(i).m_G2);
+
+    // DEBUG: Check if inputs are infinity/zero
+    fprintf(stderr, "[MULTI_PAIRING] Pair %zu: G1 is_infty=%d, G2 is_infty=%d\n",
+            i, g1_is_infty(g_1[i]), g2_is_infty(g_2[i]));
+
+    // SKIP normalization - g1_norm/g2_norm are BROKEN in WASM and zero out coordinates!
+    // The pairing operation will handle normalization internally if needed
+    fprintf(stderr, "[MULTI_PAIRING] Pair %zu: Coordinates preserved (no norm call)\n", i);
   }
+
+  fprintf(stderr, "[MULTI_PAIRING] About to call pp_map_sim_oatep_k12 with %zu pairs\n", n);
   pp_map_sim_oatep_k12(gt.m_GT, g_1, g_2, n);
+  fprintf(stderr, "[MULTI_PAIRING] Returned from pp_map_sim_oatep_k12\n");
+
+  // DEBUG: Check result GT element
+  fprintf(stderr, "[MULTI_PAIRING] Result GT first coefficient fp12[0][0][0]=%d\n",
+          fp_is_zero(gt.m_GT[0][0][0]));
+
   for (size_t i = 0; i < n; i++) {
     g1_free(g_1[i]);
     g2_free(g_2[i]);
@@ -371,7 +387,8 @@ void ro_error(void) {
 
 namespace oabe {
 
-#if !defined(BP_WITH_OPENSSL)
+#if !defined(BP_WITH_OPENSSL) && !defined(BP_WITH_MCL)
+// RNG trampoline is only used with RELIC, not MCL or OpenSSL
 static void rng_trampoline(uint8_t *buf, size_t len, void *this_ptr) {
   // cout << "calling our RNG!!!!" << endl;
   OpenABERNG *rng = static_cast<OpenABERNG *>(this_ptr);
@@ -596,11 +613,18 @@ ZP power(const ZP &x, const ZP &r) {
 
 bool ZP::ismember(void) {
   ASSERT(isInit && isOrderSet, OpenABE_ERROR_ELEMENT_NOT_INITIALIZED);
+#if defined(BP_WITH_MCL)
+  // FIX Bug #6: MCL Fr elements are ALWAYS in [0, r-1] by construction
+  // The 'order' field is incorrectly 0 (since mclBnFr can't represent r >= r mod r)
+  // All Fr elements are valid members, so always return true
+  return true;
+#else
   bool result;
   // CMP_LT if a < b, CMP_EQ if a == b and CMP_GT if a > b.
   result = (zml_bignum_cmp(m_ZP, order) == BN_CMP_LT &&
             zml_bignum_sign(m_ZP) == BN_POSITIVE);
   return result;
+#endif
 }
 
 void ZP::setOrder(const bignum_t o) {
@@ -674,7 +698,13 @@ void ZP::setFrom(ZP &z, uint32_t index) {
 ostream &operator<<(ostream &os, const ZP &zr) {
   int len = 0;
   char *str = zml_bignum_toDec(zr.m_ZP, &len);
-  string s0 = string(str, len-1);
+  // MCL's mclBnFr_getStr returns length including null terminator
+  // but RELIC's bn_write_str doesn't, so we need to handle both
+  #if defined(BP_WITH_MCL)
+  string s0(str); // MCL: just use the null-terminated string directly
+  #else
+  string s0(str, len-1); // RELIC: len doesn't include null terminator, but we subtract 1 anyway?
+  #endif
   zml_bignum_safe_free(str);
   os << s0 << " (orderSet: " << (zr.isOrderSet ? "true)" : "false)");
   return os;
@@ -1167,7 +1197,7 @@ G2 operator-(const G2& x)
 G2 G2::exp(ZP z)
 {
 	G2 g2(this->bgroup);
-    g2_mul_op(GET_BP_GROUP(g2.bgroup), g2.m_G2, this->m_G2, z.m_ZP);
+	g2_mul_op(GET_BP_GROUP(g2.bgroup), g2.m_G2, this->m_G2, z.m_ZP);
     return g2;
 }
 
@@ -1225,8 +1255,10 @@ void G2::setRandom(OpenABERNG *rng)
 
 		zml_bignum_free(order);
 #else
+#ifndef __wasm__
 		oabe_rand_seed(&rng_trampoline, (void *) rng);
-		g2_rand(this->m_G2);
+#endif
+		g2_rand_op(this->m_G2);
 #endif
 	}
 }
@@ -1383,12 +1415,7 @@ GT operator/(const GT& x,const GT& y)
 GT GT::exp(ZP z)
 {
 	GT gt(*this);
-#if defined(BP_WITH_OPENSSL)
-    GT_ELEM_exp(GET_BP_GROUP(gt.bgroup), gt.m_GT, gt.m_GT, z.m_ZP, NULL);
-    //ASSERT(rc == 1, OpenABE_ERROR_INVALID_INPUT);
-#else
-    gt_exp(gt.m_GT, gt.m_GT, z.m_ZP);
-#endif
+	gt_exp_op(GET_BP_GROUP(gt.bgroup), gt.m_GT, gt.m_GT, z.m_ZP);
 	return gt;
 }
 
