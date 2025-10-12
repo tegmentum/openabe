@@ -35,14 +35,16 @@
 #define __ZCONTEXTPKSIG_H__
 
 #include <memory>
+#include <openabe/zml/zecdsa.h>
 
 namespace oabe {
 
 class OpenABEContextPKSIG : public OpenABEContext {
 protected:
-  EC_GROUP *group;
+  ecdsa_context_t ecdsa_ctx;
+  uint8_t curve_id;
   bool validateParams(const std::string &paramsID) { return true; };
-  bool validatePkey(EVP_PKEY* pkey, bool expectPrivate);
+  bool validateKeypair(ecdsa_keypair_t keypair, bool expectPrivate);
 
 public:
   // Constructors/destructors

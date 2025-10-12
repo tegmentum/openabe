@@ -89,7 +89,9 @@ OpenABEContextABE::initializeCurve(const string groupParams) {
  * Note: we add to
  */
 OpenABEContextSchemeCPA::OpenABEContextSchemeCPA(unique_ptr<OpenABEContextABE> kem_) : ZObject() {
-  ASSERT_NOTNULL(kem_.get());
+  if (kem_.get() == nullptr) {
+    throw OpenABE_ERROR_INVALID_INPUT;
+  }
   if (kem_->getSchemeType() == OpenABE_SCHEME_KP_GPSW ||
              kem_->getSchemeType() == OpenABE_SCHEME_CP_WATERS) {
     this->isMAABE = false;
@@ -97,7 +99,7 @@ OpenABEContextSchemeCPA::OpenABEContextSchemeCPA(unique_ptr<OpenABEContextABE> k
     /* unrecognized scheme type */
     throw OpenABE_ERROR_INVALID_INPUT;
   }
-  this->m_KEM_ = move(kem_);
+  this->m_KEM_ = std::move(kem_);
 }
 
 /*!

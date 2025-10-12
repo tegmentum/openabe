@@ -189,10 +189,10 @@ OpenABEContextABE *OpenABE_createContextABE(unique_ptr<OpenABERNG> *rng,
    * calls won't require a switch statement. */
   switch (scheme_type) {
   case OpenABE_SCHEME_CP_WATERS:
-    newContext = (OpenABEContextABE *)new OpenABEContextCPWaters(move(*rng));
+    newContext = (OpenABEContextABE *)new OpenABEContextCPWaters(std::move(*rng));
     break;
   case OpenABE_SCHEME_KP_GPSW:
-    newContext = (OpenABEContextABE *)new OpenABEContextKPGPSW(move(*rng));
+    newContext = (OpenABEContextABE *)new OpenABEContextKPGPSW(std::move(*rng));
     break;
   default:
     // gErrorLog.log("Could not instantiate unknown scheme type", __LINE__,
@@ -214,7 +214,7 @@ unique_ptr<OpenABEContextSchemeCPA>
 OpenABE_createContextABESchemeCPA(OpenABE_SCHEME scheme_type) {
   unique_ptr<OpenABERNG> rng(new OpenABERNG);
   unique_ptr<OpenABEContextABE> kemContext(OpenABE_createContextABE(&rng, scheme_type));
-  return unique_ptr<OpenABEContextSchemeCPA>(new OpenABEContextSchemeCPA(move(kemContext)));
+  return unique_ptr<OpenABEContextSchemeCPA>(new OpenABEContextSchemeCPA(std::move(kemContext)));
 }
 
 unique_ptr<OpenABEContextCCA> OpenABE_createABEContextForKEM(OpenABE_SCHEME scheme_type) {
@@ -223,7 +223,8 @@ unique_ptr<OpenABEContextCCA> OpenABE_createABEContextForKEM(OpenABE_SCHEME sche
   unique_ptr<OpenABEContextSchemeCPA> schemeContext =
       OpenABE_createContextABESchemeCPA(scheme_type);
   if (!schemeContext) {
-    throw OpenABE_ERROR_INVALID_SCHEME_ID;
+    // Return nullptr for error, not error code
+    return nullptr;
   }
   // create a CCA context (KEM version) based on the scheme context
   kemContextCCA.reset(new OpenABEContextGenericCCA(std::move(schemeContext)));
@@ -308,11 +309,12 @@ OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME scheme_type) {
   unique_ptr<OpenABEContextPKE> pkeKEMContext(
       OpenABE_createContextPKE(&rng, scheme_type));
   if (!pkeKEMContext) {
-    throw OpenABE_ERROR_INVALID_SCHEME_ID;
+    // Return nullptr for error, not error code
+    return nullptr;
   }
   // return a scheme context for PKE given the KEM context
   return unique_ptr<OpenABEContextSchemePKE>(
-      new OpenABEContextSchemePKE(move(pkeKEMContext)));
+      new OpenABEContextSchemePKE(std::move(pkeKEMContext)));
 }
 
 unique_ptr<OpenABEContextSchemePKSIG> OpenABE_createContextPKSIGScheme() {
@@ -321,7 +323,7 @@ unique_ptr<OpenABEContextSchemePKSIG> OpenABE_createContextPKSIGScheme() {
   // return a unique ptr to a PKSIG scheme context (smoothen out API)
   // with an underlying PKSIG context
   return unique_ptr<OpenABEContextSchemePKSIG>(
-      new OpenABEContextSchemePKSIG(move(pksig)));
+      new OpenABEContextSchemePKSIG(std::move(pksig)));
 }
 
 /*!
@@ -350,7 +352,8 @@ OpenABECurveID OpenABE_getCurveID(uint8_t id) {
     curveID = (OpenABECurveID)id;
     break;
   default:
-    throw OpenABE_ERROR_INVALID_CURVE_ID;
+    // Return sentinel value for invalid curve ID
+    return OpenABE_NONE_ID;
   }
   return curveID;
 }
@@ -369,7 +372,9 @@ void OpenABE_setGroupObject(std::shared_ptr<ZGroup> &group, uint8_t id) {
     group.reset(new BPGroup((OpenABECurveID)id));
     break;
   default:
-    throw OpenABE_ERROR_INVALID_CURVE_ID;
+    // Void function can't return error - set group to nullptr
+    group.reset();
+    break;
   }
 }
 
@@ -389,7 +394,8 @@ OpenABE_SCHEME OpenABE_getSchemeID(uint8_t id) {
     schemeID = (OpenABE_SCHEME)id;
     break;
   default:
-    throw OpenABE_ERROR_INVALID_SCHEME_ID;
+    // Return sentinel value for invalid scheme ID
+    return OpenABE_SCHEME_NONE;
   }
   return schemeID;
 }
@@ -415,7 +421,9 @@ const string OpenABE_convertSchemeIDToString(OpenABE_SCHEME id) {
     scheme = OpenABE_KP_ABE;
     break;
   default:
-    throw OpenABE_ERROR_INVALID_SCHEME_ID;
+    // Return error string for invalid scheme
+    scheme = "Invalid Scheme";
+    break;
   }
   return scheme;
 }
@@ -458,25 +466,29 @@ string OpenABE_convertCurveIDToString(OpenABECurveID id) {
     return "BN_P638";
     break;
   default:
-    throw OpenABE_ERROR_INVALID_PARAMS_ID;
+    return "INVALID";
   }
 }
 
 OpenABECurveID OpenABE_convertStringToCurveID(const string paramsID) {
-  OpenABECurveID curveID = OpenABE_NONE_ID;
-  if (paramsID == "NIST_P256") {
-    curveID = OpenABE_NIST_P256_ID;
-  } else if (paramsID == "NIST_P384") {
-    curveID = OpenABE_NIST_P384_ID;
-  } else if (paramsID == "NIST_P521") {
-    curveID = OpenABE_NIST_P521_ID;
-  } else if (paramsID == "BN_P256") {
-    curveID = OpenABE_BN_P256_ID;
-  } else if (paramsID == "BN_P382") {
-    curveID = OpenABE_BN_P382_ID;
+  // Use the new curve database for lookup
+  OpenABECurveID curveID = OpenABE_getCurveIDByName(paramsID.c_str());
+
+  // If not found, try legacy names for backward compatibility
+  if (curveID == OpenABE_NONE_ID) {
+    if (paramsID == "BN_P254") {
+      curveID = OpenABE_BN_P254_ID;
+      // Print warning for legacy curve
+      OpenABE_printCurveWarnings(curveID);
+    } else if (paramsID == "BN_P256") {
+      curveID = OpenABE_BN_P256_ID;
+      OpenABE_printCurveWarnings(curveID);
+    } else if (paramsID == "BN_P382") {
+      curveID = OpenABE_BN_P382_ID;
+    }
   } else {
-    // Unrecognized parameter type
-    throw OpenABE_ERROR_INVALID_PARAMS_ID;
+    // Print warnings for weak/legacy curves
+    OpenABE_printCurveWarnings(curveID);
   }
 
   return curveID;

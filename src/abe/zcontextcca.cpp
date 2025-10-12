@@ -53,7 +53,7 @@ namespace oabe {
 OpenABEContextCCA::OpenABEContextCCA(unique_ptr<OpenABEContextSchemeCPA> scheme_)
     : OpenABEContextABE() {
   if (scheme_) {
-    this->abeSchemeContext = move(scheme_);
+    this->abeSchemeContext = std::move(scheme_);
   } else {
     /* throw error */
     throw OpenABE_ERROR_INVALID_INPUT;
@@ -168,7 +168,7 @@ OpenABEContextCCA::getHashKey(const string &mpkID) {
  *
  */
 OpenABEContextGenericCCA::OpenABEContextGenericCCA(unique_ptr<OpenABEContextSchemeCPA> scheme)
-    : OpenABEContextCCA(move(scheme)) {}
+    : OpenABEContextCCA(std::move(scheme)) {}
 
 /*!
  * Destructor for the OpenABEContextCCA base class.
@@ -258,6 +258,11 @@ OpenABEContextGenericCCA::encryptKEM(OpenABERNG *rng, const string &mpkID,
     nonceU = this->getPairing()->hashFromBytes(u, OpenABE_CTR_DRBG_NONCELEN,
                                                CCA_HASH_FUNCTION_TWO);
 
+    // Derive a deterministic UID from u (use first UID_LEN bytes)
+    // This ensures encrypt and re-encrypt produce identical ciphertexts
+    OpenABEByteString uid = u.getSubset(0, UID_LEN);
+    ciphertext->setHeader(this->getPairing()->getCurveID(), this->getSchemeType(), uid);
+
     // construct a new PRNG
     // set the key and seed (or plaintext)
     PRNG.reset(new OpenABECTR_DRBG(u));
@@ -330,6 +335,11 @@ OpenABEContextGenericCCA::decryptKEM(const string &mpkID, const string &keyID,
     nonceU = this->getPairing()->hashFromBytes(u, OpenABE_CTR_DRBG_NONCELEN,
                                                CCA_HASH_FUNCTION_TWO);
 
+    // Derive a deterministic UID from u (same as in encryptKEM)
+    // This ensures the re-encrypted ciphertext has the same UID
+    OpenABEByteString uid = u.getSubset(0, UID_LEN);
+    ciphertext2->setHeader(this->getPairing()->getCurveID(), this->getSchemeType(), uid);
+
     // construct a new PRNG
     // set the key and seed (or plaintext)
     PRNG.reset(new OpenABECTR_DRBG(u));
@@ -373,7 +383,7 @@ OpenABEContextSchemeCCA::OpenABEContextSchemeCCA(unique_ptr<OpenABEContextCCA> k
     /* unrecognized scheme type */
     throw OpenABE_ERROR_INVALID_INPUT;
   }
-  this->m_KEM_ = move(kem_);
+  this->m_KEM_ = std::move(kem_);
   this->m_KEM_->setSchemeType(scheme_type);
 }
 
@@ -651,7 +661,7 @@ OpenABEContextSchemeCCAWithATZN::OpenABEContextSchemeCCAWithATZN(unique_ptr<Open
     /* unrecognized scheme type */
     throw OpenABE_ERROR_INVALID_INPUT;
   }
-  this->m_KEM_ = move(kem_);
+  this->m_KEM_ = std::move(kem_);
   this->m_KEM_->setSchemeType(scheme_type);
 }
 
@@ -816,8 +826,8 @@ OpenABEContextSchemeCCAWithATZN::encrypt(const string &mpkID,
   OpenABEByteString ctBlob, ctHash, symkeyBytes;
 
   try {
-	ASSERT_NOTNULL(encryptInput);
-    ASSERT_NOTNULL(ciphertext);
+	ASSERT_NOTNULL_PTR(encryptInput);
+    ASSERT_NOTNULL_PTR(ciphertext);
 
     result =
         this->m_KEM_->encryptKEM(rng.get(), mpkID, encryptInput,
@@ -829,7 +839,7 @@ OpenABEContextSchemeCCAWithATZN::encrypt(const string &mpkID,
     ciphertext->exportToBytes(ctBlob);
     // (2) compute hash of the ciphertext
     OpenABEByteString *k = this->m_KEM_->getHashKey(mpkID);
-    ASSERT_NOTNULL(k);
+    ASSERT_NOTNULL_PTR(k);
     OpenABEComputeHash(*k, ctBlob, ctHash);
     // (3) create the key handle (from key and hash of ABE ciphertext)
     keyHandle.reset(new OpenABESymKeyHandleImpl(symkeyBytes, ctHash)); // no b64 encoding by default
@@ -863,7 +873,7 @@ OpenABEContextSchemeCCAWithATZN::decrypt(const string &mpkID, const string &keyI
   OpenABEByteString ctBlob, ctHash, symkeyBytes;
 
   try {
-    ASSERT_NOTNULL(ciphertext);
+    ASSERT_NOTNULL_PTR(ciphertext);
     // decrypt part 1 of the ciphertext (corresponds to ABE portion)
     result = this->m_KEM_->decryptKEM(mpkID, keyID, ciphertext,
                                       DEFAULT_SYM_KEY_BYTES, symkey);
@@ -875,7 +885,7 @@ OpenABEContextSchemeCCAWithATZN::decrypt(const string &mpkID, const string &keyI
     ciphertext->exportToBytes(ctBlob);
     // (2) compute hash of the ciphertext
     OpenABEByteString *k = this->m_KEM_->getHashKey(mpkID);
-    ASSERT_NOTNULL(k);
+    ASSERT_NOTNULL_PTR(k);
     OpenABEComputeHash(*k, ctBlob, ctHash);
     // (3) create the key handle (from key and hash of ABE ciphertext)
     keyHandle.reset(new OpenABESymKeyHandleImpl(symkeyBytes, ctHash)); // no b64 encoding by default

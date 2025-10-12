@@ -65,6 +65,11 @@ bool OpenABEUtilsHashToString(GT &input, uint32_t keyLen, OpenABEByteString &res
   input.serialize(serializedResult);
   input.enableCompression();
 
+  // DEBUG: Log GT serialization details
+  std::cerr << "[GT HASH DEBUG] GT serialization size: " << serializedResult.size() << " bytes" << std::endl;
+  std::cerr << "[GT HASH DEBUG] GT serialized hex (first 128 chars): " << serializedResult.toHex().substr(0, 128) << std::endl;
+  std::cerr << "[GT HASH DEBUG] Requesting keyLen: " << keyLen << " bytes" << std::endl;
+
   for (uint32_t i = 0; numBytes < keyLen; i++, numBytes += SHA256_LEN) {
     concatResult.clear();
     concatResult << numBytes << serializedResult << serializedResult.size();
@@ -72,7 +77,16 @@ bool OpenABEUtilsHashToString(GT &input, uint32_t keyLen, OpenABEByteString &res
     sha256(hash, (uint8_t *)(concatResult.str().c_str()),
            concatResult.str().size());
     result.appendArray((uint8_t *)hash.c_str(), SHA256_LEN);
+
+    // DEBUG: Log first hash iteration
+    if (i == 0) {
+      OpenABEByteString tmpHash;
+      tmpHash.appendArray((uint8_t *)hash.c_str(), SHA256_LEN);
+      std::cerr << "[GT HASH DEBUG] First SHA256 hash output: " << tmpHash.toHex() << std::endl;
+    }
   }
+
+  std::cerr << "[GT HASH DEBUG] Final derived key (hex): " << result.toHex() << std::endl;
 
   return true;
 }
@@ -138,7 +152,8 @@ out:
     EVP_MD_CTX_free(md_ctx);
   }
   if (error_msg != "") {
-   throw CryptoException(error_msg);
+    fprintf(stderr, "OpenABEComputeHash error: %s\n", error_msg.c_str());
+    // Cannot throw in WASM - output will be empty to signal error
   }
 }
 
@@ -153,7 +168,7 @@ out:
 void generateHash(std::string &hash, const std::string &password) {
   OpenABERNG rng;
   OpenABEByteString pword, salt, result, genHash;
-  ASSERT(password.size() > 0, OpenABE_ERROR_INVALID_INPUT);
+  ASSERT_VOID(password.size() > 0, OpenABE_ERROR_INVALID_INPUT);
   /* set the password */
   pword = password;
   /* generate a salt */
@@ -272,7 +287,7 @@ OpenABE_ERROR decryptUnderPassword(const string password,
         new oabe::crypto::OpenABESymKeyAuthEnc(DEFAULT_AES_SEC_LEVEL, key));
     if (!authEnc->decrypt(ptBlob, &iv, &ct, &tag)) {
       ptBlob.clear();
-      throw OpenABE_ERROR_DECRYPTION_FAILED;
+      return OpenABE_ERROR_DECRYPTION_FAILED;
     }
     plainOutputBlob = ptBlob;
   } catch (OpenABE_ERROR &error) {
@@ -340,7 +355,8 @@ out:
     EVP_MD_CTX_free(md_ctx);
   }
   if (error_msg != "") {
-    throw CryptoException(error_msg);
+    fprintf(stderr, "sha256 error: %s\n", error_msg.c_str());
+    // Cannot throw in WASM - digest will be empty to signal error
   }
 }
 

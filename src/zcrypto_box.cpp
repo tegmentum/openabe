@@ -280,7 +280,7 @@ bool OpenABECryptoContext::decrypt(const std::string &keyID,
     if ((result = schemeContextCCA_->decrypt(
              mpkID, keyID, plaintext, ciphertext1.get(), ciphertext2.get())) !=
         OpenABE_NOERROR) {
-      throw result;
+      return result;
     }
     return true;
   } catch (OpenABE_ERROR &error) {
@@ -334,14 +334,14 @@ bool OpenABECryptoContext::decrypt(const std::string &ciphertext,
     pair<string,OpenABEByteString> sk = keyManager_->getKeyCommand(userId_, decKeyId);
     if (debug_) { cout << "Found Key: '" << decKeyId << "' => '" << sk.first << "'" << endl; }
     if ((result = schemeContextCCA_->loadUserSecretParams(decKeyId, sk.second)) != OpenABE_NOERROR) {
-        throw result;
+        return result;
     }
 
     // can now decrypt
     if ((result = schemeContextCCA_->decrypt(
              mpkID, decKeyId, plaintext, ciphertext1.get(), ciphertext2.get())) !=
         OpenABE_NOERROR) {
-      throw result;
+      return result;
     }
     return true;
   } catch (OpenABE_ERROR &error) {

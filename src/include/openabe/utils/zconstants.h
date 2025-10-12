@@ -82,8 +82,30 @@ typedef enum _OpenABECurveID {
   OpenABE_BN_P256_ID = 0x73,
   OpenABE_KSS_508_ID = 0x3C,
   OpenABE_BN_P382_ID = 0xE4,
-  OpenABE_BN_P638_ID = 0x8D
+  OpenABE_BN_P446_ID = 0xE5,
+  OpenABE_BN_P638_ID = 0x8D,
+  // BLS12 curves
+  OpenABE_BLS12_P377_ID = 0xA1,
+  OpenABE_BLS12_P381_ID = 0xA2,
+  OpenABE_BLS12_P446_ID = 0xA3,
+  OpenABE_BLS12_P455_ID = 0xA4,
+  OpenABE_BLS12_P638_ID = 0xA5,
+  // BLS24 curves
+  OpenABE_BLS24_P315_ID = 0xB1,
+  OpenABE_BLS24_P317_ID = 0xB2,
+  OpenABE_BLS24_P509_ID = 0xB3,
+  // BLS48 curves
+  OpenABE_BLS48_P575_ID = 0xC1,
+  // KSS16 curves
+  OpenABE_KSS16_P339_ID = 0xD1
 } OpenABECurveID;
+
+// Security level constants (bits of security)
+#define OpenABE_SECURITY_WEAK 64
+#define OpenABE_SECURITY_LEGACY 80
+#define OpenABE_SECURITY_STANDARD 128
+#define OpenABE_SECURITY_HIGH 192
+#define OpenABE_SECURITY_VERY_HIGH 256
 
 // Data structures
 
@@ -115,12 +137,24 @@ typedef enum _zGroupType {
 #define ASSERT_GROUP(G, A, B)   if ( (A) != (G) ||  (B) != (G) ) { fprintf(stderr, "%s:%s:%d: ASSERT_GROUP failed\n", __FILE__, __FUNCTION__, __LINE__); abort(); }
 #define ASSERT_RNG(R)			if ( (R) < 1 ) { fprintf(stderr, "%s:%s:%d: ASSERT_RNG failed\n", __FILE__, __FUNCTION__, __LINE__); abort(); }
 #define ASSERT_PAIRING(P)       if ( (P) == NULL ) { fprintf(stderr, "%s:%s:%d: ASSERT_PAIRING failed\n", __FILE__, __FUNCTION__, __LINE__); abort(); }
-#define ASSERT_NOTNULL(A)		if ( (A) == NULL ) { fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL failed\n", __FILE__, __FUNCTION__, __LINE__); abort(); }
+// For functions that return OpenABE_ERROR or bool
+#define ASSERT_NOTNULL(A)		if ( (A) == NULL ) { fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL failed\n", __FILE__, __FUNCTION__, __LINE__); return oabe::OpenABE_ERROR_INVALID_INPUT; }
+// For void functions
+#define ASSERT_NOTNULL_VOID(A)	if ( (A) == NULL ) { fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL_VOID failed\n", __FILE__, __FUNCTION__, __LINE__); return; }
+#define ASSERT_VOID(A, B)       if ( (A) == false ) { fprintf(stderr, "%s:%s:%d: ASSERT_VOID failed\n", __FILE__, __FUNCTION__, __LINE__); return; }
+// For functions that return unique_ptr or raw pointers
+#define ASSERT_NOTNULL_PTR(A)   if ( (A) == NULL ) { fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL_PTR failed\n", __FILE__, __FUNCTION__, __LINE__); return nullptr; }
+// For fatal errors that must abort
+#define ABORT_ASSERT(A, B)      if ( (A) == false ) { fprintf(stderr, "%s:%s:%d: ABORT_ASSERT failed ('%s')\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(B)); abort(); }
 #else
 #define ASSERT_GROUP(G, A, B)   if ( (A) != (G) ||  (B) != (G) ) throw oabe::OpenABE_ERROR_WRONG_GROUP;
 #define ASSERT_RNG(R)			if ( (R) < 1 ) throw oabe::OpenABE_ERROR_RAND_INSUFFICIENT;
 #define ASSERT_PAIRING(P)       if ( (P) == NULL ) throw oabe::OpenABE_ERROR_WRONG_GROUP;
 #define ASSERT_NOTNULL(A)		if ( (A) == NULL ) throw oabe::OpenABE_ERROR_INVALID_INPUT;
+#define ASSERT_NOTNULL_VOID(A)	if ( (A) == NULL ) throw oabe::OpenABE_ERROR_INVALID_INPUT;
+#define ASSERT_NOTNULL_PTR(A)	if ( (A) == NULL ) { fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL_PTR failed\n", __FILE__, __FUNCTION__, __LINE__); return nullptr; }
+#define ASSERT_VOID(A, B)       if ( (A) == false ) throw B;
+#define ABORT_ASSERT(A, B)      if ( (A) == false ) { fprintf(stderr, "%s:%s:%d: ABORT_ASSERT failed ('%s')\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(B)); throw B; }
 #endif
 #define ASSERT_MESSAGE(A, B, C)  if ( (A) == false ) { string tmp_s = B; fprintf(stderr, "%s:%s:%d: %s - '%s'\n", __FILE__, __FUNCTION__, __LINE__, tmp_s.c_str(), OpenABE_errorToString(C)); throw C; }
 #define ASSERT(A, B)			if ( (A) == false ) { fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(B)); throw B; }

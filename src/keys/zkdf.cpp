@@ -88,7 +88,8 @@ OpenABEByteString OpenABEKDF::DeriveKey(OpenABEByteString &Z, uint32_t keyBitLen
   // ceiling of keydataLen / hashLen (bitwise)
   size_t reps_len = (size_t)ceil(((double)keyBitLen) / this->hashLen);
   if (reps_len > OpenABE_MAX_KDF_BITLENGTH) {
-    throw OpenABE_ERROR_INVALID_LENGTH;
+    fprintf(stderr, "KDF: invalid key length (too long)\n");
+    return OpenABEByteString();
   }
 
   // buffer = counter || hashPrefix || Z || Metadata
@@ -98,15 +99,15 @@ OpenABEByteString OpenABEKDF::DeriveKey(OpenABEByteString &Z, uint32_t keyBitLen
   buffer.appendArray(metadata.getInternalPtr(), metadata.size());
 
   if (buffer.size() > this->maxInputLen) {
-    throw OpenABE_ERROR_INVALID_LENGTH;
+    fprintf(stderr, "KDF: invalid buffer size (too large)\n");
+    return OpenABEByteString();
   }
 
   // set the hash_len
-  int hash_len = reps_len * this->hashLen;
-  uint8_t hash[hash_len + 1];
-  memset(hash, 0, hash_len + 1);
+  size_t hash_len = reps_len * this->hashLen;
+  std::vector<uint8_t> hash(hash_len + 1, 0);
 
-  uint8_t *hash_ptr = hash;
+  uint8_t *hash_ptr = &hash[0];
   for (size_t i = 0; i < reps_len; i++) {
     // H(count++ || prefix || Z || Metadata)
     sha256(hash_ptr, buffer.getInternalPtr(), buffer.size());
@@ -117,7 +118,7 @@ OpenABEByteString OpenABEKDF::DeriveKey(OpenABEByteString &Z, uint32_t keyBitLen
 
   uint32_t keydataBytes = keyBitLen / 8;
   OpenABEByteString keyMaterial;
-  keyMaterial.appendArray(hash, keydataBytes);
+  keyMaterial.appendArray(&hash[0], keydataBytes);
   return keyMaterial;
 }
 
@@ -146,9 +147,18 @@ int PKCS5_PBKDF2_HMAC_SHA256(const char *pass, int passlen,
 
 OpenABEByteString OpenABEPBKDF(OpenABEByteString &password, uint32_t keydataLenBytes,
                        OpenABEByteString &salt, int iterationCount) {
-  ASSERT(password.size() > 0, OpenABE_ERROR_INVALID_INPUT);
-  ASSERT(salt.size() > 0, OpenABE_ERROR_INVALID_INPUT);
-  ASSERT(keydataLenBytes > 0, OpenABE_ERROR_INVALID_INPUT);
+  if (!(password.size() > 0)) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+    return OpenABEByteString();
+  }
+  if (!(salt.size() > 0)) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+    return OpenABEByteString();
+  }
+  if (!(keydataLenBytes > 0)) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+    return OpenABEByteString();
+  }
 
   /* cheap allocation for keydataLenBytes */
   OpenABEByteString outputHash;

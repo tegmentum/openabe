@@ -35,23 +35,24 @@
 #ifndef __ZPKEY_H__
 #define __ZPKEY_H__
 
-#include <openssl/pem.h>
-#include <openssl/evp.h>
+#include <openabe/zml/zecdsa.h>
 
 namespace oabe {
 
 class OpenABEPKey: public OpenABEKey {
 private:
   bool isPrivate;
-  EVP_PKEY *pkey;
-  bool bioToString(std::string& s, BIO* bio);
+  ecdsa_keypair_t keypair;
+  uint8_t curve_id;
 
 public:
-  OpenABEPKey(bool isPrivate);
-  OpenABEPKey(const EC_KEY *ec_key, bool isPrivate, EC_GROUP *group = NULL);
+  OpenABEPKey(bool isPrivate, uint8_t curve_id);
+  OpenABEPKey(ecdsa_keypair_t kp, bool isPrivate, uint8_t curve_id);
   ~OpenABEPKey();
 
-  EVP_PKEY *getPkey() { return this->pkey; }
+  ecdsa_keypair_t getECDSAKeypair() { return this->keypair; }
+  bool hasPrivateKey() const { return this->isPrivate; }
+  uint8_t getCurveID() const { return this->curve_id; }
 
   // pkeyToString (does export)
   OpenABE_ERROR exportKeyToBytes(OpenABEByteString &output);

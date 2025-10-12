@@ -58,7 +58,7 @@ OpenABERNG::~OpenABERNG() {
 
 static void AesEvpBlockEncrypt(const EVP_CIPHER *cipher, const uint8_t* key,
                         const uint8_t* pl_ptr, uint8_t *ct_ptr, size_t pl_len) {
-    ASSERT_NOTNULL(cipher);
+    ASSERT_NOTNULL_VOID(cipher);
     EVP_CIPHER_CTX *ctx = nullptr;
     ctx = EVP_CIPHER_CTX_new();
     EVP_CIPHER_CTX_set_padding(ctx, false);
@@ -287,7 +287,8 @@ int ctr_drbg_init_seed(OpenABECtrDrbg& ctx,
                   size_t nonce_len) {
     // make sure entropy_source_buf is right length
     if (entropy_source_buf.size() < OpenABE_CTR_DRBG_ENTROPYLEN) {
-        throw OpenABE_ERROR_INVALID_LENGTH;
+        fprintf(stderr, "zprng: entropy source buffer too small\n");
+        return OpenABE_ERROR_INVALID_LENGTH;
     }
     return ctr_drbg_seed_entropy_len(ctx, entropy_callback, (uint8_t *)entropy_source_buf.getInternalPtr(),
                                      nonce, nonce_len,
@@ -349,13 +350,13 @@ int ctr_drbg_generate_random_with_add(OpenABECtrDrbg& ctx, uint8_t *output, size
 
 OpenABECtrDrbgContext::OpenABECtrDrbgContext(OpenABEByteString &entropy) {
     ctx_.reset(new OpenABECtrDrbg_);
-    ASSERT(entropy.size() >= OpenABE_CTR_DRBG_ENTROPYLEN, OpenABE_ERROR_INVALID_LENGTH);
+    ABORT_ASSERT(entropy.size() >= OpenABE_CTR_DRBG_ENTROPYLEN, OpenABE_ERROR_INVALID_LENGTH);
     short_entropy_ = entropy;
 }
 
 OpenABECtrDrbgContext::OpenABECtrDrbgContext(const uint8_t *entropy, uint32_t entropy_len) {
     ctx_.reset(new OpenABECtrDrbg_);
-    ASSERT(entropy_len >= OpenABE_CTR_DRBG_ENTROPYLEN, OpenABE_ERROR_INVALID_LENGTH);
+    ABORT_ASSERT(entropy_len >= OpenABE_CTR_DRBG_ENTROPYLEN, OpenABE_ERROR_INVALID_LENGTH);
     short_entropy_.appendArray((uint8_t *)entropy, entropy_len);
 }
 

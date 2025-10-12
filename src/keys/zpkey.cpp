@@ -1,21 +1,21 @@
-/// 
+///
 /// Copyright (c) 2018 Zeutro, LLC. All rights reserved.
-/// 
+///
 /// This file is part of Zeutro's OpenABE.
-/// 
+///
 /// OpenABE is free software: you can redistribute it and/or modify
 /// it under the terms of the GNU Affero General Public License as published by
 /// the Free Software Foundation, either version 3 of the License, or
 /// (at your option) any later version.
-/// 
+///
 /// OpenABE is distributed in the hope that it will be useful,
 /// but WITHOUT ANY WARRANTY; without even the implied warranty of
 /// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 /// GNU Affero General Public License for more details.
-/// 
+///
 /// You should have received a copy of the GNU Affero General Public
 /// License along with OpenABE. If not, see <http://www.gnu.org/licenses/>.
-/// 
+///
 /// You can be released from the requirements of the GNU Affero General
 /// Public License and obtain additional features by purchasing a
 /// commercial license. Buying such a license is mandatory if you
@@ -46,84 +46,24 @@ using namespace std;
 namespace oabe {
 
 /*!
- * Constructor for the OpenABEPKey class.
+ * Constructor for the OpenABEPKey class (for loading keys from serialized form).
  *
  */
-OpenABEPKey::OpenABEPKey(bool isPrivate) : OpenABEKey() {
-  this->pkey = NULL;
+OpenABEPKey::OpenABEPKey(bool isPrivate, uint8_t curve_id) : OpenABEKey() {
+  this->keypair = nullptr;
   this->isPrivate = isPrivate;
+  this->curve_id = curve_id;
 }
 
 /*!
- * Constructor for the OpenABEPKey class.
+ * Constructor for the OpenABEPKey class (wraps an existing keypair).
  *
  */
-OpenABEPKey::OpenABEPKey(const EC_KEY *ec_key, bool isPrivate, EC_GROUP *group)
+OpenABEPKey::OpenABEPKey(ecdsa_keypair_t kp, bool isPrivate, uint8_t curve_id)
     : OpenABEKey() {
-  EC_KEY *new_eckey = NULL;
-  EC_GROUP *new_group = NULL;
-  this->pkey = EVP_PKEY_new();
+  this->keypair = kp;
   this->isPrivate = isPrivate;
-  string error_msg = "";
-  // check whether private or public key
-  if (this->isPrivate) {
-    // set as the EC_KEY (private key) of the pkey
-    // EVP_PKEY_set1_EC_KEY increments reference count
-    // Note: const_cast needed because OpenSSL 3.x API requires non-const EC_KEY*
-    if (!EVP_PKEY_set1_EC_KEY(this->pkey, const_cast<EC_KEY*>(ec_key))) {
-      error_msg = "EVP_PKEY_set1_EC_KEY";
-      goto error;
-    }
-  } else {
-    ASSERT_NOTNULL(group);
-    // create a new EC_GROUP from the group of eckey, this
-    // will also copy over the ASN1 flag
-    new_group = EC_GROUP_dup(group);
-    if (!new_group) {
-      goto error;
-    }
-
-    new_eckey = EC_KEY_new();
-    if (!new_eckey) {
-      goto error;
-    }
-
-    if (EC_KEY_set_group(new_eckey, new_group) == 0) {
-      goto error;
-    }
-
-    // makes a copy of the public key
-    if (!EC_KEY_set_public_key(new_eckey, EC_KEY_get0_public_key(ec_key))) {
-      error_msg = "EC_KEY_set_public_key failed";
-      goto error;
-    }
-
-    // set the EC_KEY field of the EVP_PKEY
-    if (!EVP_PKEY_set1_EC_KEY(this->pkey, new_eckey)) {
-      error_msg = "EVP_PKEY_set1_EC_KEY";
-      goto error;
-    }
-    // Free new_eckey since set1 increments reference count
-    EC_KEY_free(new_eckey);
-    if (new_group != NULL) {
-      EC_GROUP_free(new_group);
-    }
-  }
-  return;
-error:
-  if (new_eckey != NULL) {
-    EC_KEY_free(new_eckey);
-  }
-
-  if (new_group != NULL) {
-    EC_GROUP_free(new_group);
-  }
-
-  if (error_msg != "") {
-    OpenABE_LOG(error_msg);
-  }
-
-  throw OpenABE_ERROR_ELEMENT_NOT_INITIALIZED;
+  this->curve_id = curve_id;
 }
 
 /*!
@@ -131,8 +71,8 @@ error:
  *
  */
 OpenABEPKey::~OpenABEPKey() {
-  if (this->pkey != NULL) {
-    EVP_PKEY_free(this->pkey);
+  if (this->keypair != nullptr) {
+    ecdsa_keypair_free(this->keypair);
   }
 }
 
@@ -140,101 +80,79 @@ OpenABEPKey::~OpenABEPKey() {
 OpenABE_ERROR
 OpenABEPKey::exportKeyToBytes(OpenABEByteString &output) {
   OpenABE_ERROR result = OpenABE_ERROR_INVALID_INPUT;
-  BIO *pkey_out = nullptr;
-  string pkey_text, s;
-  stringstream ss;
+  uint8_t buffer[2048];  // Should be large enough for any supported curve
+  size_t written = 0;
 
-  ASSERT_NOTNULL(this->pkey);
-
-  pkey_out = BIO_new(BIO_s_mem());
-  if (!pkey_out) {
-    goto out;
+  if (this->keypair == nullptr) {
+    return OpenABE_ERROR_INVALID_INPUT;
   }
 
   if (this->isPrivate) {
-    // write private key
-    if (!PEM_write_bio_PKCS8PrivateKey(pkey_out, this->pkey, NULL, NULL, 0,
-                                       NULL, NULL)) {
-      goto out;
-    }
+    // Export private key
+    written = ecdsa_export_private_key(this->keypair, buffer, sizeof(buffer));
   } else {
-    // write public key
-    if (!PEM_write_bio_PUBKEY(pkey_out, this->pkey)) {
-      goto out;
-    }
+    // Export public key
+    written = ecdsa_export_public_key(this->keypair, buffer, sizeof(buffer));
   }
 
-  // Unfortunately Thrift requires a signature key to be in OpenSSL
-  // format, so we keep that format exactly.  If you look in the
-  // history for this file, you will find some metadata we kept with
-  // keys that we could reinstate by patching Thrift.
-  if (!bioToString(s, pkey_out)) {
-    goto out;
+  if (written == 0) {
+    return OpenABE_ERROR_SERIALIZATION_FAILED;
   }
-  output = s;
+
+  // Store the curve_id as the first byte, followed by the key data
+  output.clear();
+  output.push_back(this->curve_id);
+  output.appendArray(buffer, written);
+
   result = OpenABE_NOERROR;
-
-out:
-  if (pkey_out) {
-    BIO_free(pkey_out);
-  }
-
   return result;
 }
 
 OpenABE_ERROR
 OpenABEPKey::loadKeyFromBytes(OpenABEByteString &input) {
   OpenABE_ERROR result = OpenABE_NOERROR;
-  BIO *bio = NULL;
+  ecdsa_context_t temp_ctx = nullptr;
+  int ret;
 
-  // cout << "Serialized Key:\n" << input.toString() << endl;
+  if (input.size() < 2) {
+    return OpenABE_ERROR_INVALID_INPUT;
+  }
 
-  bio = BIO_new_mem_buf((void *)input.getInternalPtr(), input.size());
-  if (!bio) {
-    result = OpenABE_ERROR_INVALID_INPUT;
+  // First byte is the curve_id
+  this->curve_id = input.at(0);
+
+  // Initialize temporary context for the curve
+  ret = ecdsa_context_init(&temp_ctx, this->curve_id);
+  if (ret != 0) {
+    result = OpenABE_ERROR_INVALID_PARAMS;
     goto out;
   }
 
-  if (this->pkey != NULL) {
-    EVP_PKEY_free(this->pkey);
-    this->pkey = NULL;
+  // Clean up existing keypair if any
+  if (this->keypair != nullptr) {
+    ecdsa_keypair_free(this->keypair);
+    this->keypair = nullptr;
   }
 
+  // Import key from remaining bytes
   if (this->isPrivate) {
-    this->pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    ret = ecdsa_import_private_key(temp_ctx, &this->keypair,
+                                    input.getInternalPtr() + 1, input.size() - 1);
   } else {
-    this->pkey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+    ret = ecdsa_import_public_key(temp_ctx, &this->keypair,
+                                   input.getInternalPtr() + 1, input.size() - 1);
   }
-  ASSERT_NOTNULL(this->pkey);
 
-  if (!this->pkey) {
+  if (ret != 0 || this->keypair == nullptr) {
     result = OpenABE_ERROR_DESERIALIZATION_FAILED;
     goto out;
   }
 
 out:
-  if (bio) {
-    BIO_free(bio);
+  if (temp_ctx != nullptr) {
+    ecdsa_context_free(temp_ctx);
   }
 
-  return result;
-}
-
-bool OpenABEPKey::bioToString(string &s, BIO *bio) {
-  bool result = false;
-  char buf[512];
-  int rc;
-
-  s.clear();
-  while ((rc = BIO_read(bio, buf, sizeof(buf))) > 0) {
-    char *end = buf;
-    end += rc;
-    s.append(buf, end);
-  }
-
-  if (BIO_eof(bio)) {
-    result = true;
-  }
   return result;
 }
 

@@ -48,41 +48,36 @@ int runPkeKeygen(string& id, string& suffix) {
   OpenABE_ERROR result = OpenABE_NOERROR;
   int err_code = -1;
 
-  try {
-    unique_ptr<OpenABEContextSchemePKE> schemeContext = OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME_PK_OPDH);
-    if (schemeContext == nullptr) {
-        cerr << "unable to create a new context" << endl;
-        return err_code;
-    }
-
-    // Generate a set of parameters for an ABE authority
-    if ( (result = schemeContext->generateParams(DEFAULT_NIST_PARAM_STRING)) != OpenABE_NOERROR) {
-        cerr << "Unable to generate curve parameters: " << DEFAULT_NIST_PARAM_STRING << endl;
-        throw result;
-    }
-
-    // Compute party A's static public and private key
-    const string keyId = "ID_" + id;
-    const string pkId =  "public_" + id;
-    const string skId = "private_" + id;
-    if ((result = schemeContext->keygen(keyId, pkId, skId)) != OpenABE_NOERROR) {
-        cerr << "unable to generate keys for: " << keyId << endl;
-        throw result;
-    }
-
-    const string pubKeyFile = id + ".pk" + suffix;
-    const string privKeyFile = id + ".sk" + suffix;
-    OpenABEByteString publicKey, privateKey;
-    schemeContext->exportKey(pkId, publicKey);
-    schemeContext->exportKey(skId, privateKey);
-
-    WriteToFile(pubKeyFile.c_str(), PK_BEGIN_HEADER + Base64Encode(publicKey.getInternalPtr(), publicKey.size()) + PK_END_HEADER);
-    WriteToFile(privKeyFile.c_str(), SK_BEGIN_HEADER + Base64Encode(privateKey.getInternalPtr(), privateKey.size()) + SK_END_HEADER);
-    err_code = 0;
-  } catch (OpenABE_ERROR & error) {
-    cout << "caught exception: " << OpenABE_errorToString(error) << endl;
-    err_code = error;
+  unique_ptr<OpenABEContextSchemePKE> schemeContext = OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME_PK_OPDH);
+  if (schemeContext == nullptr) {
+      cerr << "unable to create a new context" << endl;
+      return err_code;
   }
+
+  // Generate a set of parameters for an ABE authority
+  if ( (result = schemeContext->generateParams(DEFAULT_NIST_PARAM_STRING)) != OpenABE_NOERROR) {
+      cerr << "Unable to generate curve parameters: " << DEFAULT_NIST_PARAM_STRING << endl;
+      return result;
+  }
+
+  // Compute party A's static public and private key
+  const string keyId = "ID_" + id;
+  const string pkId =  "public_" + id;
+  const string skId = "private_" + id;
+  if ((result = schemeContext->keygen(keyId, pkId, skId)) != OpenABE_NOERROR) {
+      cerr << "unable to generate keys for: " << keyId << endl;
+      return result;
+  }
+
+  const string pubKeyFile = id + ".pk" + suffix;
+  const string privKeyFile = id + ".sk" + suffix;
+  OpenABEByteString publicKey, privateKey;
+  schemeContext->exportKey(pkId, publicKey);
+  schemeContext->exportKey(skId, privateKey);
+
+  WriteToFile(pubKeyFile.c_str(), PK_BEGIN_HEADER + Base64Encode(publicKey.getInternalPtr(), publicKey.size()) + PK_END_HEADER);
+  WriteToFile(privKeyFile.c_str(), SK_BEGIN_HEADER + Base64Encode(privateKey.getInternalPtr(), privateKey.size()) + SK_END_HEADER);
+  err_code = 0;
 
   return err_code;
 }
@@ -109,56 +104,54 @@ int runAbeKeygen(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, str
     return err_code;
   }
 
-  try {
-    // Get the functional input
-    if(scheme_type == OpenABE_SCHEME_CP_WATERS) {
-      funcInput = createAttributeList(keyInput);
-    } else if(scheme_type == OpenABE_SCHEME_KP_GPSW) {
-      funcInput = createPolicyTree(keyInput);
-    }
-    ASSERT(funcInput != nullptr, OpenABE_ERROR_INVALID_INPUT);
+  // Get the functional input
+  if(scheme_type == OpenABE_SCHEME_CP_WATERS) {
+    funcInput = createAttributeList(keyInput);
+  } else if(scheme_type == OpenABE_SCHEME_KP_GPSW) {
+    funcInput = createPolicyTree(keyInput);
+  }
+  if (funcInput == nullptr) {
+    cerr << "invalid functional input" << endl;
+    return err_code;
+  }
 
-    // Do it once for CP or KP
-    // read the file
-    mpkBlob = ReadFile(mpkFile.c_str());
-    if (mpkBlob.size() == 0) {
-        cerr << "master public parameters not encoded correctly." << endl;
-        return err_code;
-    }
+  // Do it once for CP or KP
+  // read the file
+  mpkBlob = ReadFile(mpkFile.c_str());
+  if (mpkBlob.size() == 0) {
+      cerr << "master public parameters not encoded correctly." << endl;
+      return err_code;
+  }
 
-    mskBlob = ReadFile(mskFile.c_str());
-    if (mskBlob.size() == 0) {
-        cerr << "master secret parameters not encoded correctly." << endl;
-        return err_code;
-    }
+  mskBlob = ReadFile(mskFile.c_str());
+  if (mskBlob.size() == 0) {
+      cerr << "master secret parameters not encoded correctly." << endl;
+      return err_code;
+  }
 
-    if ((result = schemeContext->loadMasterPublicParams(mpkID, mpkBlob)) != OpenABE_NOERROR) {
-        cerr << "unable to load the master public parameters" << endl;
-        throw result;
-    }
+  if ((result = schemeContext->loadMasterPublicParams(mpkID, mpkBlob)) != OpenABE_NOERROR) {
+      cerr << "unable to load the master public parameters" << endl;
+      return result;
+  }
 
-    if ((result = schemeContext->loadMasterSecretParams(mskID, mskBlob)) != OpenABE_NOERROR) {
-        cerr << "unable to load the master secret parameters" << endl;
-        throw result;
-    }
-    // generate the user's key
-    if ((result = schemeContext->keygen(funcInput.get(), skID, mpkID, mskID)) != OpenABE_NOERROR) {
-        cout << "decryption key error" << endl;
-        throw result;
-    }
+  if ((result = schemeContext->loadMasterSecretParams(mskID, mskBlob)) != OpenABE_NOERROR) {
+      cerr << "unable to load the master secret parameters" << endl;
+      return result;
+  }
+  // generate the user's key
+  if ((result = schemeContext->keygen(funcInput.get(), skID, mpkID, mskID)) != OpenABE_NOERROR) {
+      cout << "decryption key error" << endl;
+      return result;
+  }
 
-     // export the generated key
-     if ((result = schemeContext->exportKey(skID, skBlob)) != OpenABE_NOERROR) {
-        cout << "unable to export master secret parameters" << endl;
-        throw result;
-     }
+   // export the generated key
+   if ((result = schemeContext->exportKey(skID, skBlob)) != OpenABE_NOERROR) {
+      cout << "unable to export master secret parameters" << endl;
+      return result;
+   }
 
-    WriteToFile(keyFile.c_str(), SK_BEGIN_HEADER + Base64Encode(skBlob.getInternalPtr(), skBlob.size()) + SK_END_HEADER);
-    err_code = 0;
-    } catch (OpenABE_ERROR & error) {
-    	cout << "caught exception: " << OpenABE_errorToString(error) << endl;
-    	err_code = error;
-    }
+  WriteToFile(keyFile.c_str(), SK_BEGIN_HEADER + Base64Encode(skBlob.getInternalPtr(), skBlob.size()) + SK_END_HEADER);
+  err_code = 0;
 
     return err_code;
 }

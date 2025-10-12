@@ -94,8 +94,11 @@ string OpenABESymKey::toString() { return this->m_keyData.toHex(); }
 bool OpenABESymKey::hashToSymmetricKey(GT &input, uint32_t keyLen,
                                    OpenABEHashFunctionType hashType) {
   this->m_keyData.clear();
+  std::cerr << "[hashToSymmetricKey] Input GT: " << input << std::endl;
   // Hash the element into the key
-  return OpenABEUtilsHashToString(input, keyLen, this->m_keyData, hashType);
+  bool result = OpenABEUtilsHashToString(input, keyLen, this->m_keyData, hashType);
+  std::cerr << "[hashToSymmetricKey] Output key (hex): " << this->m_keyData.toHex() << std::endl;
+  return result;
 }
 
 bool OpenABESymKey::generateSymmetricKey(uint32_t keyLen) {
@@ -156,7 +159,10 @@ OpenABESymKeyEnc::~OpenABESymKeyEnc() { SAFE_FREE(this->key); }
 
 void OpenABESymKeyEnc::chooseRandomIV() {
   if (!this->iv_set) {
-    ASSERT_RNG(RAND_bytes(this->iv, AES_BLOCK_SIZE));
+    if (!(RAND_bytes(this->iv, AES_BLOCK_SIZE) >= 1)) {
+      fprintf(stderr, "%s:%s:%d: ASSERT_RNG failed\n", __FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
   }
 }
 
@@ -336,7 +342,7 @@ OpenABE_ERROR OpenABESymKeyAuthEncStream::encryptInit(OpenABEByteString *iv) {
       this->updateEncCount = 0;
       this->init_enc_set = true;
     } else {
-      throw OpenABE_ERROR_IN_USE_ALREADY;
+      return OpenABE_ERROR_IN_USE_ALREADY;
     }
   } catch (OpenABE_ERROR &error) {
     result = error;
@@ -507,10 +513,10 @@ OpenABE_ERROR OpenABESymKeyAuthEncStream::decryptFinalize(OpenABEByteString *pla
       } else {
         /* tag verification failed. therefore, throw a decryption failed error
          */
-        throw OpenABE_ERROR_DECRYPTION_FAILED;
+        return OpenABE_ERROR_DECRYPTION_FAILED;
       }
     } else {
-      throw OpenABE_ERROR_INVALID_INPUT;
+      return OpenABE_ERROR_INVALID_INPUT;
     }
   } catch (OpenABE_ERROR &error) {
     result = error;

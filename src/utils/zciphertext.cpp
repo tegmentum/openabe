@@ -113,7 +113,8 @@ void OpenABECiphertext::exportToBytes(OpenABEByteString &output) {
 void OpenABECiphertext::loadFromBytes(OpenABEByteString &input) {
   size_t hdrLen = 3 + UID_LEN;
   if (input.size() < hdrLen) {
-    throw OpenABE_ERROR_INVALID_INPUT;
+    fprintf(stderr, "loadFromBytes: invalid input\n");
+    return;
   }
 
   OpenABEByteString ciphertextHeader, ciphertextBytes;
@@ -123,12 +124,17 @@ void OpenABECiphertext::loadFromBytes(OpenABEByteString &input) {
 
   if (ciphertextHeader.size() == hdrLen) {
     // assert that libID matches current libID
-    ASSERT(ciphertextHeader.at(0) <= OpenABE_LIBRARY_VERSION,
-           OpenABE_ERROR_INVALID_LIBVERSION);
+    if (!(ciphertextHeader.at(0) <= OpenABE_LIBRARY_VERSION)) {
+      fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_LIBVERSION));
+      return;
+    }
     this->libraryVersion = ciphertextHeader.at(0);
     // fetch remaining ciphertext bytes
     ciphertextBytes = input.smartUnpack(&index);
-    ASSERT(ciphertextBytes.size() > 0, OpenABE_ERROR_INVALID_CIPHERTEXT_BODY);
+    if (!(ciphertextBytes.size() > 0)) {
+      fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_CIPHERTEXT_BODY));
+      return;
+    }
 
     // compose portions of header
     this->curveID = OpenABE_getCurveID(ciphertextHeader.at(1));
@@ -140,7 +146,8 @@ void OpenABECiphertext::loadFromBytes(OpenABEByteString &input) {
 
     this->deserialize(ciphertextBytes);
   } else {
-    throw OpenABE_ERROR_INVALID_CIPHERTEXT_HEADER;
+    fprintf(stderr, "loadFromBytes: invalid ciphertext header\n");
+    return;
   }
   return;
 }
@@ -168,10 +175,15 @@ void OpenABECiphertext::loadFromBytesWithoutHeader(OpenABEByteString &input) {
   OpenABEByteString ciphertextBytes;
   size_t index = 0;
 
+  cout << "DEBUG: loadFromBytesWithoutHeader - input size: " << input.size() << " bytes" << endl;
   ciphertextBytes = input.smartUnpack(&index);
-  ASSERT(ciphertextBytes.size() > 0, OpenABE_ERROR_INVALID_CIPHERTEXT_BODY);
+  cout << "DEBUG: loadFromBytesWithoutHeader - unpacked ciphertext size: " << ciphertextBytes.size()
+       << " bytes, index after unpack: " << index << endl;
+  ASSERT_VOID(ciphertextBytes.size() > 0, OpenABE_ERROR_INVALID_CIPHERTEXT_BODY);
   // deserialize bytes into this container
+  cout << "DEBUG: loadFromBytesWithoutHeader - about to call deserialize" << endl;
   this->deserialize(ciphertextBytes);
+  cout << "DEBUG: loadFromBytesWithoutHeader - deserialize completed" << endl;
   return;
 }
 
@@ -187,7 +199,7 @@ void OpenABECiphertext::setHeader(OpenABECurveID curveID, OpenABE_SCHEME scheme_
   this->libraryVersion = OpenABE_LIBRARY_VERSION;
   if (!this->uid_set_extern) {
     // only if one hasn't been set externally
-    ASSERT_NOTNULL(rng);
+    ASSERT_NOTNULL_VOID(rng);
     rng->getRandomBytes(&this->uid, UID_LEN);
   }
 }

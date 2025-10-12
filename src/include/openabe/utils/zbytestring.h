@@ -160,9 +160,8 @@ public:
 
   std::string toHex() const {
     std::stringstream ss;
-    int hex_len = 2;
-    char hex[hex_len+1];
-    std::memset(hex, 0, hex_len+1);
+    char hex[3];  // 2 hex digits + null terminator
+    std::memset(hex, 0, 3);
 
     for (std::vector<uint8_t>::const_iterator it = this->begin();
         it != this->end(); ++it) {
@@ -174,9 +173,8 @@ public:
 
   std::string toLowerHex() const {
     std::stringstream ss;
-    int hex_len = 2;
-    char hex[hex_len+1];
-    std::memset(hex, 0, hex_len+1);
+    char hex[3];  // 2 hex digits + null terminator
+    std::memset(hex, 0, 3);
 
     for (std::vector<uint8_t>::const_iterator it = this->begin() ; it != this->end(); ++it) {
         sprintf(hex, "%02x", *it);

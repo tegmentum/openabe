@@ -1,21 +1,21 @@
-/// 
+///
 /// Copyright (c) 2018 Zeutro, LLC. All rights reserved.
-/// 
+///
 /// This file is part of Zeutro's OpenABE.
-/// 
+///
 /// OpenABE is free software: you can redistribute it and/or modify
 /// it under the terms of the GNU Affero General Public License as published by
 /// the Free Software Foundation, either version 3 of the License, or
 /// (at your option) any later version.
-/// 
+///
 /// OpenABE is distributed in the hope that it will be useful,
 /// but WITHOUT ANY WARRANTY; without even the implied warranty of
 /// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 /// GNU Affero General Public License for more details.
-/// 
+///
 /// You should have received a copy of the GNU Affero General Public
 /// License along with OpenABE. If not, see <http://www.gnu.org/licenses/>.
-/// 
+///
 /// You can be released from the requirements of the GNU Affero General
 /// Public License and obtain additional features by purchasing a
 /// commercial license. Buying such a license is mandatory if you
@@ -30,7 +30,7 @@
 ///
 /// \author J. Ayo Akinyele
 ///
-///   
+///
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,12 +46,31 @@ using namespace std;
  ********************************************************************************/
 namespace oabe {
 
+// Helper function to map curve name strings to curve IDs
+static uint8_t getCurveID(const std::string &groupParams) {
+    if (groupParams == "NIST_P256" || groupParams == "secp256r1" || groupParams == "prime256v1") {
+        return OpenABE_NIST_P256_ID;
+    } else if (groupParams == "NIST_P384" || groupParams == "secp384r1") {
+        return OpenABE_NIST_P384_ID;
+    } else if (groupParams == "NIST_P521" || groupParams == "secp521r1") {
+        return OpenABE_NIST_P521_ID;
+    } else if (groupParams == "secp256k1") {
+        // MCL secp256k1 - map to P256 ID for now
+        // The actual backend selection is done by compile-time flags
+        return OpenABE_NIST_P256_ID;
+    }
+
+    // Default to P256
+    return OpenABE_NIST_P256_ID;
+}
+
 /*!
  * Constructor for the OpenABEContextPKSIG base class.
  *
  */
 OpenABEContextPKSIG::OpenABEContextPKSIG(): OpenABEContext() {
-    this->group = nullptr;
+    this->ecdsa_ctx = nullptr;
+    this->curve_id = OpenABE_NIST_P256_ID;  // Default
 }
 
 /*!
@@ -59,17 +78,23 @@ OpenABEContextPKSIG::OpenABEContextPKSIG(): OpenABEContext() {
  *
  */
 OpenABEContextPKSIG::~OpenABEContextPKSIG() {
-    if(this->group != nullptr) {
-        EC_GROUP_free(this->group);
+    if(this->ecdsa_ctx != nullptr) {
+        ecdsa_context_free(this->ecdsa_ctx);
     }
 }
 
 OpenABE_ERROR
 OpenABEContextPKSIG::initializeCurve(const std::string groupParams) {
     try {
-        if(this->group == nullptr) {
-            generateECCurveParameters(&this->group, groupParams);
-            ASSERT_NOTNULL(this->group);
+        if(this->ecdsa_ctx == nullptr) {
+            this->curve_id = getCurveID(groupParams);
+
+            int ret = ecdsa_context_init(&this->ecdsa_ctx, this->curve_id);
+            if (ret != 0) {
+                throw OpenABE_ERROR_INVALID_GROUP_PARAMS;
+            }
+
+            ASSERT_NOTNULL(this->ecdsa_ctx);
         }
     } catch(OpenABE_ERROR& error) {
         return error;
@@ -83,16 +108,8 @@ OpenABEContextPKSIG::generateParams(const std::string groupParams) {
     OpenABE_ERROR result  = OpenABE_NOERROR;
 
     try {
-        // initialize the group (if not already)
+        // Initialize the curve context (if not already)
         this->initializeCurve(groupParams);
-
-        // ***Important***
-        // The ASN1 flag causes OpenSSL to maintain curve names in the
-        // keys it saves.  This is necessary for TLS to work properly
-        // (without enabling generic EC group support in TLS options,
-        // which maybe you can do?)
-        EC_GROUP_set_asn1_flag(this->group, OPENSSL_EC_NAMED_CURVE);
-
     } catch(OpenABE_ERROR& error) {
         result = error;
     }
@@ -103,35 +120,48 @@ OpenABEContextPKSIG::generateParams(const std::string groupParams) {
 OpenABE_ERROR
 OpenABEContextPKSIG::keygen(const std::string &pkID, const std::string &skID) {
     OpenABE_ERROR result   = OpenABE_NOERROR;
-    EC_KEY *ec_key     = nullptr;
+    ecdsa_keypair_t keypair = nullptr;
     shared_ptr<OpenABEPKey> pubKey = nullptr, privKey = nullptr;
 
     try {
-        ASSERT_NOTNULL(this->group);
+        ASSERT_NOTNULL(this->ecdsa_ctx);
 
-        ec_key = EC_KEY_new();
-        ASSERT_NOTNULL(ec_key);
-
-        if (EC_KEY_set_group(ec_key, this->group) == 0) {
-            throw OpenABE_ERROR_INVALID_GROUP_PARAMS;
-        }
-
-        // generate ECDSA keys and store inside the ec_key object
-        if (!EC_KEY_generate_key(ec_key)) {
+        // Generate ECDSA keypair using the abstraction layer
+        int ret = ecdsa_keygen(this->ecdsa_ctx, &keypair);
+        if (ret != 0) {
             throw OpenABE_ERROR_KEYGEN_FAILED;
         }
 
-        // now split the EC_KEY into public and private key structures
-        // and instantiate the OpenABEPKey objects
-        pubKey.reset(new OpenABEPKey(ec_key, false, this->group));
-        privKey.reset(new OpenABEPKey(ec_key, true));
+        // Create separate OpenABEPKey objects for public and private keys
+        // Note: We need to duplicate the keypair for the public key since
+        // we'll be creating two separate OpenABEPKey objects
 
-        // add the keys to the keystore
+        // For the public key, we export and re-import to create a public-only keypair
+        uint8_t pub_buf[2048];
+        size_t pub_len = ecdsa_export_public_key(keypair, pub_buf, sizeof(pub_buf));
+        if (pub_len == 0) {
+            throw OpenABE_ERROR_KEYGEN_FAILED;
+        }
+
+        ecdsa_keypair_t pub_keypair = nullptr;
+        ret = ecdsa_import_public_key(this->ecdsa_ctx, &pub_keypair, pub_buf, pub_len);
+        if (ret != 0) {
+            throw OpenABE_ERROR_KEYGEN_FAILED;
+        }
+
+        // Create the OpenABEPKey objects
+        pubKey.reset(new OpenABEPKey(pub_keypair, false, this->curve_id));
+        privKey.reset(new OpenABEPKey(keypair, true, this->curve_id));
+
+        // Add the keys to the keystore
         this->getKeystore()->addKey(pkID, pubKey,  KEY_TYPE_PUBLIC);
         this->getKeystore()->addKey(skID, privKey, KEY_TYPE_SECRET);
 
     } catch(OpenABE_ERROR& error) {
         result = error;
+        if (keypair != nullptr) {
+            ecdsa_keypair_free(keypair);
+        }
     }
 
     return result;
@@ -141,162 +171,88 @@ OpenABEContextPKSIG::keygen(const std::string &pkID, const std::string &skID) {
 OpenABE_ERROR
 OpenABEContextPKSIG::sign(OpenABEPKey *privKey, OpenABEByteString *message, OpenABEByteString *signature) {
     OpenABE_ERROR result = OpenABE_NOERROR;
-    EVP_MD_CTX* md = nullptr;
-    string error_msg = "";
-    size_t siglen = 0;
-    uint8_t *sig = nullptr;
+    uint8_t sig_buf[512];  // Should be large enough for any supported curve
+    size_t sig_len = 0;
 
-    ASSERT_NOTNULL(privKey);
-    ASSERT_NOTNULL(message);
-    ASSERT_NOTNULL(signature);
+    try {
+        ASSERT_NOTNULL(privKey);
+        ASSERT_NOTNULL(message);
+        ASSERT_NOTNULL(signature);
 
-    md = EVP_MD_CTX_new();
-    if (!md) {
-        error_msg = "EVP_MD_CTX_new";
-        goto out;
-    }
+        ecdsa_keypair_t keypair = privKey->getECDSAKeypair();
+        ASSERT_NOTNULL(keypair);
 
-    if (EVP_DigestSignInit(md, NULL, EVP_sha256(), NULL, privKey->getPkey()) != 1) {
-        error_msg = "EVP_DigestSignInit";
-        goto out;
-    }
+        // Sign the message using the ECDSA abstraction
+        sig_len = ecdsa_sign(keypair,
+                             message->getInternalPtr(), message->size(),
+                             sig_buf, sizeof(sig_buf));
 
-    if (EVP_DigestSignUpdate(md, message->getInternalPtr(), message->size()) != 1) {
-        error_msg = "EVP_DigestSignUpdate";
-        goto out;
-    }
+        if (sig_len == 0) {
+            throw OpenABE_ERROR_SIGNATURE_FAILED;
+        }
 
-    if (EVP_DigestSignFinal(md, NULL, &siglen) != 1) {
-        error_msg = "EVP_DigestSignFinal(determine siglen)";
-        goto out;
+        // Return signature as a OpenABEByteString
+        signature->clear();
+        signature->appendArray(sig_buf, sig_len);
+
+    } catch(OpenABE_ERROR& error) {
+        result = error;
     }
 
-    // using openssl malloc instead of OpenABEByteString->fillBuffer
-    // to avoid trailing zero bytes. Trailing zero bytes
-    // invalidates ECDSA_verify DER encoding/decoding test.
-    // NOTE: this was exposed by recent improvements
-    // in openssl-1.0.1l
-    sig = (uint8_t *)OPENSSL_malloc((unsigned int)siglen);
-    if (sig == nullptr) {
-        error_msg = "OPENSSL_malloc failed in OpenABEContextPKSIG::sign";
-        goto out;
-    }
-    // Extract the signature
-    if (EVP_DigestSignFinal(md, sig, &siglen) != 1) {
-        error_msg = "EVP_DigestSignFinal(output sig)";
-        goto out;
-    }
-    // return sig as a OpenABEByteString
-    signature->clear();
-    signature->appendArray(sig, siglen);
-out:
-    if (md) {
-        EVP_MD_CTX_free(md);
-    }
-
-    if(error_msg != "") {
-        OpenABE_LOG(error_msg);
-        result = OpenABE_ERROR_SIGNATURE_FAILED;
-    }
-
-    if (sig != NULL) {
-        OPENSSL_cleanse((char *)sig, siglen);
-        OPENSSL_free(sig);
-    }
     return result;
 }
 
 OpenABE_ERROR
 OpenABEContextPKSIG::verify(OpenABEPKey *pubKey, OpenABEByteString *message, OpenABEByteString *signature) {
     OpenABE_ERROR result = OpenABE_NOERROR;
-    EVP_MD_CTX* md = NULL;
-    string error_msg = "";
-    bool answer;
-    ASSERT_NOTNULL(pubKey);
-    ASSERT_NOTNULL(message);
-    ASSERT_NOTNULL(signature);
 
-    md = EVP_MD_CTX_new();
-    if (!md) {
-        error_msg = "EVP_MD_CTX_new";
-        goto out;
-    }
+    try {
+        ASSERT_NOTNULL(pubKey);
+        ASSERT_NOTNULL(message);
+        ASSERT_NOTNULL(signature);
 
-    if (EVP_DigestVerifyInit(md, NULL, EVP_sha256(), NULL, pubKey->getPkey()) != 1) {
-        error_msg = "EVP_DigestVerifyInit";
-        goto out;
-    }
+        ecdsa_keypair_t keypair = pubKey->getECDSAKeypair();
+        ASSERT_NOTNULL(keypair);
 
-    if (EVP_DigestVerifyUpdate(md, message->getInternalPtr(), message->size()) != 1) {
-        error_msg = "EVP_DigestVerifyUpdate";
-        goto out;
-    }
+        // Verify the signature using the ECDSA abstraction
+        int ret = ecdsa_verify(keypair,
+                               message->getInternalPtr(), message->size(),
+                               signature->getInternalPtr(), signature->size());
 
-    answer = (EVP_DigestVerifyFinal(md, (unsigned char*)signature->getInternalPtr(), signature->size()) == 1);
-    if(!answer) {
-        error_msg = "EVP_DigestVerifyFinal failed";
-        goto out;
-    }
+        if (ret != 1) {
+            throw OpenABE_ERROR_VERIFICATION_FAILED;
+        }
 
-out:
-    if (md) {
-        EVP_MD_CTX_free(md);
-    }
-
-    if(error_msg != "") {
-        OpenABE_LOG(error_msg);
-        result = OpenABE_ERROR_VERIFICATION_FAILED;
+    } catch(OpenABE_ERROR& error) {
+        result = error;
     }
 
     return result;
 }
 
 bool
-OpenABEContextPKSIG::validatePkey(EVP_PKEY* pkey, bool expectPrivate) {
-    EC_KEY* eckey;
-    const EC_GROUP* group;
-    bool result = false;
-    bool hasPrivate;
-
-    eckey = EVP_PKEY_get1_EC_KEY(pkey);
-    if (!eckey) {
-        // Wrong key type
-        goto out;
-    }
-    group = EC_KEY_get0_group(eckey);
-    if (!group) {
-        // Shouldn't happen
-        goto out;
-    }
-    // Check public versus private key
-    hasPrivate = (EC_KEY_get0_private_key(eckey) != NULL);
-    if (hasPrivate != expectPrivate) {
-        goto out;
+OpenABEContextPKSIG::validateKeypair(ecdsa_keypair_t keypair, bool expectPrivate) {
+    if (!keypair) {
+        return false;
     }
 
-    // Success
-    result = true;
+    // Check if the keypair has a private key component
+    bool hasPrivate = (ecdsa_has_private_key(keypair) == 1);
 
-    out:
-    if (eckey) {
-        EC_KEY_free(eckey);
-    }
-
-    return result;
+    return (hasPrivate == expectPrivate);
 }
 
 bool
 OpenABEContextPKSIG::validatePublicKey(const shared_ptr<OpenABEPKey>& key) {
     ASSERT_NOTNULL(key);
-    return this->validatePkey(key->getPkey(), false);
+    return this->validateKeypair(key->getECDSAKeypair(), false);
 }
 
 
 bool
 OpenABEContextPKSIG::validatePrivateKey(const std::shared_ptr<OpenABEPKey>& key) {
     ASSERT_NOTNULL(key);
-//	return this->validatePkey(key->getPkey(), true);
-    return true;
+    return this->validateKeypair(key->getECDSAKeypair(), true);
 }
 
 
@@ -305,7 +261,7 @@ OpenABEContextPKSIG::validatePrivateKey(const std::shared_ptr<OpenABEPKey>& key)
  ********************************************************************************/
 
 OpenABEContextSchemePKSIG::OpenABEContextSchemePKSIG(unique_ptr<OpenABEContextPKSIG> pksig): ZObject() {
-    m_PKSIG = move(pksig);
+    m_PKSIG = std::move(pksig);
 }
 
 OpenABEContextSchemePKSIG::~OpenABEContextSchemePKSIG() {
@@ -341,8 +297,15 @@ OpenABEContextSchemePKSIG::loadPrivateKey(const std::string &keyID, OpenABEByteS
     bool isPrivate = true;
 
     try {
-        // now we can deserialize the key directly
-        SK.reset(new OpenABEPKey(isPrivate));
+        if (keyBlob.size() < 2) {
+            throw OpenABE_ERROR_INVALID_INPUT;
+        }
+
+        // First byte contains the curve_id
+        uint8_t curve_id = keyBlob.at(0);
+
+        // Now we can deserialize the key directly
+        SK.reset(new OpenABEPKey(isPrivate, curve_id));
         SK->loadKeyFromBytes(keyBlob);
 
         if(this->m_PKSIG->validatePrivateKey(SK)) {
@@ -367,8 +330,15 @@ OpenABEContextSchemePKSIG::loadPublicKey(const std::string &keyID, OpenABEByteSt
     bool isPrivate = false;
 
     try {
-        // now we can deserialize the key directly
-        PK.reset(new OpenABEPKey(isPrivate));
+        if (keyBlob.size() < 2) {
+            throw OpenABE_ERROR_INVALID_INPUT;
+        }
+
+        // First byte contains the curve_id
+        uint8_t curve_id = keyBlob.at(0);
+
+        // Now we can deserialize the key directly
+        PK.reset(new OpenABEPKey(isPrivate, curve_id));
         PK->loadKeyFromBytes(keyBlob);
 
         if(this->m_PKSIG->validatePublicKey(PK)) {

@@ -124,7 +124,7 @@ OpenABEKeystoreManager::storeWithKeyIDCommand(const string& userId, const std::s
         metadata->curveID = curveID;
         metadata->schemeID = schemeID;
         metadata->inputType = keyInput->getFunctionType();
-        metadata->input = move(keyInput);
+        metadata->input = std::move(keyInput);
         metadata->isCached = canCacheKey;
         keyMetadata_[keyID] = metadata;
         return true;
@@ -244,7 +244,10 @@ pair<bool,int>
 OpenABEKeystoreManager::testAKey(OpenABEMetadata& key, OpenABEFunctionInput* funcInput) {
     OpenABEPolicy *policy = nullptr;
     OpenABEAttributeList *attr_list = nullptr;
-    ASSERT_NOTNULL(funcInput);
+    if (funcInput == NULL) {
+        fprintf(stderr, "%s:%s:%d: funcInput is null\n", __FILE__, __FUNCTION__, __LINE__);
+        return make_pair(false, 0);
+    }
     if(key->inputType == FUNC_ATTRLIST_INPUT &&
             funcInput->getFunctionType() == FUNC_POLICY_INPUT) {
         policy    = (OpenABEPolicy *) funcInput;
@@ -257,7 +260,8 @@ OpenABEKeystoreManager::testAKey(OpenABEMetadata& key, OpenABEFunctionInput* fun
     }
     else {
         /* throw an error - invalid input on either key or ciphertext (most likely ciphertext) */
-        throw OpenABE_ERROR_INVALID_CIPHERTEXT_HEADER;
+        fprintf(stderr, "testAKey: invalid ciphertext header\n");
+        return make_pair(false, -1);
     }
     return checkIfSatisfied(policy, attr_list);
 }
@@ -271,8 +275,11 @@ OpenABEKeystoreManager::searchKeyCommand(OpenABEKeyQuery* query, OpenABEFunction
 
 vector<std::string>
 OpenABEKeystoreManager::deleteKeyCommand(OpenABEKeyQuery* query) {
-    ASSERT_NOTNULL(query);
     vector<std::string> keyList;
+    if (query == NULL) {
+        fprintf(stderr, "%s:%s:%d: query is null\n", __FILE__, __FUNCTION__, __LINE__);
+        return keyList;
+    }
 
     std::lock_guard<std::mutex> lock(ks_lock_);
     keyList = getKeyIds(query->userId, query->currentTime);
@@ -296,8 +303,10 @@ OpenABEKeystoreManager::deleteKeyCommand(OpenABEKeyQuery* query) {
 
 const string
 OpenABEKeystoreManager::searchKey(OpenABEKeyQuery* query, OpenABEFunctionInput *funcInput) {
-    ASSERT_NOTNULL(query);
-    ASSERT_NOTNULL(funcInput);
+    if (query == NULL || funcInput == NULL) {
+        fprintf(stderr, "%s:%s:%d: null pointer\n", __FILE__, __FUNCTION__, __LINE__);
+        return "";
+    }
     vector<KeyRef> satKeys;
     // initial set of keys that are available that could satisfy the input ciphertext
     vector<string> keyRefs = filterKeys(query->userId, funcInput->getFunctionType());
@@ -367,14 +376,20 @@ unique_ptr<OpenABEFunctionInput> getFunctionInput(OpenABEKey *key) {
         case OpenABE_SCHEME_CP_WATERS_CCA:
             // attributes are on the key for CP-ABE
             attrList = (OpenABEAttributeList*)key->getComponent("input");
-            ASSERT_NOTNULL(attrList);
+            if (attrList == NULL) {
+                fprintf(stderr, "%s:%s:%d: attrList is null\n", __FILE__, __FUNCTION__, __LINE__);
+                return nullptr;
+            }
             return createAttributeList(attrList->toCompactString());
             break;
         case OpenABE_SCHEME_KP_GPSW:
         case OpenABE_SCHEME_KP_GPSW_CCA:
             // policy on the key for KP-ABE
             policy_str = key->getByteString("input");
-            ASSERT_NOTNULL(policy_str);
+            if (policy_str == NULL) {
+                fprintf(stderr, "%s:%s:%d: policy_str is null\n", __FILE__, __FUNCTION__, __LINE__);
+                return nullptr;
+            }
             return createPolicyTree(policy_str->toString());
             break;
         default:

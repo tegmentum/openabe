@@ -280,7 +280,8 @@ OpenABEKeystore::parseKeyHeader(const std::string keyID, OpenABEByteString &keyB
   // parses the header and the body from PKE keys
   key = this->constructKeyFromBytes(keyID, keyBlob, outputKeyBytes);
   if(key == nullptr) {
-      THROW_ERROR(OpenABE_ERROR_INVALID_INPUT);
+      fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
+      return nullptr;
   }
 
   return key;
@@ -292,33 +293,36 @@ OpenABEKeystore::constructKeyFromBytes(const string &keyID, OpenABEByteString &k
   size_t hdrLen = 3 + UID_LEN;
   shared_ptr<OpenABEKey> key = nullptr;
 
-  try {
-    if(keyBlob.size() < hdrLen) { THROW_ERROR(OpenABE_ERROR_INVALID_LENGTH); }
-    OpenABEByteString keyHeader;
-    size_t index = 0;
-    // convert to OpenABEByteStrings
-    keyHeader = keyBlob.unpack(&index);
+  if(keyBlob.size() < hdrLen) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_LENGTH));
+    return nullptr;
+  }
+  OpenABEByteString keyHeader;
+  size_t index = 0;
+  // convert to OpenABEByteStrings
+  keyHeader = keyBlob.unpack(&index);
 
-    if(keyHeader.size() >= hdrLen) {
-      // check that lib version correct
-      ASSERT(keyHeader.at(0) <= OpenABE_LIBRARY_VERSION, OpenABE_ERROR_INVALID_LIBVERSION);
-
-      OpenABECurveID curveID = OpenABE_getCurveID(keyHeader.at(1));
-      uint8_t algID      = OpenABE_getSchemeID(keyHeader.at(2));
-      OpenABEByteString uid  = keyHeader.getSubset(3, UID_LEN);
-      OpenABEByteString id   = keyHeader.getSubset(hdrLen, keyHeader.size()-hdrLen);
-
-      // alloc/construct the key
-      key.reset(new OpenABEKey(curveID, algID, id.toString(), &uid));
-      // return the serialized form of the key structure
-      keyBytes.clear();
-      keyBytes  = keyBlob.unpack(&index);
+  if(keyHeader.size() >= hdrLen) {
+    // check that lib version correct
+    if (!(keyHeader.at(0) <= OpenABE_LIBRARY_VERSION)) {
+      fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_LIBVERSION));
+      return nullptr;
     }
-    else {
-      THROW_ERROR(OpenABE_ERROR_INVALID_KEY_HEADER);
-    }
-  } catch(OpenABE_ERROR &error) {
-      cerr << "OpenABEKeystore::constructKeyFromBytes: " << OpenABE_errorToString(error) << endl;
+
+    OpenABECurveID curveID = OpenABE_getCurveID(keyHeader.at(1));
+    uint8_t algID      = OpenABE_getSchemeID(keyHeader.at(2));
+    OpenABEByteString uid  = keyHeader.getSubset(3, UID_LEN);
+    OpenABEByteString id   = keyHeader.getSubset(hdrLen, keyHeader.size()-hdrLen);
+
+    // alloc/construct the key
+    key.reset(new OpenABEKey(curveID, algID, id.toString(), &uid));
+    // return the serialized form of the key structure
+    keyBytes.clear();
+    keyBytes  = keyBlob.unpack(&index);
+  }
+  else {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_KEY_HEADER));
+    return nullptr;
   }
   return key;
 }

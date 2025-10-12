@@ -90,7 +90,7 @@ ZObject::deRef()
 
 void
 OpenABEZeroize(void *b, size_t b_len) {
-  ASSERT_NOTNULL(b);
+  if (b == NULL) { fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL failed\n", __FILE__, __FUNCTION__, __LINE__); return; }
   volatile uint8_t *p = (uint8_t *)b;
   if (b_len > 0) {
     while( b_len-- ) {
@@ -183,7 +183,8 @@ string Base64Decode(string const& encoded_string) {
   if (in_ < encoded_string.size()) {
     // Look for terminating '='s, maximum 2
     if (encoded_string.size() - in_ > 2) {
-        throw OpenABE_ERROR_INVALID_INPUT;
+        fprintf(stderr, "Invalid Base64 input: too many terminating characters\n");
+        return "";
     }
     size_t tmp = in_;
     for (; tmp < encoded_string.size(); tmp++) {
@@ -192,7 +193,8 @@ string Base64Decode(string const& encoded_string) {
         }
     }
     if (tmp != encoded_string.size()) {
-        throw OpenABE_ERROR_INVALID_INPUT;
+        fprintf(stderr, "Invalid Base64 input: invalid terminating characters\n");
+        return "";
     }
   }
 

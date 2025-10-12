@@ -3,7 +3,7 @@ include ../Makefile.common
 
 CUR_DIR = .
 OBJS    = common.o
-BINOBJS = oabe_setup oabe_keygen oabe_enc oabe_dec
+BINOBJS = oabe_setup oabe_keygen oabe_enc oabe_dec oabe_curves
 OABE_LIB = $(OABE_LIB_ROOT)/$(OABELIB)
 
 all: $(BINOBJS)
@@ -29,6 +29,9 @@ oabe_enc: $(OBJS)
 
 oabe_dec: $(OBJS)
 	$(CXX) -o oabe_dec $(OBJS) -I../src/ $(CXXFLAGS) $(LDFLAGS) $(CUR_DIR)/decrypt.cpp $(OABE_LIB) $(OABELDSHLIBS)
+
+oabe_curves:
+	$(CXX) -o oabe_curves -I../src/ $(CXXFLAGS) $(LDFLAGS) $(CUR_DIR)/oabe_curves.cpp $(OABE_LIB) $(OABELDSHLIBS)
 
 %.o: %.c
 	$(CC) $(CCFLAGS) -c $<

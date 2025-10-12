@@ -77,7 +77,10 @@ unique_ptr<OpenABEFunctionInput> copyFunctionInput(const OpenABEFunctionInput &i
 }
 
 unique_ptr<OpenABEFunctionInput> getFunctionInput(OpenABECiphertext *ciphertext) {
-  ASSERT_NOTNULL(ciphertext);
+  if (ciphertext == NULL) {
+    fprintf(stderr, "%s:%s:%d: ciphertext is null\n", __FILE__, __FUNCTION__, __LINE__);
+    return nullptr;
+  }
   OpenABE_SCHEME scheme_type = ciphertext->getSchemeType();
   OpenABEByteString *policy_str = NULL;
   OpenABEAttributeList *attrList = NULL;
@@ -87,14 +90,20 @@ unique_ptr<OpenABEFunctionInput> getFunctionInput(OpenABECiphertext *ciphertext)
   case OpenABE_SCHEME_CP_WATERS:
   case OpenABE_SCHEME_CP_WATERS_CCA:
     policy_str = ciphertext->getByteString("policy");
-    ASSERT_NOTNULL(policy_str);
+    if (policy_str == NULL) {
+      fprintf(stderr, "%s:%s:%d: policy_str is null\n", __FILE__, __FUNCTION__, __LINE__);
+      return nullptr;
+    }
     return unique_ptr<OpenABEFunctionInput>(
                createPolicyTree(policy_str->toString()));
     break;
   case OpenABE_SCHEME_KP_GPSW:
   case OpenABE_SCHEME_KP_GPSW_CCA:
     attrList = (OpenABEAttributeList *)ciphertext->getComponent("attributes");
-    ASSERT_NOTNULL(attrList);
+    if (attrList == NULL) {
+      fprintf(stderr, "%s:%s:%d: attrList is null\n", __FILE__, __FUNCTION__, __LINE__);
+      return nullptr;
+    }
     return unique_ptr<OpenABEFunctionInput>(
                createAttributeList(attrList->toCompactString()));
     break;

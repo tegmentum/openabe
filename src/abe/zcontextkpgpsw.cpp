@@ -58,7 +58,7 @@ namespace oabe {
 
 OpenABEContextKPGPSW::OpenABEContextKPGPSW(unique_ptr<OpenABERNG> rng) : OpenABEContextABE() {
   this->debug = false;
-  this->m_RNG_ = move(rng);
+  this->m_RNG_ = std::move(rng);
   this->algID = OpenABE_SCHEME_KP_GPSW;
 }
 

@@ -501,9 +501,11 @@ OpenABETreeNode *Driver::ge_policy(const std::string &attr, OpenABEUInteger *num
 OpenABETreeNode *Driver::range_policy(const std::string &c, OpenABEUInteger *min_num,
                                   OpenABEUInteger *max_num) {
   if (min_num->getVal() > max_num->getVal()) {
-    throw OpenABE_ERROR_INVALID_RANGE_NUMBERS;
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_RANGE_NUMBERS));
+    return nullptr;
   } else if (min_num->getBits() != max_num->getBits()) {
-    throw OpenABE_ERROR_INVALID_MISMATCH_BITS;
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_MISMATCH_BITS));
+    return nullptr;
   }
   // translate to (LEAF > min_num AND LEAF < max_num)
   OpenABETreeNode *rootNode = new OpenABETreeNode();
@@ -520,9 +522,11 @@ OpenABETreeNode *Driver::range_incl_policy(const std::string &c,
                                        OpenABEUInteger *min_num,
                                        OpenABEUInteger *max_num) {
   if (min_num->getVal() > max_num->getVal()) {
-    throw OpenABE_ERROR_INVALID_RANGE_NUMBERS;
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_RANGE_NUMBERS));
+    return nullptr;
   } else if (min_num->getBits() != max_num->getBits()) {
-    throw OpenABE_ERROR_INVALID_MISMATCH_BITS;
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_MISMATCH_BITS));
+    return nullptr;
   }
   // translate to (LEAF >= min_num AND LEAF <= max_num)
   OpenABETreeNode *rootNode = new OpenABETreeNode();
@@ -601,20 +605,20 @@ uint32_t validate_date(const std::string &prefix, OpenABEUInteger *m,
   //    cout << "Year: " << y->getVal() << endl;
   if (prefix == MONTH_KEYWORD || prefix == DAY_KEYWORD ||
       prefix == YEAR_KEYWORD) {
-        throw OpenABE_ERROR_INVALID_PREFIX_SPECIFIED;
+        return OpenABE_ERROR_INVALID_PREFIX_SPECIFIED;
   }
 
   if (!(m->isFlexInt() && d->isFlexInt() && y->isFlexInt())) {
-    throw OpenABE_ERROR_INVALID_ATTRIBUTE_STRUCTURE;
+    return OpenABE_ERROR_INVALID_ATTRIBUTE_STRUCTURE;
   }
 
   if (!is_valid_date(m->getVal(), d->getVal(), y->getVal())) {
-    throw OpenABE_ERROR_INVALID_DATE_SPECIFIED;
+    return OpenABE_ERROR_INVALID_DATE_SPECIFIED;
   }
 
   // reject if before epoch
   if (y->getVal() < EPOCH_YEAR) {
-    throw OpenABE_ERROR_INVALID_DATE_BEFORE_EPOCH;
+    return OpenABE_ERROR_INVALID_DATE_BEFORE_EPOCH;
   }
 
   struct tm t = {0};
@@ -632,25 +636,30 @@ void validate_range_date(const std::string &prefix, OpenABEUInteger *m,
                          OpenABEUInteger *y) {
   if (prefix == MONTH_KEYWORD || prefix == DAY_KEYWORD ||
       prefix == YEAR_KEYWORD) {
-    throw OpenABE_ERROR_INVALID_PREFIX_SPECIFIED;
+    fprintf(stderr, "validate_range_date: invalid prefix\n");
+    return;
   }
 
   if (!(m->isFlexInt() && min_d->isFlexInt() && max_d->isFlexInt() &&
         y->isFlexInt())) {
-    throw OpenABE_ERROR_INVALID_ATTRIBUTE_STRUCTURE;
+    fprintf(stderr, "validate_range_date: invalid attribute structure\n");
+    return;
   }
 
   if (!is_valid_date(m->getVal(), min_d->getVal(), y->getVal())) {
-    throw OpenABE_ERROR_INVALID_DATE_SPECIFIED;
+    fprintf(stderr, "validate_range_date: invalid date (min)\n");
+    return;
   }
 
   if (!is_valid_date(m->getVal(), max_d->getVal(), y->getVal())) {
-    throw OpenABE_ERROR_INVALID_DATE_SPECIFIED;
+    fprintf(stderr, "validate_range_date: invalid date (max)\n");
+    return;
   }
 
   // reject if before epoch
   if (y->getVal() < EPOCH_YEAR) {
-    throw OpenABE_ERROR_INVALID_DATE_BEFORE_EPOCH;
+    fprintf(stderr, "validate_range_date: date before epoch\n");
+    return;
   }
 }
 
@@ -738,7 +747,8 @@ OpenABETreeNode *Driver::range_date_in_policy(const std::string &prefix,
                                           OpenABEUInteger *m, OpenABEUInteger *min_d,
                                           OpenABEUInteger *max_d, OpenABEUInteger *y) {
   if (min_d->getVal() > max_d->getVal()) {
-    throw OpenABE_ERROR_INVALID_RANGE_NUMBERS;
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_RANGE_NUMBERS));
+    return nullptr;
   }
   validate_range_date(prefix, m, min_d, max_d, y);
 
@@ -827,8 +837,9 @@ pair<string, string> check_attribute(const string &c) {
         }
       }
     } else {
-      // throw an error here
-      throw OpenABE_ERROR_INVALID_ATTRIBUTE_STRUCTURE;
+      // return empty pair on error
+      fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_ATTRIBUTE_STRUCTURE));
+      return make_pair("", "");
     }
   } else {
     // continue as before and means no prefix was specified

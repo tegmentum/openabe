@@ -36,7 +36,7 @@
 %skeleton "lalr1.cc"
 
 /* namespace to enclose parser in */
-%name-prefix "oabe"
+%define api.prefix {oabe}
 
 /* set the parser's class identifier */
 %define api.parser.class {Parser}
@@ -55,7 +55,7 @@
 %parse-param { class Driver& driver }
 
 /* verbose error messages */
-%error-verbose
+%define parse.error verbose
 
  /*** BEGIN EXAMPLE - Change the example grammar's tokens below ***/
 

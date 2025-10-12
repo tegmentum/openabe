@@ -44,7 +44,6 @@ using namespace oabe;
 
 void runSetup(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, bool verbose)
 {
-    try {
     OpenABEByteString mpkBlob, mskBlob;
     string mpkFile = MPK_ID + suffix, mskFile = MSK_ID + suffix;
     if(prefix != "") {
@@ -90,11 +89,6 @@ void runSetup(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, bool v
     WriteToFile(mpkFile.c_str(), MPK_BEGIN_HEADER + Base64Encode(mpkBlob.getInternalPtr(), mpkBlob.size()) + MPK_END_HEADER);
     cout << "writing " << mskBlob.size() << " bytes to " << mskFile << endl;
     WriteToFile(mskFile.c_str(), MSK_BEGIN_HEADER + Base64Encode(mskBlob.getInternalPtr(), mskBlob.size()) + MSK_END_HEADER);
-
-    } catch (OpenABE_ERROR& error) {
-    	cout << "caught exception: " << OpenABE_errorToString(error) << endl;
-    	return;
-    }
 
     return;
 }

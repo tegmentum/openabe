@@ -66,8 +66,10 @@ OpenABEAttributeList::OpenABEAttributeList() : OpenABEFunctionInput() {
 OpenABEAttributeList::OpenABEAttributeList(uint32_t numArgs, std::vector<string> args)
     : OpenABEFunctionInput() {
   string c;
-  if (numArgs != args.size())
-    throw OpenABE_ERROR_INVALID_INPUT;
+  if (numArgs != args.size()) {
+    fprintf(stderr, "OpenABEAttributeList: invalid input\n");
+    return;
+  }
 
   for (size_t i = 0; i < args.size(); i++) {
     if (args[i] != "")
@@ -225,8 +227,7 @@ bool OpenABEAttributeList::isEqual(ZObject *z) const {
         this->m_Attributes.begin(), this->m_Attributes.end(), list.begin());
     return iter->size() == 0; // > 0 means false
   }
-  // return false;
-  throw OpenABE_ERROR_INVALID_INPUT;
+  return false;
 }
 
 //bool OpenABEAttributeList::isNumeric(const string s) {

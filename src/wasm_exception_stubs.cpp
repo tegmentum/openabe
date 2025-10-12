@@ -13,8 +13,17 @@
 
 #include <cstdlib>
 #include <cstddef>
+#include <sys/types.h>
 
 extern "C" {
+
+// System call stubs for WASM/WASI
+// getpid is used by OpenSSL/MCL for RNG seeding
+pid_t getpid() {
+    // Return a constant PID for WASM
+    // This is safe for testing but may reduce RNG entropy
+    return 1;
+}
 
 // Allocate memory for exception object
 void* __cxa_allocate_exception(size_t thrown_size) noexcept {

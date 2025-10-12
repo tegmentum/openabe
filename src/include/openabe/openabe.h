@@ -49,16 +49,23 @@
 
 #ifdef DEBUG
  #define DEBUG_ELEMENT_PRINTF(...) element_printf(__VA_ARGS__)
+ // For functions returning OpenABE_ERROR
  #define OpenABE_LOG_AND_THROW(str, err)                                            \
-  OpenABE_LOG_ERROR((str));                                                        \
-  throw(err);
+  do { OpenABE_LOG_ERROR((str)); return (err); } while(0)
+ // For void functions
+ #define OpenABE_LOG_AND_THROW_VOID(str)                                            \
+  do { OpenABE_LOG_ERROR((str)); return; } while(0)
 #define OpenABE_LOG(str)                                                           \
   OpenABE_LOG_ERROR((str));
 
 #else
  #define DEBUG_ELEMENT_PRINTF(...)
+ // For functions returning OpenABE_ERROR
  #define OpenABE_LOG_AND_THROW(str, err)                                            \
-  throw(err);
+  do { fprintf(stderr, "ERROR: %s (code: %d)\n", str, err); return (err); } while(0)
+ // For void functions
+ #define OpenABE_LOG_AND_THROW_VOID(str)                                            \
+  do { fprintf(stderr, "ERROR: %s\n", str); return; } while(0)
  #define OpenABE_LOG(str) /* do nothing */
 #endif
 
@@ -118,7 +125,9 @@ typedef uint32_t OpenABESecurityLevel;
 #ifdef __wasm__
 #include <openabe/wasm_mutex.h>
 #endif
+#if !defined(BP_WITH_MCL)
 #include <gmpxx.h>
+#endif
 extern "C" {
 #include <openabe/zml/zelement.h>
 }
@@ -224,6 +233,30 @@ OpenABE_SCHEME OpenABE_convertStringToSchemeID(const std::string id);
 OpenABECurveID OpenABE_convertStringToCurveID(const std::string paramsID);
 std::string OpenABE_convertCurveIDToString(OpenABECurveID id);
 void OpenABE_setGroupObject(std::shared_ptr<ZGroup> &group, uint8_t id);
+
+///
+/// Curve information and metadata functions
+///
+
+// Curve query functions (implemented in zcurveinfo.cpp)
+extern "C" {
+  const char* OpenABE_getCurveName(OpenABECurveID id);
+  const char* OpenABE_getCurveDisplayName(OpenABECurveID id);
+  OpenABESecurityLevel OpenABE_getCurveSecurityLevel(OpenABECurveID id);
+  const char* OpenABE_getCurveFamily(OpenABECurveID id);
+  int OpenABE_getCurveFieldBits(OpenABECurveID id);
+  int OpenABE_getCurveEmbeddingDegree(OpenABECurveID id);
+  const char* OpenABE_getCurveStatus(OpenABECurveID id);
+  const char* OpenABE_getCurveNotes(OpenABECurveID id);
+  const char* OpenABE_getCurveRelicID(OpenABECurveID id);
+  OpenABECurveID OpenABE_getCurveIDByName(const char* name);
+  bool OpenABE_isCurveSupported(const char* name);
+  int OpenABE_listAllCurves(const char*** names_out, int* count_out);
+  int OpenABE_listRecommendedCurves(const char*** names_out, int* count_out);
+  void OpenABE_printCurveInfo(OpenABECurveID id);
+  void OpenABE_printCurveWarnings(OpenABECurveID id);
+  void OpenABE_printAllCurves(void);
+}
 
 ///
 /// OpenABE initialization per thread

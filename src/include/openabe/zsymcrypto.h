@@ -83,6 +83,7 @@ public:
 
 class OpenABESymKeyHandle {
 public:
+  virtual ~OpenABESymKeyHandle() = default;
   virtual void encrypt(std::string& ciphertext,
                        const std::string& plaintext) = 0;
   virtual void decrypt(std::string& plaintext,

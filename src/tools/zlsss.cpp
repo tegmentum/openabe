@@ -67,6 +67,9 @@ OpenABELSSS::OpenABELSSS(OpenABEPairing *pairing, OpenABERNG *rng) : ZObject(), 
   this->m_Pairing->addRef();
   this->m_RNG = rng;
   this->m_Pairing->initZP(zero, 0);
+  // Initialize member variables used in calculateCoefficient
+  this->m_Pairing->initZP(iPlusOne, 0);
+  this->m_Pairing->initZP(indexPlusOne, 0);
 }
 
 
@@ -104,7 +107,7 @@ OpenABELSSS::shareSecret(const OpenABEFunctionInput *input, ZP &elt)
   // Verify that the input is a supported type (OpenABEPolicy)
   const OpenABEPolicy *policy = dynamic_cast<const OpenABEPolicy*>(input);
   if (policy == nullptr) {
-      OpenABE_LOG_AND_THROW("Sharing input must be a Policy", OpenABE_ERROR_INVALID_INPUT);
+      OpenABE_LOG_AND_THROW_VOID("Sharing input must be a Policy");
   }
   // Clear any existing results
   this->clearExistingResults();
@@ -248,7 +251,7 @@ OpenABELSSS::iterativeShareSecret(OpenABETreeNode *treeNode, ZP &elt)
     theSecret    = eltList.top();
     nodes.pop();
     eltList.pop();
-    ASSERT_NOTNULL(visitedNode);
+    ASSERT_NOTNULL_VOID(visitedNode);
 
     // Base case:
     // If the node is a leaf node, simply add the given element to the results
@@ -345,8 +348,8 @@ OpenABELSSS::iterativeCoefficientRecover(OpenABETreeNode *treeNode, ZP &inCoeff)
           break;
         default:
           // Unrecognized node type
-          OpenABE_LOG_AND_THROW("Unrecognized node type", OpenABE_ERROR_SECRET_SHARING_FAILED);
-          break;
+          fprintf(stderr, "ERROR: Unrecognized node type\n");
+          return false;
 #endif
       }
 
@@ -385,19 +388,37 @@ OpenABELSSS::calculateCoefficient(OpenABETreeNode *treeNode, uint32_t index, uin
   this->m_Pairing->initZP(result, 1);
   this->m_Pairing->initZP(this->indexPlusOne, index + 1);
 
+  // Use local ZP variables for coefficient calculation
+  ZP local_iPlusOne, local_indexPlusOne;
+  this->m_Pairing->initZP(local_indexPlusOne, index + 1);
+
+  std::cerr << "[LSSS COEFF] calculateCoefficient for index=" << index << ", threshold=" << threshold << ", total=" << total << std::endl;
+  std::cerr << "[LSSS COEFF] Starting with result=1" << std::endl;
+
   // Product for all marked subnodes (excluding index) of ( (0 - (X(i))) / (X(subnode_index) - (X(i))) )
   // Note that X(i) = i+1.
   for (uint32_t i = 0; i < threshold; i++) {
     /* Check if this subnode is being used for the recovery.	*/
-    this->m_Pairing->initZP(this->iPlusOne, i + 1);
-    if (treeNode->getSubnode(i)->getMark() == true) {
+    this->m_Pairing->initZP(local_iPlusOne, i + 1);
+    bool is_marked = treeNode->getSubnode(i)->getMark();
+    std::cerr << "[LSSS COEFF] i=" << i << ", marked=" << (is_marked ? "true" : "false") << std::endl;
+    if (is_marked) {
       if (i != index) {
-        result *= result * ((this->zero - this->iPlusOne) / (this->indexPlusOne - this->iPlusOne));
+        ZP numerator = this->zero - local_iPlusOne;
+        ZP denominator = local_indexPlusOne - local_iPlusOne;
+        ZP term = numerator / denominator;
+        std::cerr << "[LSSS COEFF]   numerator (0 - " << (i+1) << ") = " << numerator << std::endl;
+        std::cerr << "[LSSS COEFF]   denominator (" << (index+1) << " - " << (i+1) << ") = " << denominator << std::endl;
+        std::cerr << "[LSSS COEFF]   term = " << term << std::endl;
+        // BUG FIX: Removed extra "result *" that was squaring the coefficient each iteration
+        result *= term;
+        std::cerr << "[LSSS COEFF]   result after multiply = " << result << std::endl;
       }
     }
   }
-    
-    return result;
+
+  std::cerr << "[LSSS COEFF] Final coefficient = " << result << std::endl;
+  return result;
 }
 
 /*!
@@ -413,10 +434,10 @@ void
 OpenABELSSS::addShareToResults(OpenABETreeNode *treeNode, ZP &elt)
 {
   OpenABELSSSElement lsssElement(treeNode->getCompleteLabel(), elt);
-  this->m_ResultMap[this->makeUniqueLabel(treeNode)] = lsssElement;
-  // JAA: uncomment to debug labels
-  // cout << "Unique label: " << this->makeUniqueLabel(treeNode) << endl;
-  // cout << treeNode->getCompleteLabel() << " -> " << elt << endl;
+  std::string uniqueLabel = this->makeUniqueLabel(treeNode);
+  this->m_ResultMap[uniqueLabel] = lsssElement;
+  // Debug logging for share distribution
+  std::cerr << "[LSSS SHARE] Unique label: '" << uniqueLabel << "', Complete label: '" << treeNode->getCompleteLabel() << "', Share: " << elt << std::endl;
 }
 
 /*!
@@ -519,8 +540,8 @@ bool iterativeScanTree(OpenABETreeNode *treeNode, OpenABEAttributeList *attribut
           break;
       default:
           // Unrecognized node type
-          OpenABE_LOG_AND_THROW("Unrecognized node type", OpenABE_ERROR_SECRET_SHARING_FAILED);
-          break;
+          fprintf(stderr, "ERROR: Unrecognized node type\n");
+          return false;
     }
 
     allSubnodesVisited = true;
@@ -636,8 +657,10 @@ bool determineIfNodeShouldBeMarked(uint32_t threshold, OpenABETreeNode *node)
 }
 
 pair<bool, int> checkIfSatisfied(OpenABEPolicy *policy, OpenABEAttributeList *attr_list, bool reset_flags) {
-    ASSERT_NOTNULL(policy);
-    ASSERT_NOTNULL(attr_list);
+    if (policy == NULL || attr_list == NULL) {
+        fprintf(stderr, "%s:%s:%d: null pointer\n", __FILE__, __FUNCTION__, __LINE__);
+        return make_pair(false, 0);
+    }
     // check whether list satisfies the policy
     bool isSatisfied = iterativeScanTree(policy->getRootNode(), attr_list);
     int numNodesSatisfied = policy->getRootNode()->getNumSatisfied();

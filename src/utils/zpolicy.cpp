@@ -133,7 +133,10 @@ std::unique_ptr<OpenABEPolicy> createPolicyTree(std::string s) {
 
 unique_ptr<OpenABEPolicy>
 addToRootOfInput(zGateType type, const string attribute, OpenABEPolicy* policy) {
-  ASSERT_NOTNULL(policy);
+  if (policy == NULL) {
+    fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL failed\n", __FILE__, __FUNCTION__, __LINE__);
+    return nullptr;
+  }
   if(!policy->getRevocationStatus()) {
       // add attribute to policy
       string new_pol = "(";
@@ -143,7 +146,7 @@ addToRootOfInput(zGateType type, const string attribute, OpenABEPolicy* policy) 
   } else {
       // revocation is enabled so must search for the appropriate
       // attribute and extend
-      throw OpenABE_ERROR_NOT_IMPLEMENTED;
+      return nullptr;
   }
   return nullptr;
 }
@@ -235,8 +238,8 @@ OpenABETreeNode::getThresholdValue() {
         result = this->m_thresholdValue;
         break;
     default:
-        OpenABE_LOG_AND_THROW("Illegal gate type", OpenABE_ERROR_INVALID_POLICY);
-        break;
+        fprintf(stderr, "ERROR: Illegal gate type\n");
+        return 0;
   }
 
   return result;
@@ -253,7 +256,8 @@ OpenABETreeNode::getThresholdValue() {
 OpenABETreeNode*
 OpenABETreeNode::getSubnode(uint32_t index) {
   if (index >= this->getNumSubnodes()) {
-    OpenABE_LOG_AND_THROW("Invalid policy subnode requested", OpenABE_ERROR_INVALID_INPUT);
+    fprintf(stderr, "ERROR: Invalid policy subnode requested\n");
+    return nullptr;
   }
 
   return this->m_Subnodes[index];
@@ -267,7 +271,10 @@ OpenABETreeNode::getSubnode(uint32_t index) {
 
 OpenABETreeNode::OpenABETreeNode(OpenABETreeNode *copy) {
   if (copy == NULL) {
-      OpenABE_LOG_AND_THROW("Copy with NULL pointer", OpenABE_ERROR_UNKNOWN);
+      fprintf(stderr, "ERROR: Copy with NULL pointer\n");
+      // Cannot return from constructor - object will be in invalid state
+      this->m_nodeType = GATE_TYPE_LEAF;
+      return;
   }
 
   this->m_nodeType            = copy->m_nodeType;
@@ -338,8 +345,8 @@ OpenABETreeNode::toString() {
         op = tmp.str();
         break;
     default:
-        OpenABE_LOG_AND_THROW("Illegal gate type", OpenABE_ERROR_INVALID_POLICY);
-        break;
+        fprintf(stderr, "ERROR: Illegal gate type\n");
+        return "";
   }
 
   if(this->m_Subnodes.size() == 2) {

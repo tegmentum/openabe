@@ -98,7 +98,8 @@ out:
   // if kctx is NULL, nothing is done.
   EVP_PKEY_CTX_free(kctx);
   if (error_msg != "") {
-    throw oabe::CryptoException(error_msg);
+    fprintf(stderr, "OpenABEComputeHKDF error: %s\n", error_msg.c_str());
+    // Cannot throw in WASM - caller must check output_key size
   }
 }
 
@@ -348,35 +349,33 @@ OpenABESymKeyAuthEnc::decrypt(string& plaintext, OpenABEByteString* iv, OpenABEB
  ********************************************************************************/
 
 OpenABESymKeyHandleImpl::OpenABESymKeyHandleImpl(const string& keyBytes, bool apply_b64_encode) {
-    try {
-        if (keyBytes.size() != DEFAULT_SYM_KEY_BYTES) {
-            throw OpenABE_ERROR_INVALID_LENGTH;
-        }
-
-        security_level_ = DEFAULT_AES_SEC_LEVEL;
-    } catch (OpenABE_ERROR& error) {
-        string msg = OpenABE_errorToString(error);
-        throw runtime_error(msg);
+    if (keyBytes.size() != DEFAULT_SYM_KEY_BYTES) {
+        // Constructor can't return error, allow invalid state
+        fprintf(stderr, "Invalid key length: %zu, expected %d\n", keyBytes.size(), DEFAULT_SYM_KEY_BYTES);
+        key_ = "";
+        security_level_ = 0;
+        b64_encode_ = false;
+        return;
     }
 
+    security_level_ = DEFAULT_AES_SEC_LEVEL;
     key_ = keyBytes;
     b64_encode_ = apply_b64_encode;
 }
 
 OpenABESymKeyHandleImpl::OpenABESymKeyHandleImpl(OpenABEByteString& keyBytes,
 		                                 OpenABEByteString& authData, bool apply_b64_encode) {
-    try {
-        key_ = keyBytes.toString();
-        if (key_.size() != DEFAULT_SYM_KEY_BYTES) {
-            throw OpenABE_ERROR_INVALID_LENGTH;
-        }
-
-        security_level_ = DEFAULT_AES_SEC_LEVEL;
-    } catch (OpenABE_ERROR& error) {
-        string msg = OpenABE_errorToString(error);
-        throw runtime_error(msg);
+    key_ = keyBytes.toString();
+    if (key_.size() != DEFAULT_SYM_KEY_BYTES) {
+        // Constructor can't return error, allow invalid state
+        fprintf(stderr, "Invalid key length: %zu, expected %d\n", key_.size(), DEFAULT_SYM_KEY_BYTES);
+        key_ = "";
+        security_level_ = 0;
+        b64_encode_ = false;
+        return;
     }
 
+    security_level_ = DEFAULT_AES_SEC_LEVEL;
     authData_ = authData;
     b64_encode_ = apply_b64_encode;
 }
@@ -400,7 +399,8 @@ void OpenABESymKeyHandleImpl::encrypt(string& ciphertext, const string& plaintex
         }
         // now we can encrypt with sym key
         if (symkeyContext_->encrypt(plaintext, &ziv, &zct, &ztag) != OpenABE_NOERROR) {
-            throw runtime_error("Encryption failed");
+            fprintf(stderr, "OpenABESymKeyHandleImpl::encrypt: Encryption failed\n");
+            return; // Leave ciphertext empty to signal error
         }
 
         // serialize all three ziv, zciphertext and ztag
@@ -423,7 +423,8 @@ void OpenABESymKeyHandleImpl::encrypt(string& ciphertext, const string& plaintex
         }
     } catch (OpenABE_ERROR& error) {
         string msg = OpenABE_errorToString(error);
-        throw runtime_error(msg);
+        fprintf(stderr, "OpenABESymKeyHandleImpl::encrypt error: %s\n", msg.c_str());
+        return; // Leave ciphertext empty to signal error
     }
 }
 
@@ -451,11 +452,13 @@ void OpenABESymKeyHandleImpl::decrypt(string& plaintext, const string& ciphertex
         }
         bool dec_status = symkeyContext_->decrypt(plaintext, &ziv, &zct, &ztag);
         if (!dec_status) {
-            throw runtime_error("Decryption failed");
+            fprintf(stderr, "OpenABESymKeyHandleImpl::decrypt: Decryption failed\n");
+            return; // Leave plaintext empty to signal error
         }
     } catch (OpenABE_ERROR& error) {
         string msg = OpenABE_errorToString(error);
-        throw runtime_error(msg);
+        fprintf(stderr, "OpenABESymKeyHandleImpl::decrypt error: %s\n", msg.c_str());
+        return; // Leave plaintext empty to signal error
     }
 }
 

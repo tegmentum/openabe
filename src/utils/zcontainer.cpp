@@ -99,7 +99,7 @@ ZObject *OpenABEContainer::getComponent(const string &name) {
 
   if (result == nullptr) {
     cerr << "OpenABEContainer::getComponent: missing '" << name << "'" << endl;
-    throw OpenABE_ERROR_ELEMENT_NOT_FOUND;
+    return nullptr;
   }
 
   return result;
@@ -146,7 +146,8 @@ void OpenABEContainer::serialize(OpenABEByteString &result) const {
 
 void OpenABEContainer::deserializeElement(std::string key, OpenABEByteString &value) {
   if (value.size() == 0) {
-    throw OpenABE_ERROR_INVALID_INPUT;
+    fprintf(stderr, "deserializeElement: invalid input (empty value)\n");
+    return;
   }
   uint8_t type = value.at(0);
 
@@ -155,9 +156,15 @@ void OpenABEContainer::deserializeElement(std::string key, OpenABEByteString &va
     i->deserialize(value);
     this->setComponent(key, i.get());
   } else if (type >= OpenABE_ELEMENT_ZP && type <= OpenABE_ELEMENT_GT) {
-    ASSERT(this->group != nullptr, OpenABE_ERROR_INVALID_GROUP_PARAMS);
+    if (this->group == nullptr) {
+      fprintf(stderr, "%s:%s:%d: group is null\n", __FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
     std::shared_ptr<BPGroup> bp = dynamic_pointer_cast<BPGroup>(group);
-    ASSERT(bp != nullptr, OpenABE_ERROR_INVALID_GROUP_PARAMS);
+    if (bp == nullptr) {
+      fprintf(stderr, "%s:%s:%d: cast to BPGroup failed\n", __FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
     if (type == OpenABE_ELEMENT_ZP) {
       unique_ptr<ZP> s(new ZP);
       s->setOrder(bp->order);
@@ -184,20 +191,28 @@ void OpenABEContainer::deserializeElement(std::string key, OpenABEByteString &va
     const string b = value.toString();
     unique_ptr<OpenABEPolicy> p = oabe::createPolicyTree(b);
     if (p == nullptr) {
-      throw OpenABE_ERROR_INVALID_POLICY_TREE;
+      fprintf(stderr, "deserializeElement: invalid policy tree\n");
+      return;
     }
     this->setComponent(key, p.get());
   } else if (type == OpenABE_ELEMENT_ATTRIBUTES) {
     const string b = value.toString();
     unique_ptr<OpenABEAttributeList> a = oabe::createAttributeList(b);
     if (a == nullptr) {
-      throw OpenABE_ERROR_INVALID_ATTRIBUTE_LIST;
+      fprintf(stderr, "deserializeElement: invalid attribute list\n");
+      return;
     }
     this->setComponent(key, a.get());
   } else if (type == OpenABE_ELEMENT_ZP_t || type == OpenABE_ELEMENT_G_t) {
-    ASSERT(this->group != nullptr, OpenABE_ERROR_INVALID_GROUP_PARAMS);
+    if (this->group == nullptr) {
+      fprintf(stderr, "%s:%s:%d: group is null\n", __FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
     std::shared_ptr<ECGroup> ec = dynamic_pointer_cast<ECGroup>(group);
-    ASSERT(ec != nullptr, OpenABE_ERROR_INVALID_GROUP_PARAMS);
+    if (ec == nullptr) {
+      fprintf(stderr, "%s:%s:%d: cast to ECGroup failed\n", __FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
 
     if (type == OpenABE_ELEMENT_ZP_t) {
       unique_ptr<ZP_t> s(new ZP_t);
@@ -250,11 +265,18 @@ bool operator==(const OpenABEContainer &c1, const OpenABEContainer &c2) {
   // check that the 'keys' of the containers are equal
   std::vector<std::string> keyList1 = const_cast<OpenABEContainer &>(c1).getKeys();
   std::vector<std::string> keyList2 = const_cast<OpenABEContainer &>(c2).getKeys();
+
+  // First check: containers must have the same number of keys
+  if (keyList1.size() != keyList2.size()) {
+    return false;
+  }
+
   std::vector<std::string> keyList3(keyList1.size() + keyList2.size());
   std::vector<std::string>::iterator iter =
       std::set_difference(keyList1.begin(), keyList1.end(), keyList2.begin(),
                           keyList2.end(), keyList3.begin());
-  size_t keydiff = iter->size();
+  // Fix: Calculate the number of different keys using distance, not iter->size()
+  size_t keydiff = std::distance(keyList3.begin(), iter);
   if (keydiff > 0) {
     return false;
   }

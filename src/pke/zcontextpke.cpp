@@ -75,7 +75,7 @@ OpenABEContextPKE::initializeCurve(const string groupParams) {
   // Instantiate a OpenABE elliptic curve object with the given parameters
   this->m_EllipticCurve_.reset(OpenABE_createNewEllipticCurve(groupParams));
   if (this->m_EllipticCurve_ == nullptr) {
-    throw OpenABE_ERROR_INVALID_GROUP_PARAMS;
+    return OpenABE_ERROR_INVALID_GROUP_PARAMS;
   }
 
   return result;
@@ -221,7 +221,7 @@ OpenABEContextOPDH::encryptKEM(OpenABERNG *rng, const string &pkID,
     // load the recipient's public key
     shared_ptr<OpenABEKey> PK = this->getKeystore()->getPublicKey(pkID);
     if (PK == nullptr) {
-      throw OpenABE_ERROR_MISSING_RECEIVER_PUBLIC_KEY;
+      return OpenABE_ERROR_MISSING_RECEIVER_PUBLIC_KEY;
     }
     // select generator of the curve
     G_t g = this->getECCurve()->getGenerator();
@@ -294,14 +294,14 @@ OpenABEContextOPDH::decryptKEM(const string &pkID, const string &skID,
     // load the sender's public key
     PK = this->getKeystore()->getPublicKey(pkID);
     if (PK == nullptr) {
-      throw OpenABE_ERROR_MISSING_SENDER_PUBLIC_KEY;
+      return OpenABE_ERROR_MISSING_SENDER_PUBLIC_KEY;
     }
     senderID = PK->getUID();
 
     // load the recipient's private key
     SK = this->getKeystore()->getSecretKey(skID);
     if (SK == nullptr) {
-      throw OpenABE_ERROR_MISSING_RECEIVER_PRIVATE_KEY;
+      return OpenABE_ERROR_MISSING_RECEIVER_PRIVATE_KEY;
     }
 
     // compute C ^ (recipient's private key)
@@ -474,7 +474,7 @@ OpenABEContextSchemePKE::exportKey(const string &keyID, OpenABEByteString &keyBl
     // Attempt to export the given keyID to a temp keyBlob output buffer
     if (OpenABE_exportKey(this->m_KEM_->getKeystore(), keyID, &tmpKeyBlob) !=
         OpenABE_NOERROR) {
-      throw OpenABE_ERROR_INVALID_INPUT;
+      return OpenABE_ERROR_INVALID_INPUT;
     }
 
     // Just set the keyBlob
@@ -508,7 +508,7 @@ OpenABEContextSchemePKE::loadPublicKey(const string &keyID, OpenABEByteString &k
     PK = this->m_KEM_->getKeystore()->constructKeyFromBytes(keyID, keyBlob,
                                                             outputKeyBytes);
     if (PK == nullptr) {
-      throw OpenABE_ERROR_INVALID_INPUT;
+      return OpenABE_ERROR_INVALID_INPUT;
     }
 
     // Initialize the curve if ec parameters are not set
@@ -520,7 +520,7 @@ OpenABEContextSchemePKE::loadPublicKey(const string &keyID, OpenABEByteString &k
 
     if (PK->getCurveID() != this->m_KEM_->getECCurve()->getCurveID() ||
         PK->getAlgorithmID() != this->m_KEM_->getAlgorithmID()) {
-      throw OpenABE_ERROR_INVALID_KEY_HEADER;
+      return OpenABE_ERROR_INVALID_KEY_HEADER;
     }
 
     // Now we can deserialize the body of the key
@@ -532,7 +532,7 @@ OpenABEContextSchemePKE::loadPublicKey(const string &keyID, OpenABEByteString &k
       // If all goes well, then add the constructed key to the keystore
       this->m_KEM_->getKeystore()->addKey(keyID, PK, KEY_TYPE_PUBLIC);
     } else {
-      throw OpenABE_ERROR_INVALID_PARAMS;
+      return OpenABE_ERROR_INVALID_PARAMS;
     }
 
   } catch (OpenABE_ERROR &error) {
@@ -561,7 +561,7 @@ OpenABEContextSchemePKE::loadPrivateKey(const string &keyID, OpenABEByteString &
     SK = this->m_KEM_->getKeystore()->constructKeyFromBytes(keyID, keyBlob,
                                                             outputKeyBytes);
     if (SK == nullptr) {
-      throw OpenABE_ERROR_INVALID_INPUT;
+      return OpenABE_ERROR_INVALID_INPUT;
     }
     // Initialize the curve if ec parameters are not set
     if (this->m_KEM_->getECCurve() == nullptr) {
@@ -572,7 +572,7 @@ OpenABEContextSchemePKE::loadPrivateKey(const string &keyID, OpenABEByteString &
 
     if (SK->getCurveID() != this->m_KEM_->getECCurve()->getCurveID() ||
         SK->getAlgorithmID() != this->m_KEM_->getAlgorithmID()) {
-      throw OpenABE_ERROR_INVALID_KEY_HEADER;
+      return OpenABE_ERROR_INVALID_KEY_HEADER;
     }
 
     // Now we can deserialize the body of the key
@@ -583,7 +583,7 @@ OpenABEContextSchemePKE::loadPrivateKey(const string &keyID, OpenABEByteString &
       // If all goes well, then add the constructed key to the keystore
       this->m_KEM_->getKeystore()->addKey(keyID, SK, KEY_TYPE_SECRET);
     } else {
-      throw OpenABE_ERROR_INVALID_PARAMS;
+      return OpenABE_ERROR_INVALID_PARAMS;
     }
   } catch (OpenABE_ERROR &error) {
     result = error;
@@ -633,7 +633,7 @@ OpenABEContextSchemePKE::encrypt(OpenABERNG *rng, const string &pkID,
     // Get PK of sender (assumes it has already been loaded)
     senderPK = this->m_KEM_->getKeystore()->getPublicKey(senderpkID);
     if (senderPK == nullptr) {
-      throw OpenABE_ERROR_MISSING_SENDER_PUBLIC_KEY;
+      return OpenABE_ERROR_MISSING_SENDER_PUBLIC_KEY;
     }
     senderID = senderPK->getUID();
     // Returns a ciphertext and a symmetric key
@@ -712,7 +712,7 @@ OpenABEContextSchemePKE::decrypt(const string &pkID, const string &skID,
     authEnc->setAddAuthData(ctHdr);
 
     if (!authEnc->decrypt(plaintext, iv, ct, tag)) {
-      throw OpenABE_ERROR_DECRYPTION_FAILED;
+      return OpenABE_ERROR_DECRYPTION_FAILED;
     }
   } catch (OpenABE_ERROR &error) {
     result = error;

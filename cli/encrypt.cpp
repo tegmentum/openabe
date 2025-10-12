@@ -62,59 +62,55 @@ void runPkEncrypt(string& suffix, string& sender_id, string& recipient_id,
     OpenABE_ERROR result = OpenABE_NOERROR;
     // load public key file for the recipient
     OpenABEByteString send_PublicKey, recp_PublicKey, ctBlob;
-    try {
-        if (!getPublicKey(send_PublicKey, sender_id, suffix)) {
-            return;
-        }
-        if (!getPublicKey(recp_PublicKey, recipient_id, suffix)) {
-            return;
-        }
 
-        unique_ptr<OpenABEContextSchemePKE> schemeContext = OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME_PK_OPDH);
-        if (schemeContext == nullptr) {
-            cerr << "unable to create a new context" << endl;
-            return;
-        }
-
-        // Generate a set of parameters for an ABE authority
-        if ( (result = schemeContext->generateParams(DEFAULT_NIST_PARAM_STRING)) != OpenABE_NOERROR) {
-            cerr << "unable to generate curve parameters: " << DEFAULT_NIST_PARAM_STRING << endl;
-            throw result;
-        }
-
-        string sen_pkID = "public_" + sender_id;
-        string rec_pkID = "public_" + recipient_id;
-        if ((result = schemeContext->loadPublicKey(sen_pkID, send_PublicKey)) != OpenABE_NOERROR) {
-            cerr << "unable to load the sender's public key: " << rec_pkID << endl;
-            throw result;
-        }
-
-        if ((result = schemeContext->loadPublicKey(rec_pkID, recp_PublicKey)) != OpenABE_NOERROR) {
-            cerr << "unable to load the recipient's public key: " << rec_pkID << endl;
-            throw result;
-        }
-
-        unique_ptr<OpenABECiphertext> ciphertext(new OpenABECiphertext);
-        if ((result = schemeContext->encrypt(nullptr, rec_pkID, sen_pkID, inputStr, ciphertext.get())) != OpenABE_NOERROR) {
-            cerr << "error while trying to encrypt input file" << endl;
-            throw result;
-        }
-
-        // write ciphertext out
-        ciphertext->exportToBytes(ctBlob);
-        string ctBlobStr = CT2_BEGIN_HEADER;
-        ctBlobStr += NL + Base64Encode(ctBlob.getInternalPtr(), ctBlob.size()) + NL;
-        ctBlobStr += CT2_END_HEADER;
-        ctBlobStr += NL;
-
-        if (verbose) {
-            cout << "writing " << ctBlob.size() << " bytes" << endl;
-        }
-        WriteToFile(ciphertextFile.c_str(), ctBlobStr);
-
-    } catch (OpenABE_ERROR& error) {
-        cout << "caught exception: " << OpenABE_errorToString(error) << endl;
+    if (!getPublicKey(send_PublicKey, sender_id, suffix)) {
+        return;
     }
+    if (!getPublicKey(recp_PublicKey, recipient_id, suffix)) {
+        return;
+    }
+
+    unique_ptr<OpenABEContextSchemePKE> schemeContext = OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME_PK_OPDH);
+    if (schemeContext == nullptr) {
+        cerr << "unable to create a new context" << endl;
+        return;
+    }
+
+    // Generate a set of parameters for an ABE authority
+    if ( (result = schemeContext->generateParams(DEFAULT_NIST_PARAM_STRING)) != OpenABE_NOERROR) {
+        cerr << "unable to generate curve parameters: " << DEFAULT_NIST_PARAM_STRING << endl;
+        return;
+    }
+
+    string sen_pkID = "public_" + sender_id;
+    string rec_pkID = "public_" + recipient_id;
+    if ((result = schemeContext->loadPublicKey(sen_pkID, send_PublicKey)) != OpenABE_NOERROR) {
+        cerr << "unable to load the sender's public key: " << rec_pkID << endl;
+        return;
+    }
+
+    if ((result = schemeContext->loadPublicKey(rec_pkID, recp_PublicKey)) != OpenABE_NOERROR) {
+        cerr << "unable to load the recipient's public key: " << rec_pkID << endl;
+        return;
+    }
+
+    unique_ptr<OpenABECiphertext> ciphertext(new OpenABECiphertext);
+    if ((result = schemeContext->encrypt(nullptr, rec_pkID, sen_pkID, inputStr, ciphertext.get())) != OpenABE_NOERROR) {
+        cerr << "error while trying to encrypt input file" << endl;
+        return;
+    }
+
+    // write ciphertext out
+    ciphertext->exportToBytes(ctBlob);
+    string ctBlobStr = CT2_BEGIN_HEADER;
+    ctBlobStr += NL + Base64Encode(ctBlob.getInternalPtr(), ctBlob.size()) + NL;
+    ctBlobStr += CT2_END_HEADER;
+    ctBlobStr += NL;
+
+    if (verbose) {
+        cout << "writing " << ctBlob.size() << " bytes" << endl;
+    }
+    WriteToFile(ciphertextFile.c_str(), ctBlobStr);
 
     return;
 }
@@ -134,61 +130,59 @@ void runAbeEncrypt(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, s
 
   OpenABEByteString ct1Blob, ct2Blob, mpkBlob;
 
-    try {
-    // Initialize a OpenABEContext structure
-    schemeContext = OpenABE_createContextABESchemeCCA(scheme_type);
-    if (schemeContext == nullptr) {
-      cerr << "unable to create a new context" << endl;
-      return;
-    }
-
-    // next, get the functional input for encryption (based on scheme type)
-    if (scheme_type == OpenABE_SCHEME_KP_GPSW) {
-      funcInput = createAttributeList(func_input);
-    } else if(scheme_type == OpenABE_SCHEME_CP_WATERS) {
-      funcInput = createPolicyTree(func_input);
-    }
-    ASSERT(funcInput != nullptr, OpenABE_ERROR_INVALID_INPUT);
-
-    // for KP and CP, we only have to do this once
-    mpkBlob = ReadFile(mpkFile.c_str());
-    if (mpkBlob.size() == 0) {
-      cerr << "master public parameters not encoded properly." << endl;
-      return;
-    }
-
-    if ((result = schemeContext->loadMasterPublicParams(mpkID, mpkBlob)) != OpenABE_NOERROR) {
-      cerr << "unable to load the master public parameters" << endl;
-      throw result;
-    }
-
-    std::unique_ptr<OpenABECiphertext> ciphertext1(new OpenABECiphertext);
-    std::unique_ptr<OpenABECiphertext> ciphertext2(new OpenABECiphertext);
-    if ((result = schemeContext->encrypt(mpkID, funcInput.get(), inputStr, ciphertext1.get(), ciphertext2.get())) != OpenABE_NOERROR) {
-      cerr << "error occurred during encryption" << endl;
-      throw result;
-    }
-
-    // write to disk
-    ciphertext1->exportToBytes(ct1Blob);
-    ciphertext2->exportToBytesWithoutHeader(ct2Blob);
-    string ctBlobStr = CT1_BEGIN_HEADER;
-    ctBlobStr += NL + Base64Encode(ct1Blob.getInternalPtr(), ct1Blob.size()) + NL;
-    ctBlobStr += CT1_END_HEADER;
-    ctBlobStr += NL;
-    ctBlobStr += CT2_BEGIN_HEADER;
-    ctBlobStr += NL + Base64Encode(ct2Blob.getInternalPtr(), ct2Blob.size()) + NL;
-    ctBlobStr += CT2_END_HEADER;
-    ctBlobStr += NL;
-
-    if(verbose) { cout << "writing " << ct2Blob.size() << " bytes" << endl; }
-    WriteToFile(ciphertextFile.c_str(), ctBlobStr);
-
-    } catch (OpenABE_ERROR & error) {
-    	cout << "caught exception: " << OpenABE_errorToString(error) << endl;
-    }
-
+  // Initialize a OpenABEContext structure
+  schemeContext = OpenABE_createContextABESchemeCCA(scheme_type);
+  if (schemeContext == nullptr) {
+    cerr << "unable to create a new context" << endl;
     return;
+  }
+
+  // next, get the functional input for encryption (based on scheme type)
+  if (scheme_type == OpenABE_SCHEME_KP_GPSW) {
+    funcInput = createAttributeList(func_input);
+  } else if(scheme_type == OpenABE_SCHEME_CP_WATERS) {
+    funcInput = createPolicyTree(func_input);
+  }
+  if (funcInput == nullptr) {
+    cerr << "invalid functional input" << endl;
+    return;
+  }
+
+  // for KP and CP, we only have to do this once
+  mpkBlob = ReadFile(mpkFile.c_str());
+  if (mpkBlob.size() == 0) {
+    cerr << "master public parameters not encoded properly." << endl;
+    return;
+  }
+
+  if ((result = schemeContext->loadMasterPublicParams(mpkID, mpkBlob)) != OpenABE_NOERROR) {
+    cerr << "unable to load the master public parameters" << endl;
+    return;
+  }
+
+  std::unique_ptr<OpenABECiphertext> ciphertext1(new OpenABECiphertext);
+  std::unique_ptr<OpenABECiphertext> ciphertext2(new OpenABECiphertext);
+  if ((result = schemeContext->encrypt(mpkID, funcInput.get(), inputStr, ciphertext1.get(), ciphertext2.get())) != OpenABE_NOERROR) {
+    cerr << "error occurred during encryption" << endl;
+    return;
+  }
+
+  // write to disk
+  ciphertext1->exportToBytes(ct1Blob);
+  ciphertext2->exportToBytesWithoutHeader(ct2Blob);
+  string ctBlobStr = CT1_BEGIN_HEADER;
+  ctBlobStr += NL + Base64Encode(ct1Blob.getInternalPtr(), ct1Blob.size()) + NL;
+  ctBlobStr += CT1_END_HEADER;
+  ctBlobStr += NL;
+  ctBlobStr += CT2_BEGIN_HEADER;
+  ctBlobStr += NL + Base64Encode(ct2Blob.getInternalPtr(), ct2Blob.size()) + NL;
+  ctBlobStr += CT2_END_HEADER;
+  ctBlobStr += NL;
+
+  if(verbose) { cout << "writing " << ct2Blob.size() << " bytes" << endl; }
+  WriteToFile(ciphertextFile.c_str(), ctBlobStr);
+
+  return;
 }
 
 int main(int argc, char **argv)
