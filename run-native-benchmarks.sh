@@ -65,12 +65,14 @@ echo ""
 step "1/2 Building and testing: Native + RELIC"
 echo ""
 
-info "Cleaning previous builds..."
+info "Building Native + RELIC (clean build)..."
+# Note: We don't run make clean because dependencies can be reused
+# Only clean the src directory
+cd "$ZROOT/src"
 make clean > /dev/null 2>&1 || true
-cd deps && make clean > /dev/null 2>&1 || true
 cd "$ZROOT"
 
-info "Building Native + RELIC..."
+info "Building dependencies for Native + RELIC..."
 export ZML_LIB=""
 export ZROOT="$ZROOT"
 
@@ -82,7 +84,8 @@ if ! make -j4 > "$RESULTS_DIR/build-native-relic-deps.log" 2>&1; then
 fi
 cd "$ZROOT/src"
 
-if ! make -j4 > "$RESULTS_DIR/build-native-relic-src.log" 2>&1; then
+# Build just the libraries, not the test programs (which require gtest)
+if ! make -j4 libopenabe.a libzsym.a > "$RESULTS_DIR/build-native-relic-src.log" 2>&1; then
     error "Failed to build source for Native + RELIC"
     error "See log: $RESULTS_DIR/build-native-relic-src.log"
     exit 1
@@ -114,12 +117,13 @@ echo ""
 step "2/2 Building and testing: Native + MCL"
 echo ""
 
-info "Cleaning previous builds..."
+info "Rebuilding for Native + MCL..."
+# Clean source but keep dependencies (OpenSSL, gtest)
+cd "$ZROOT/src"
 make clean > /dev/null 2>&1 || true
-cd deps && make clean > /dev/null 2>&1 || true
 cd "$ZROOT"
 
-info "Building Native + MCL..."
+info "Building dependencies for Native + MCL..."
 export ZML_LIB="with_mcl"
 export ZROOT="$ZROOT"
 
@@ -131,7 +135,8 @@ if ! make -j4 > "$RESULTS_DIR/build-native-mcl-deps.log" 2>&1; then
 fi
 cd "$ZROOT/src"
 
-if ! make -j4 ZML_LIB=with_mcl > "$RESULTS_DIR/build-native-mcl-src.log" 2>&1; then
+# Build just the libraries, not the test programs (which require gtest)
+if ! make -j4 ZML_LIB=with_mcl libopenabe.a libzsym.a > "$RESULTS_DIR/build-native-mcl-src.log" 2>&1; then
     error "Failed to build source for Native + MCL"
     error "See log: $RESULTS_DIR/build-native-mcl-src.log"
     exit 1
