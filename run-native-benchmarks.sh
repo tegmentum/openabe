@@ -66,17 +66,25 @@ step "1/2 Building and testing: Native + RELIC"
 echo ""
 
 info "Building Native + RELIC (clean build)..."
-# Note: We don't run make clean because dependencies can be reused
-# Only clean the src directory
+# Clean source directory
 cd "$ZROOT/src"
 make clean > /dev/null 2>&1 || true
 cd "$ZROOT"
 
-info "Building dependencies for Native + RELIC..."
+# Clean OpenABE build artifacts
+info "Cleaning OpenABE build artifacts..."
+rm -f src/libopenabe.a src/libzsym.a 2>/dev/null || true
+rm -rf root/include/openabe root/lib/libopenabe.* root/lib/libzsym.* 2>/dev/null || true
+
+# Clean and rebuild deps for RELIC
+info "Cleaning and rebuilding dependencies for Native + RELIC..."
 export ZML_LIB=""
 export ZROOT="$ZROOT"
 
 cd deps
+# Clean RELIC-specific build artifacts
+make -C relic clean > /dev/null 2>&1 || true
+# Rebuild all deps
 if ! make -j4 > "$RESULTS_DIR/build-native-relic-deps.log" 2>&1; then
     error "Failed to build dependencies for Native + RELIC"
     error "See log: $RESULTS_DIR/build-native-relic-deps.log"
@@ -118,16 +126,25 @@ step "2/2 Building and testing: Native + MCL"
 echo ""
 
 info "Rebuilding for Native + MCL..."
-# Clean source but keep dependencies (OpenSSL, gtest)
+# Clean source directory
 cd "$ZROOT/src"
 make clean > /dev/null 2>&1 || true
 cd "$ZROOT"
 
-info "Building dependencies for Native + MCL..."
+# Clean OpenABE build artifacts
+info "Cleaning OpenABE build artifacts..."
+rm -f src/libopenabe.a src/libzsym.a 2>/dev/null || true
+rm -rf root/include/openabe root/lib/libopenabe.* root/lib/libzsym.* 2>/dev/null || true
+
+# Clean and rebuild deps for MCL
+info "Cleaning and rebuilding dependencies for Native + MCL..."
 export ZML_LIB="with_mcl"
 export ZROOT="$ZROOT"
 
 cd deps
+# Clean MCL-specific build artifacts
+make -C mcl clean > /dev/null 2>&1 || true
+# Rebuild all deps
 if ! make -j4 > "$RESULTS_DIR/build-native-mcl-deps.log" 2>&1; then
     error "Failed to build dependencies for Native + MCL"
     error "See log: $RESULTS_DIR/build-native-mcl-deps.log"
