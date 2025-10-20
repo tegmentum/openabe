@@ -349,6 +349,23 @@ OpenABECurveID OpenABE_getCurveID(uint8_t id) {
   case OpenABE_BN_P158_ID:
   case OpenABE_BN_P254_ID:
   case OpenABE_BN_P256_ID:
+  case OpenABE_BN_P382_ID:
+  case OpenABE_BN_P446_ID:
+  case OpenABE_BN_P638_ID:
+  // BLS12 curves
+  case OpenABE_BLS12_P377_ID:
+  case OpenABE_BLS12_P381_ID:
+  case OpenABE_BLS12_P446_ID:
+  case OpenABE_BLS12_P455_ID:
+  case OpenABE_BLS12_P638_ID:
+  // BLS24 curves
+  case OpenABE_BLS24_P315_ID:
+  case OpenABE_BLS24_P317_ID:
+  case OpenABE_BLS24_P509_ID:
+  // BLS48 curves
+  case OpenABE_BLS48_P575_ID:
+  // KSS16 curves
+  case OpenABE_KSS16_P339_ID:
     curveID = (OpenABECurveID)id;
     break;
   default:
@@ -369,6 +386,11 @@ void OpenABE_setGroupObject(std::shared_ptr<ZGroup> &group, uint8_t id) {
   case OpenABE_BN_P254_ID:
   case OpenABE_BN_P256_ID:
   case OpenABE_BN_P382_ID:
+  case OpenABE_BLS12_P377_ID:
+  case OpenABE_BLS12_P381_ID:
+  case OpenABE_BLS12_P446_ID:
+  case OpenABE_BLS12_P455_ID:
+  case OpenABE_BLS12_P638_ID:
     group.reset(new BPGroup((OpenABECurveID)id));
     break;
   default:
@@ -464,6 +486,22 @@ string OpenABE_convertCurveIDToString(OpenABECurveID id) {
     break;
   case OpenABE_BN_P638_ID:
     return "BN_P638";
+    break;
+  // BLS12 curves
+  case OpenABE_BLS12_P377_ID:
+    return "BLS12_P377";
+    break;
+  case OpenABE_BLS12_P381_ID:
+    return "BLS12_P381";
+    break;
+  case OpenABE_BLS12_P446_ID:
+    return "BLS12_P446";
+    break;
+  case OpenABE_BLS12_P455_ID:
+    return "BLS12_P455";
+    break;
+  case OpenABE_BLS12_P638_ID:
+    return "BLS12_P638";
     break;
   default:
     return "INVALID";

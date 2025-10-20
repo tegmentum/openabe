@@ -275,6 +275,7 @@ OpenABELSSS::iterativeShareSecret(OpenABETreeNode *treeNode, ZP &elt)
       }
       // set position 0 as the passed in secret
       coefficients[0] = theSecret;
+
       // Now evaluate the polynomial at points (1, 2, ..., totalSubnodes) to
       // obtain the shares
       for (uint32_t i = 0; i < totalSubnodes; i++) {
@@ -392,32 +393,23 @@ OpenABELSSS::calculateCoefficient(OpenABETreeNode *treeNode, uint32_t index, uin
   ZP local_iPlusOne, local_indexPlusOne;
   this->m_Pairing->initZP(local_indexPlusOne, index + 1);
 
-  std::cerr << "[LSSS COEFF] calculateCoefficient for index=" << index << ", threshold=" << threshold << ", total=" << total << std::endl;
-  std::cerr << "[LSSS COEFF] Starting with result=1" << std::endl;
-
   // Product for all marked subnodes (excluding index) of ( (0 - (X(i))) / (X(subnode_index) - (X(i))) )
   // Note that X(i) = i+1.
   for (uint32_t i = 0; i < threshold; i++) {
     /* Check if this subnode is being used for the recovery.	*/
     this->m_Pairing->initZP(local_iPlusOne, i + 1);
     bool is_marked = treeNode->getSubnode(i)->getMark();
-    std::cerr << "[LSSS COEFF] i=" << i << ", marked=" << (is_marked ? "true" : "false") << std::endl;
     if (is_marked) {
       if (i != index) {
         ZP numerator = this->zero - local_iPlusOne;
         ZP denominator = local_indexPlusOne - local_iPlusOne;
         ZP term = numerator / denominator;
-        std::cerr << "[LSSS COEFF]   numerator (0 - " << (i+1) << ") = " << numerator << std::endl;
-        std::cerr << "[LSSS COEFF]   denominator (" << (index+1) << " - " << (i+1) << ") = " << denominator << std::endl;
-        std::cerr << "[LSSS COEFF]   term = " << term << std::endl;
         // BUG FIX: Removed extra "result *" that was squaring the coefficient each iteration
         result *= term;
-        std::cerr << "[LSSS COEFF]   result after multiply = " << result << std::endl;
       }
     }
   }
 
-  std::cerr << "[LSSS COEFF] Final coefficient = " << result << std::endl;
   return result;
 }
 
@@ -436,8 +428,6 @@ OpenABELSSS::addShareToResults(OpenABETreeNode *treeNode, ZP &elt)
   OpenABELSSSElement lsssElement(treeNode->getCompleteLabel(), elt);
   std::string uniqueLabel = this->makeUniqueLabel(treeNode);
   this->m_ResultMap[uniqueLabel] = lsssElement;
-  // Debug logging for share distribution
-  std::cerr << "[LSSS SHARE] Unique label: '" << uniqueLabel << "', Complete label: '" << treeNode->getCompleteLabel() << "', Share: " << elt << std::endl;
 }
 
 /*!

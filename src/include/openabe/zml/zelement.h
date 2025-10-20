@@ -34,44 +34,28 @@
 #ifndef __ZELEMENT_H__
 #define __ZELEMENT_H__
 
-// Bignum library: follows bilinear pairing library choice
 #if defined(BP_WITH_OPENSSL)
-#define BN_WITH_OPENSSL
-#endif
-
-#if defined(BP_WITH_MCL)
-#define BN_WITH_MCL
-#endif
-
-// Elliptic Curve library: can be chosen independently via EC_WITH_MCL or EC_WITH_OPENSSL
-// EC_WITH_MCL and EC_WITH_OPENSSL are set by Makefile.common based on EC_LIB variable
-// If neither is explicitly set, default to OpenSSL for EC operations
-#if !defined(EC_WITH_MCL) && !defined(EC_WITH_OPENSSL)
 #define EC_WITH_OPENSSL
+#define BN_WITH_OPENSSL
+#elif defined(BP_WITH_MCL)
+#define BN_WITH_MCL
 #endif
 
 #if defined(BP_WITH_OPENSSL)
 #include <openssl/bp.h>
 #endif
 
-#if defined(BP_WITH_MCL)
- /* MCL uses C API for BN254 pairing */
- #define MCLBN_FP_UNIT_SIZE 4
- #define MCLBN_FR_UNIT_SIZE 4
- #include <mcl/bn.h>
+#if defined(EC_WITH_OPENSSL)
+#include <openssl/ec.h>
+#include <openssl/bn.h>
 #endif
 
-#if !defined(BP_WITH_OPENSSL) && !defined(BP_WITH_MCL)
+#if defined(BP_WITH_MCL)
+ #include <mcl/bn.h>
+#elif !defined(BP_WITH_OPENSSL)
  #include <relic/relic.h>
  #include <relic_ec/relic.h>
  #include <openabe/zml/relic_compat.h>
-#endif
-
-// Include OpenSSL EC headers when using OpenSSL for EC operations
-#if defined(EC_WITH_OPENSSL)
- #include <openssl/ec.h>
- #include <openssl/bn.h>
- #include <openssl/obj_mac.h>
 #endif
 
 /*************************** BN Definitions *********************/
@@ -114,36 +98,41 @@ typedef BIGNUM* bignum_t;
 
 /* BEGIN MCL macro definitions */
 
-typedef mclBnFr* bignum_t;
+typedef mclBnFr bignum_t;
 
-#define zml_bignum_free(b)                mclBnFr_clear(b); free(b)
-#define zml_bignum_safe_free(b)           free(b)
-#define zml_bignum_is_zero(b)             mclBnFr_isZero(b)
-#define zml_bignum_is_one(b)              mclBnFr_isOne(b)
+#define zml_bignum_free(b)            memset(&b, 0, sizeof(b))
+#define zml_bignum_safe_free(b)       free(b)
 
-#define BN_POSITIVE      0
-#define BN_NEGATIVE      1
-#define BN_CMP_LT       -1
-#define BN_CMP_EQ        0
-#define BN_CMP_GT        1
-#define G_CMP_EQ         BN_CMP_EQ
-#define CMP_EQ           0
-#define CMP_LT          -1
-#define CMP_GT           1
+// MCL uses different read/write functions
+#define zml_bignum_fromHex(b, str, len)   mclBnFr_setStr(&b, str, len, 16)
+#define zml_bignum_fromBin(b, ustr, len)  mclBnFr_deserialize(&b, ustr, len)
+#define zml_bignum_toBin(b, str, len)     mclBnFr_serialize(str, len, &b)
 
-// MCL function declarations (implemented in zelement_mcl.c)
-int zml_bignum_fromHex(bignum_t b, const char *str, size_t len);
-int zml_bignum_fromBin(bignum_t b, const uint8_t *buf, size_t len);
-size_t zml_bignum_toBin(const bignum_t b, uint8_t *buf, size_t max_len);
-void zml_bignum_setuint(bignum_t b, unsigned int x);
-void zml_bignum_rand(bignum_t a, bignum_t o);
+#define zml_bignum_setuint(b, x)          mclBnFr_setInt(&b, x)
+// returns 1 if true, otherwise 0
+#define zml_bignum_is_zero(b)             mclBnFr_isZero(&b)
+#define zml_bignum_is_one(b)              mclBnFr_isOne(&b)
+
+// FIX Bug #13: For MCL, bignum_t is mclBnFr (struct value, not pointer).
+// The zml_bignum_copy() function signature passes by value, which doesn't work
+// for structs. Use a macro that does struct assignment instead.
+#define zml_bignum_copy(to, from)         ((to) = (from))
+
+#define BN_CMP_LT                     -1
+#define BN_CMP_EQ                     0
+#define BN_CMP_GT                     1
+
+#define BN_POSITIVE                   0
+#define BN_NEGATIVE                   1
+#define G_CMP_EQ                      0
+
+/* END of MCL macro definitions */
 int zml_check_error();
-
-/* END MCL macro definitions */
+void zml_bignum_rand(bignum_t *a, const bignum_t *o);
 
 #else
 
-/* BEGIN RELIC macro definitions (default if BN_WITH_OPENSSL or BN_WITH_MCL not set) */
+/* BEGIN RELIC macro definitions (default if BN_WITH_OPENSSL/MCL not set) */
 
 typedef bn_t bignum_t;
 
@@ -192,22 +181,8 @@ typedef EC_GROUP* ec_group_t;
 #define ec_get_ref(a)           a
 /* END of OpenSSL macro definitions */
 
-#elif defined(EC_WITH_MCL)
-
-/* BEGIN MCL EC macro definitions */
-typedef void* ec_point_t;
-typedef void* ec_group_t;
-
-#define ec_point_free(e)        free(e)
-#define ec_group_free(g)        g = NULL;
-#define ec_point_set_null(e)    e = nullptr
-#define is_ec_point_null(e)     (e == nullptr)
-#define ec_get_ref(a)           a
-
-/* END MCL EC macro definitions */
-
 #else
-/* if EC_WITH_OPENSSL or EC_WITH_MCL not specifically defined,
+/* if EC_WITH_OPENSSL not specifically defined,
  * then we use RELIC EC operations by default */
 
  /* BEGIN RELIC macro definitions */
@@ -234,7 +209,15 @@ void zml_clean();
 
 // abstract bignum operations
 void zml_bignum_init(bignum_t *a);
+#if defined(BN_WITH_MCL)
+// Temporarily undefine macro to allow function declaration for non-MCL backends
+#pragma push_macro("zml_bignum_copy")
+#undef zml_bignum_copy
+#endif
 void zml_bignum_copy(bignum_t to, const bignum_t from);
+#if defined(BN_WITH_MCL)
+#pragma pop_macro("zml_bignum_copy")
+#endif
 int zml_bignum_sign(const bignum_t a);
 int zml_bignum_cmp(const bignum_t a, const bignum_t b);
 void zml_bignum_setzero(bignum_t a);
@@ -256,6 +239,9 @@ void zml_bignum_rshift(bignum_t r, const bignum_t a, int n);
 // NOTE: must free the memory that is returned from bignum_toHex and bignum_toDec using bignum_safe_free
 char *zml_bignum_toHex(const bignum_t b, int *length);
 char *zml_bignum_toDec(const bignum_t b, int *length);
+
+// Helper functions
+int bn_is_even(const bignum_t a);
 
 // abstract elliptic curve operations
 int ec_group_init(ec_group_t *group, uint8_t id);
@@ -304,50 +290,47 @@ typedef GT_ELEM* gt_ptr;
 
 /* BEGIN MCL macro definitions */
 
-typedef void* bp_group_t;  // MCL doesn't use group objects
+typedef void* bp_group_t;
 #define bp_group_free(g)   g = nullptr;
 
-typedef mclBnG1* g1_ptr;
-typedef mclBnG2* g2_ptr;
-typedef mclBnGT* gt_ptr;
+typedef mclBnG1 g1_ptr;
+typedef mclBnG2 g2_ptr;
+typedef mclBnGT gt_ptr;
 
-#define g_set_null(g)      g = nullptr
-#define g1_copy_const      mclBnG1_copy
-#define g2_copy_const      mclBnG2_copy
-#define gt_copy_const      mclBnGT_copy
+// MCL comparison constants (matching RELIC behavior)
+#define CMP_EQ   0
+#define CMP_NE   1
+#define CMP_LT   -1
+#define CMP_GT   1
 
-#define g1_element_free(e) mclBnG1_clear(e); free(e)
-#define g2_element_free(e) mclBnG2_clear(e); free(e)
-#define gt_element_free(e) mclBnGT_clear(e); free(e)
+#define g_set_null(g)   memset(&g, 0, sizeof(g))
+#define g1_copy_const(r, p)   memcpy(&r, &p, sizeof(mclBnG1))
+#define g2_copy_const(r, p)   memcpy(&r, &p, sizeof(mclBnG2))
+#define gt_copy_const(r, p)   memcpy(&r, &p, sizeof(mclBnGT))
 
-#define is_elem_null(e)    (e == nullptr)
+#define g1_element_free(e)   memset(&e, 0, sizeof(e))
+#define g2_element_free(e)   memset(&e, 0, sizeof(e))
+#define gt_element_free(e)   memset(&e, 0, sizeof(e))
 
-// MCL helper function declarations
-void mclBnG1_copy(mclBnG1* y, const mclBnG1* x);
-void mclBnG2_copy(mclBnG2* y, const mclBnG2* x);
-void mclBnGT_copy(mclBnGT* y, const mclBnGT* x);
+#define is_elem_null(e)   FALSE
 
-// MCL pairing helper function declarations (for C++ layer compatibility)
-int g1_cmp(const g1_ptr a, const g1_ptr b);
-void g1_neg(g1_ptr r, const g1_ptr a);
-void g1_rand(g1_ptr g);
-void g2_add(g2_ptr r, const g2_ptr a, const g2_ptr b);
-void g2_sub(g2_ptr r, const g2_ptr a, const g2_ptr b);
-void g2_neg(g2_ptr r, const g2_ptr a);
-void g2_norm(g2_ptr r, const g2_ptr a);
-void g2_rand(g2_ptr g);
-int gt_cmp(const gt_ptr a, const gt_ptr b);
-void gt_exp(gt_ptr r, const gt_ptr a, const bignum_t b);
-void gt_inv(gt_ptr r, const gt_ptr a);
-void gt_set_unity(gt_ptr a);
-int gt_is_unity(const gt_ptr a);
-int bn_is_even(const bignum_t a);
-void oabe_rand_seed(unsigned char* buf, int buf_len);
+#define g1_cmp(a, b)   (memcmp(&a, &b, sizeof(mclBnG1)) == 0 ? CMP_EQ : CMP_NE)
+#define g2_cmp(a, b)   (memcmp(&a, &b, sizeof(mclBnG2)) == 0 ? CMP_EQ : CMP_NE)
+#define gt_cmp(a, b)   (memcmp(&a, &b, sizeof(mclBnGT)) == 0 ? CMP_EQ : CMP_NE)
 
-/* END MCL macro definitions */
+// MCL group operation macros
+#define g1_neg(r, p)         mclBnG1_neg(&r, &p)
+#define g2_add(r, a, b)      mclBnG2_add(&r, &a, &b)
+#define g2_sub(r, a, b)      mclBnG2_sub(&r, &a, &b)
+#define g2_neg(r, p)         mclBnG2_neg(&r, &p)
+#define g2_norm(r, p)        mclBnG2_normalize(&r, &p)
+#define gt_inv(r, p)         mclBnGT_inv(&r, &p)
+#define gt_set_unity(g)      mclBnGT_setInt(&g, 1)
+
+/* END of MCL macro definitions */
 
 #else
-/* if BP_WITH_OPENSSL or BP_WITH_MCL not specifically defined,
+/* if BP_WITH_OPENSSL and BP_WITH_MCL not defined,
  * then we use RELIC EC operations by default */
 
  /* BEGIN RELIC macro definitions */
@@ -423,19 +406,44 @@ void bp_ensure_curve_params(uint8_t id);
 // ZML abstract methods for G1
 void g1_init(bp_group_t group, g1_ptr *e);
 void g1_set_to_infinity(bp_group_t group, g1_ptr *e);
+#if defined(BP_WITH_MCL)
+// FIX Bug #9: For MCL, g1_ptr is struct so must pass by pointer
+void g1_add_op(bp_group_t group, g1_ptr *z, const g1_ptr *x, const g1_ptr *y);
+void g1_sub_op(bp_group_t group, g1_ptr *z, const g1_ptr *x);
+void g1_mul_op(bp_group_t group, g1_ptr *z, const g1_ptr *x, const bignum_t *r);
+void g1_map_op(const bp_group_t group, g1_ptr *g, uint8_t *msg, int msg_len);
+#else
 void g1_add_op(bp_group_t group, g1_ptr z, const g1_ptr x, const g1_ptr y);
 void g1_sub_op(bp_group_t group, g1_ptr z, const g1_ptr x);
 void g1_mul_op(bp_group_t group, g1_ptr z, const g1_ptr x, const bignum_t r);
-void g1_rand_op(g1_ptr g);
 void g1_map_op(const bp_group_t group, g1_ptr g, uint8_t *msg, int msg_len);
+#endif
+#if defined(BP_WITH_MCL)
+// FIX Bug #9: For MCL, g1_ptr is struct so must pass by pointer
+void g1_rand_op(g1_ptr *g);
+#else
+void g1_rand_op(g1_ptr g);
+#endif
 
 #if !defined(BP_WITH_OPENSSL)
 size_t g1_elem_len(const g1_ptr g);
+#if defined(BP_WITH_MCL)
+// FIX Bug #9: For MCL, g1_ptr is struct so must pass by pointer
+void g1_elem_in(g1_ptr *g, uint8_t *in, size_t len);
+void g1_elem_out(const g1_ptr *g, uint8_t *out, size_t len);
+#else
 void g1_elem_in(g1_ptr g, uint8_t *in, size_t len);
 void g1_elem_out(const g1_ptr g, uint8_t *out, size_t len);
+#endif
 size_t g2_elem_len(g2_ptr g);
+#if defined(BP_WITH_MCL)
+// FIX Bug #9: For MCL, g2_ptr is struct so must pass by pointer
+void g2_elem_in(g2_ptr *g, uint8_t *in, size_t len);
+void g2_elem_out(const g2_ptr *g, uint8_t *out, size_t len);
+#else
 void g2_elem_in(g2_ptr g, uint8_t *in, size_t len);
 void g2_elem_out(g2_ptr g, uint8_t *out, size_t len);
+#endif
 size_t gt_elem_len(gt_ptr g, int should_compress);
 void gt_elem_in(gt_ptr g, uint8_t *in, size_t len);
 void gt_elem_out(gt_ptr g, uint8_t *out, size_t len, int should_compress);
@@ -444,19 +452,41 @@ void gt_elem_out(gt_ptr g, uint8_t *out, size_t len, int should_compress);
 // ZML abstract methods for G2
 void g2_init(bp_group_t group, g2_ptr *e);
 void g2_set_to_infinity(bp_group_t group, g2_ptr *e);
+#if defined(BP_WITH_MCL)
+// FIX Bug #9: For MCL, g2_ptr is struct so must pass by pointer
+int g2_cmp_op(bp_group_t group, const g2_ptr *x, const g2_ptr *y);
+void g2_mul_op(bp_group_t group, g2_ptr *z, const g2_ptr *x, const bignum_t *r);
+#else
 int g2_cmp_op(bp_group_t group, g2_ptr x, g2_ptr y);
 void g2_mul_op(bp_group_t group, g2_ptr z, g2_ptr x, bignum_t r);
+#endif
 void g2_rand_op(g2_ptr g);
 
 // ZML abstract methods for GT
 void gt_init(const bp_group_t group, gt_ptr *e);
 void gt_set_to_infinity(bp_group_t group, gt_ptr *e);
+#if defined(BP_WITH_MCL)
+// FIX Bug #9: For MCL, gt_ptr is struct so must pass by pointer
+void gt_mul_op(const bp_group_t group, gt_ptr *z, const gt_ptr *x, const gt_ptr *y);
+void gt_div_op(const bp_group_t group, gt_ptr *z, const gt_ptr *x, const gt_ptr *y);
+void gt_exp_op(const bp_group_t group, gt_ptr *y, const gt_ptr *x, const bignum_t *r);
+int gt_is_unity_check(const bp_group_t group, const gt_ptr *r);
+#else
 void gt_mul_op(const bp_group_t group, gt_ptr z, gt_ptr x, gt_ptr y);
 void gt_div_op(const bp_group_t group, gt_ptr z, gt_ptr x, gt_ptr y);
 void gt_exp_op(const bp_group_t group, gt_ptr y, gt_ptr x, bignum_t r);
 int gt_is_unity_check(const bp_group_t group, gt_ptr r);
+#endif
+
+// GT helper functions
+int gt_is_unity(const gt_ptr a);
 
 // ZML (pairings & multi-pairings)
+#if defined(BP_WITH_MCL)
+// FIX Bug #9: For MCL, all ptr types are structs so must pass by pointer
+void bp_map_op(const bp_group_t group, gt_ptr *gt, const g1_ptr *g1, const g2_ptr *g2);
+#else
 void bp_map_op(const bp_group_t group, gt_ptr gt, g1_ptr g1, g2_ptr g2);
+#endif
 
 #endif /* ifdef __ZELEMENT_H__ */
