@@ -102,120 +102,23 @@ int zml_bignum_cmp(const bignum_t a, const bignum_t b) {
   return BN_CMP_EQ;
 }
 
-void zml_bignum_setzero(bignum_t a) {
-  mclBnFr_clear(&a);
-}
+// FIX Bug #15: These functions are now replaced by macros in zelement.h
+// The macros directly call MCL functions with proper address-of operators (&)
+// The function implementations below had pass-by-value bugs (bignum_t is a struct)
+// and are no longer used when macros are active.
+//
+// NOTE: These are defined as macros in zelement.h:
+// - zml_bignum_setzero, zml_bignum_mod, zml_bignum_negate
+// - zml_bignum_add, zml_bignum_sub, zml_bignum_sub_order
+// - zml_bignum_mul, zml_bignum_div, zml_bignum_exp
+// - zml_bignum_mod_inv, zml_bignum_lshift, zml_bignum_rshift
 
 int zml_bignum_countbytes(const bignum_t a) {
-  // FIX Bug #5: Should return actual bytes needed, not full field size
-  // This matches RELIC behavior which returns minimum bytes needed
-
-  // Serialize to get actual bytes
-  uint8_t temp[32];
-  size_t len = mclBnFr_serialize(temp, sizeof(temp), &a);
-
-  // Find first non-zero byte from the end (MSB in little-endian)
-  size_t start = 0;
-  while (start < len && temp[len - 1 - start] == 0) {
-    start++;
-  }
-
-  // If all zeros, return 1 (minimum)
-  if (start == len) {
-    return 1;
-  }
-
-  return len - start;
-}
-
-void zml_bignum_mod(bignum_t x, const bignum_t o) {
-  // MCL Fr elements are already reduced modulo the order
-  // No operation needed
-  (void)o;  // Suppress unused parameter warning
-}
-
-void zml_bignum_negate(bignum_t b, const bignum_t o) {
-  mclBnFr_neg(&b, &b);
-  (void)o;  // Suppress unused parameter warning
-}
-
-void zml_bignum_add(bignum_t r, const bignum_t x, const bignum_t y, const bignum_t o) {
-  mclBnFr_add(&r, &x, &y);
-  (void)o;  // MCL handles modular reduction automatically
-}
-
-void zml_bignum_sub(bignum_t r, const bignum_t x, const bignum_t y) {
-  mclBnFr_sub(&r, &x, &y);
-}
-
-void zml_bignum_sub_order(bignum_t r, const bignum_t x, const bignum_t y, const bignum_t o) {
-  mclBnFr_sub(&r, &x, &y);
-  (void)o;  // MCL handles modular reduction automatically
-}
-
-void zml_bignum_mul(bignum_t r, const bignum_t x, const bignum_t y, const bignum_t o) {
-  mclBnFr_mul(&r, &x, &y);
-  (void)o;  // MCL handles modular reduction automatically
-}
-
-void zml_bignum_div(bignum_t r, const bignum_t x, const bignum_t y, const bignum_t o) {
-  mclBnFr inv;
-  memset(&inv, 0, sizeof(inv));
-  mclBnFr_inv(&inv, &y);
-  mclBnFr_mul(&r, &x, &inv);
-  (void)o;  // MCL handles modular reduction automatically
-}
-
-void zml_bignum_exp(bignum_t r, const bignum_t x, const bignum_t y, const bignum_t o) {
-  // For Fr elements, exponentiation is not directly supported
-  // We'll implement using repeated multiplication
-  mclBnFr result, base;
-  mclBnFr_setInt(&result, 1);
-  memcpy(&base, &x, sizeof(mclBnFr));
-
-  // Get y as integer (assuming y is small enough)
-  char y_str[256];
-  mclBnFr_getStr(y_str, sizeof(y_str), &y, 10);
-  unsigned long exp = strtoul(y_str, NULL, 10);
-
-  for (unsigned long i = 0; i < exp; i++) {
-    mclBnFr_mul(&result, &result, &base);
-  }
-  memcpy(&r, &result, sizeof(mclBnFr));
-  (void)o;  // MCL handles modular reduction automatically
-}
-
-int zml_bignum_mod_inv(bignum_t a, const bignum_t b, const bignum_t o) {
-  mclBnFr_inv(&a, &b);
-  (void)o;  // MCL handles modular reduction automatically
-  return 1;
-}
-
-void zml_bignum_lshift(bignum_t r, const bignum_t a, int n) {
-  // Implement as multiplication by 2^n
-  mclBnFr two, power, result;
-  mclBnFr_setInt(&two, 2);
-  mclBnFr_setInt(&power, 1);
-
-  for (int i = 0; i < n; i++) {
-    mclBnFr_mul(&power, &power, &two);
-  }
-
-  mclBnFr_mul(&r, &a, &power);
-}
-
-void zml_bignum_rshift(bignum_t r, const bignum_t a, int n) {
-  // Implement as division by 2^n
-  mclBnFr two, power, inv;
-  mclBnFr_setInt(&two, 2);
-  mclBnFr_setInt(&power, 1);
-
-  for (int i = 0; i < n; i++) {
-    mclBnFr_mul(&power, &power, &two);
-  }
-
-  mclBnFr_inv(&inv, &power);
-  mclBnFr_mul(&r, &a, &inv);
+  // FIX Bug #15: MCL bignum_t is mclBnFr, use MCL serialization to get byte count
+  // MCL already returns the minimal serialization, no need to trim zeros
+  uint8_t buf[64];  // Fr elements are at most 32 bytes for BLS12-381
+  size_t len = mclBnFr_serialize(buf, sizeof(buf), &a);
+  return (int)len;
 }
 
 char *zml_bignum_toHex(const bignum_t b, int *length) {
@@ -448,17 +351,21 @@ int gt_is_unity_check(const bp_group_t group, const gt_ptr *r) {
   (void)group;
 }
 
-size_t gt_elem_len(gt_ptr g, int should_compress) {
+// FIX Bug #9: For MCL, gt_ptr is struct so must pass by pointer
+size_t gt_elem_len(const gt_ptr *g, int should_compress) {
   return mclBn_getG1ByteSize() * 12;  // GT is 12 times the size of G1
   (void)should_compress;
+  (void)g;  // Not used for size calculation
 }
 
-void gt_elem_in(gt_ptr g, uint8_t *in, size_t len) {
-  mclBnGT_deserialize(&g, in, len);
+// FIX Bug #9: For MCL, gt_ptr is struct so must pass by pointer
+void gt_elem_in(gt_ptr *g, uint8_t *in, size_t len) {
+  mclBnGT_deserialize(g, in, len);
 }
 
-void gt_elem_out(gt_ptr g, uint8_t *out, size_t len, int should_compress) {
-  mclBnGT_serialize(out, len, &g);
+// FIX Bug #9: For MCL, gt_ptr is struct so must pass by pointer
+void gt_elem_out(const gt_ptr *g, uint8_t *out, size_t len, int should_compress) {
+  mclBnGT_serialize(out, len, g);
   (void)should_compress;
 }
 
