@@ -245,10 +245,30 @@ OpenABEContextGenericCCA::encryptKEM(OpenABERNG *rng, const string &mpkID,
     myRNG->getRandomBytes(&K, keyByteLen);
     // cout << "K : " << K.toHex() << endl;
 
+    // CRITICAL FIX FOR BUG #15: Canonicalize policy tree structure
+    // For CP-ABE policies, canonicalize the tree to ensure deterministic child ordering.
+    // This ensures the LSSS traversal order is identical in both encryption and re-encryption.
+    unique_ptr<OpenABEFunctionInput> normalizedInput = nullptr;
+    if (encryptInput->getFunctionType() == FUNC_POLICY_INPUT) {
+      // For CP-ABE policies, make a copy and canonicalize it
+      normalizedInput = copyFunctionInput(*encryptInput);
+      OpenABEPolicy *policy_ptr = dynamic_cast<OpenABEPolicy*>(normalizedInput.get());
+      if (policy_ptr == nullptr) {
+        OpenABE_LOG_AND_THROW("Failed to cast to policy",
+                          OpenABE_ERROR_INVALID_INPUT);
+      }
+      // Explicitly canonicalize to ensure deterministic child ordering
+      policy_ptr->canonicalize();
+    } else {
+      // For KP-ABE attribute lists, use original (no tree structure issues)
+      normalizedInput = copyFunctionInput(*encryptInput);
+    }
+
     // set M = r || K
     OpenABEByteString M = r + K;
     // r || K || A (use canonical form for policy to ensure consistent hashing)
-    concat = M + encryptInput->toCanonicalString();
+    std::string canonical_policy = normalizedInput->toCanonicalString();
+    concat = M + canonical_policy;
     // uint32_t target_len = concat.size();
 
     // u = H_1(r || K || A)
@@ -268,8 +288,8 @@ OpenABEContextGenericCCA::encryptKEM(OpenABERNG *rng, const string &mpkID,
     PRNG.reset(new OpenABECTR_DRBG(u));
     PRNG->setSeed(nonceU);
 
-    // compute ciphertext, C
-    result = this->abeSchemeContext->encrypt(PRNG.get(), mpkID, encryptInput,
+    // compute ciphertext, C using the normalized input
+    result = this->abeSchemeContext->encrypt(PRNG.get(), mpkID, normalizedInput.get(),
                                              &M, ciphertext);
     if (result != OpenABE_NOERROR) {
       OpenABE_LOG_AND_THROW("ABE Encryption failed.", OpenABE_ERROR_ENCRYPTION_ERROR);
@@ -326,8 +346,29 @@ OpenABEContextGenericCCA::decryptKEM(const string &mpkID, const string &keyID,
       OpenABE_LOG_AND_THROW("Failed to get functional input.",
                         OpenABE_ERROR_INVALID_INPUT);
     }
+
+    // CRITICAL FIX FOR BUG #15: Canonicalize policy tree structure (same as encryptKEM)
+    // For CP-ABE policies, canonicalize the tree to ensure deterministic child ordering.
+    // This ensures the LSSS traversal order is identical in both encryption and re-encryption.
+    unique_ptr<OpenABEFunctionInput> normalizedInput = nullptr;
+    if (encryptInput->getFunctionType() == FUNC_POLICY_INPUT) {
+      // For CP-ABE policies, make a copy and canonicalize it
+      normalizedInput = copyFunctionInput(*encryptInput);
+      OpenABEPolicy *policy_ptr = dynamic_cast<OpenABEPolicy*>(normalizedInput.get());
+      if (policy_ptr == nullptr) {
+        OpenABE_LOG_AND_THROW("Failed to cast to policy",
+                          OpenABE_ERROR_INVALID_INPUT);
+      }
+      // Explicitly canonicalize to ensure deterministic child ordering
+      policy_ptr->canonicalize();
+    } else {
+      // For KP-ABE attribute lists, use original (no tree structure issues)
+      normalizedInput = copyFunctionInput(*encryptInput);
+    }
+
     // r' || K' || A (use canonical form for policy to ensure consistent hashing)
-    concat = r + K + encryptInput->toCanonicalString();
+    std::string canonical_policy = normalizedInput->toCanonicalString();
+    concat = r + K + canonical_policy;
     // u = H_1(r' || K' || A)
     u = this->abeSchemeContext->getPairing()->hashFromBytes(concat, keyByteLen,
                                           CCA_HASH_FUNCTION_ONE);
@@ -345,9 +386,9 @@ OpenABEContextGenericCCA::decryptKEM(const string &mpkID, const string &keyID,
     PRNG.reset(new OpenABECTR_DRBG(u));
     PRNG->setSeed(nonceU);
 
-    // compute ciphertext, C
+    // compute ciphertext, C using the normalized input
     result = this->abeSchemeContext->encrypt(
-        PRNG.get(), mpkID, encryptInput.get(), &M, ciphertext2.get());
+        PRNG.get(), mpkID, normalizedInput.get(), &M, ciphertext2.get());
     // verification check
     if (*ciphertext == *ciphertext2) {
       key->setSymmetricKey(K);

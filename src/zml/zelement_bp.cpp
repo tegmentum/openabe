@@ -57,7 +57,7 @@ const string print_point(char *x, int x_len, char *y, int y_len) {
 const string g1_point_to_string(bp_group_t group, const g1_ptr p) {
 #if defined(BP_WITH_MCL)
   char buf[1024];
-  size_t len = mclBnG1_getStr(buf, sizeof(buf), p, 10);
+  size_t len = mclBnG1_getStr(buf, sizeof(buf), &p, 10);
   if (len == 0) {
     return "[0,0]";
   }
@@ -93,7 +93,7 @@ void g1_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 #if defined(BP_WITH_MCL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE);
-  size_t len = mclBnG1_serialize(buf, MAX_BUFFER_SIZE, p);
+  size_t len = mclBnG1_serialize(buf, MAX_BUFFER_SIZE, &p);
   if (len == 0) {
     fprintf(stderr, "g1_convert_to_bytestring: mclBnG1_serialize failed\n");
     return;
@@ -112,16 +112,25 @@ void g1_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 #endif
 }
 
+#if defined(BP_WITH_MCL)
+// FIX Bug #16: For MCL, g1_ptr is mclBnG1 (struct value, not pointer).
+// Must pass by reference so deserialization modifies the original, not a copy.
+void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr& p, uint8_t curve_id) {
+#else
 void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p, uint8_t curve_id) {
+#endif
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
 #if defined(BP_WITH_MCL)
-  size_t read = mclBnG1_deserialize(p, xstr, xstr_len);
+  fprintf(stderr, "[g1_convert_to_point] BEFORE deserialize: p_is_zero=%d\n", mclBnG1_isZero(&p));
+  size_t read = mclBnG1_deserialize(&p, xstr, xstr_len);
   if (read == 0) {
     fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
             OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
     return;
   }
+  fprintf(stderr, "[g1_convert_to_point] AFTER deserialize: read=%zu, p_is_zero=%d, p_is_valid=%d\n",
+          read, mclBnG1_isZero(&p), mclBnG1_isValid(&p));
 #elif defined(BP_WITH_OPENSSL)
   G1_ELEM_oct2point(group, p, xstr, xstr_len, NULL);
 #else
@@ -136,14 +145,18 @@ void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p,
 }
 
 // Wrapper for external callers without curve_id parameter
+#if defined(BP_WITH_MCL)
+void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr& p) {
+#else
 void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p) {
+#endif
   g1_convert_to_point(group, s, p, 0);
 }
 
 const string g2_point_to_string(bp_group_t group, const g2_ptr p) {
 #if defined(BP_WITH_MCL)
   char buf[2048];
-  size_t len = mclBnG2_getStr(buf, sizeof(buf), p, 10);
+  size_t len = mclBnG2_getStr(buf, sizeof(buf), &p, 10);
   if (len == 0) {
     return "[0,0],[0,0]";
   }
@@ -196,7 +209,7 @@ void g2_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 #if defined(BP_WITH_MCL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE);
-  size_t len = mclBnG2_serialize(buf, MAX_BUFFER_SIZE, p);
+  size_t len = mclBnG2_serialize(buf, MAX_BUFFER_SIZE, &p);
   if (len == 0) {
     fprintf(stderr, "g2_convert_to_bytestring: mclBnG2_serialize failed\n");
     return;
@@ -220,11 +233,17 @@ void g2_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 #endif
 }
 
+#if defined(BP_WITH_MCL)
+// FIX Bug #16: For MCL, g2_ptr is mclBnG2 (struct value, not pointer).
+// Must pass by reference so deserialization modifies the original, not a copy.
+void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr& p, uint8_t curve_id) {
+#else
 void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p, uint8_t curve_id) {
+#endif
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
 #if defined(BP_WITH_MCL)
-  size_t read = mclBnG2_deserialize(p, xstr, xstr_len);
+  size_t read = mclBnG2_deserialize(&p, xstr, xstr_len);
   if (read == 0) {
     fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
             OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
@@ -244,30 +263,43 @@ void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p,
 }
 
 // Wrapper for external callers without curve_id parameter
+#if defined(BP_WITH_MCL)
+void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr& p) {
+#else
 void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p) {
+#endif
   g2_convert_to_point(group, s, p, 0);
 }
 
-void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p,
+void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s, const gt_ptr *p,
                               int should_compress) {
 #if defined(BP_WITH_MCL)
+  // FIX Bug #8: gt_ptr is mclBnGT struct, must pass by pointer!
+
+  // DEBUG: Check if GT element is valid before serialization
+  int is_one = mclBnGT_isOne(p);
+  int is_zero = mclBnGT_isZero(p);
+  fprintf(stderr, "[gt_convert_to_bytestring] GT is_one=%d, is_zero=%d\n", is_one, is_zero);
+
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE);
-  size_t len = mclBnGT_serialize(buf, MAX_BUFFER_SIZE, p);
+  size_t len = mclBnGT_serialize(buf, MAX_BUFFER_SIZE, p);  // p is now already a pointer
   if (len == 0) {
     fprintf(stderr, "gt_convert_to_bytestring: mclBnGT_serialize failed\n");
+    fprintf(stderr, "  GT element state: is_one=%d, is_zero=%d\n", is_one, is_zero);
     return;
   }
+  fprintf(stderr, "[gt_convert_to_bytestring] Serialized %zu bytes\n", len);
   s.appendArray(buf, len);
 #elif defined(BP_WITH_OPENSSL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE);
-  size_t len = GT_ELEM_elem2oct(group, p, buf, MAX_BUFFER_SIZE, NULL);
+  size_t len = GT_ELEM_elem2oct(group, *p, buf, MAX_BUFFER_SIZE, NULL);
   s.appendArray(buf, len);
 #else
-  size_t len = gt_elem_len(p, should_compress);
+  size_t len = gt_elem_len(*p, should_compress);
   s.fillBuffer(0, len);
-  gt_elem_out(p, s.getInternalPtr(), len, should_compress);
+  gt_elem_out(*p, s.getInternalPtr(), len, should_compress);
 //  size_t len = gt_size_bin(p, should_compress);
 //  // cout << "G1::serialize => " << len << endl;
 //  s.fillBuffer(0, len);
@@ -275,31 +307,32 @@ void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s, gt_p
 #endif
 }
 
-void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p, uint8_t curve_id) {
+void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr *p, uint8_t curve_id) {
   uint8_t *xstr = s.getInternalPtr();
   size_t xstr_len = s.size();
 #if defined(BP_WITH_MCL)
-  size_t read = mclBnGT_deserialize(p, xstr, xstr_len);
+  // FIX Bug #8: gt_ptr is mclBnGT struct, must pass by pointer!
+  size_t read = mclBnGT_deserialize(p, xstr, xstr_len);  // p is now already a pointer
   if (read == 0) {
     fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
             OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
     return;
   }
 #elif defined(BP_WITH_OPENSSL)
-  GT_ELEM_oct2elem(group, p, xstr, xstr_len, NULL);
+  GT_ELEM_oct2elem(group, *p, xstr, xstr_len, NULL);
 #else
   // Ensure correct RELIC curve parameters are set before deserialization
   if (curve_id != 0) {
     bp_ensure_curve_params(curve_id);
   }
-  gt_elem_in(p, xstr, xstr_len);
+  gt_elem_in(*p, xstr, xstr_len);
   if (!oabe::checkRelicError()) { fprintf(stderr, "%s:%s:%d: '%s'\
 ", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED)); return; }
 #endif
 }
 
 // Wrapper for external callers without curve_id parameter
-void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr p) {
+void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr *p) {
   gt_convert_to_point(group, s, p, 0);
 }
 
@@ -326,19 +359,46 @@ void multi_bp_map_op(const bp_group_t group, oabe::GT &gt,
   GT_ELEMs_pairing(group, gt.m_GT, n, ps, qs, NULL);
   #else /* BP_WITH_MCL */
   // For MCL, compute multi-pairing
+  fprintf(stderr, "[MULTI_PAIRING_MCL] Computing %zu pairings\n", n);
   mclBnGT temp;
   memset(&temp, 0, sizeof(temp));
   if (n == 0) {
-    mclBnGT_setInt(gt.m_GT, 1);  // Set to multiplicative identity (1), NOT zero!
+    mclBnGT_setInt(&gt.m_GT, 1);  // Set to multiplicative identity (1), NOT zero!
   } else {
     for (size_t i = 0; i < n; i++) {
-      mclBn_pairing(&temp, ps[i], qs[i]);
+      // DEBUG: Check if G1 and G2 inputs are valid
+      int g1_valid = mclBnG1_isValid(&ps[i]);
+      int g2_valid = mclBnG2_isValid(&qs[i]);
+      int g1_zero = mclBnG1_isZero(&ps[i]);
+      int g2_zero = mclBnG2_isZero(&qs[i]);
+      fprintf(stderr, "[MULTI_PAIRING_MCL] Pair %zu: G1 valid=%d zero=%d, G2 valid=%d zero=%d\n",
+              i, g1_valid, g1_zero, g2_valid, g2_zero);
+
+      mclBn_pairing(&temp, &ps[i], &qs[i]);
+
+      // DEBUG: Check if pairing result is identity
+      int temp_is_one = mclBnGT_isOne(&temp);
+      int temp_is_zero = mclBnGT_isZero(&temp);
+      fprintf(stderr, "[MULTI_PAIRING_MCL] Pair %zu: pairing result is_one=%d is_zero=%d\n",
+              i, temp_is_one, temp_is_zero);
+
       if (i == 0) {
-        mclBnGT_copy(gt.m_GT, &temp);
+        // MCL doesn't have mclBnGT_copy, use memcpy or direct assignment
+        memcpy(&gt.m_GT, &temp, sizeof(mclBnGT));
+        fprintf(stderr, "[MULTI_PAIRING_MCL] Pair %zu: copied to result\n", i);
       } else {
-        mclBnGT_mul(gt.m_GT, gt.m_GT, &temp);
+        mclBnGT_mul(&gt.m_GT, &gt.m_GT, &temp);
+        int result_is_one = mclBnGT_isOne(&gt.m_GT);
+        fprintf(stderr, "[MULTI_PAIRING_MCL] Pair %zu: multiplied, result is_one=%d\n",
+                i, result_is_one);
       }
     }
+
+    // DEBUG: Final result check
+    int final_is_one = mclBnGT_isOne(&gt.m_GT);
+    int final_is_zero = mclBnGT_isZero(&gt.m_GT);
+    fprintf(stderr, "[MULTI_PAIRING_MCL] Final result: is_one=%d is_zero=%d\n",
+            final_is_one, final_is_zero);
   }
   #endif
 #else
@@ -359,9 +419,25 @@ void multi_bp_map_op(const bp_group_t group, oabe::GT &gt,
     fprintf(stderr, "[MULTI_PAIRING] Pair %zu: Coordinates preserved (no norm call)\n", i);
   }
 
-  fprintf(stderr, "[MULTI_PAIRING] About to call pp_map_sim_oatep_k12 with %zu pairs\n", n);
-  pp_map_sim_oatep_k12(gt.m_GT, g_1, g_2, n);
-  fprintf(stderr, "[MULTI_PAIRING] Returned from pp_map_sim_oatep_k12\n");
+  fprintf(stderr, "[MULTI_PAIRING] Computing %zu pairings individually\n", n);
+
+  // WORKAROUND: pp_map_sim_oatep_k12 appears to be broken in RELIC 0.7.0 with BN254
+  // Use individual pairings and multiply results instead
+  gt_t temp;
+  fp12_inits(temp);
+
+  for (size_t i = 0; i < n; i++) {
+    pp_map_oatep_k12(temp, g_1[i], g_2[i]);
+    if (i == 0) {
+      fp12_copy(gt.m_GT, temp);
+    } else {
+      fp12_mul(gt.m_GT, gt.m_GT, temp);
+    }
+    fprintf(stderr, "[MULTI_PAIRING] Pair %zu: computed and multiplied\n", i);
+  }
+
+  fp12_free(temp);
+  fprintf(stderr, "[MULTI_PAIRING] Finished individual pairing computation\n");
 
   // DEBUG: Check result GT element
   fprintf(stderr, "[MULTI_PAIRING] Result GT first coefficient fp12[0][0][0]=%d\n",
@@ -538,7 +614,33 @@ ZP operator-(const ZP &x, const ZP &y) {
   else
     zr.setOrder(y.order);
 
+#if defined(BP_WITH_MCL)
+  // DEBUG: Check input values before subtraction
+  fprintf(stderr, "[ZP_SUB_DEBUG] Before subtraction:\n");
+  fprintf(stderr, "[ZP_SUB_DEBUG]   x.isOrderSet=%d, y.isOrderSet=%d, zr.isOrderSet=%d\n",
+          x.isOrderSet, y.isOrderSet, zr.isOrderSet);
+  fprintf(stderr, "[ZP_SUB_DEBUG]   x.isZero=%d, y.isZero=%d\n",
+          mclBnFr_isZero(&x.m_ZP), mclBnFr_isZero(&y.m_ZP));
+
+  // Get string representation
+  char x_str[256], y_str[256];
+  mclBnFr_getStr(x_str, sizeof(x_str), &x.m_ZP, 10);
+  mclBnFr_getStr(y_str, sizeof(y_str), &y.m_ZP, 10);
+  fprintf(stderr, "[ZP_SUB_DEBUG]   x value: %s\n", x_str);
+  fprintf(stderr, "[ZP_SUB_DEBUG]   y value: %s\n", y_str);
+#endif
+
   zml_bignum_sub_order(zr.m_ZP, x.m_ZP, y.m_ZP, zr.order);
+
+#if defined(BP_WITH_MCL)
+  // DEBUG: Check result after subtraction
+  fprintf(stderr, "[ZP_SUB_DEBUG] After subtraction:\n");
+  fprintf(stderr, "[ZP_SUB_DEBUG]   result.isZero=%d\n", mclBnFr_isZero(&zr.m_ZP));
+  char r_str[256];
+  mclBnFr_getStr(r_str, sizeof(r_str), &zr.m_ZP, 10);
+  fprintf(stderr, "[ZP_SUB_DEBUG]   result value: %s\n", r_str);
+#endif
+
   return zr;
 }
 
@@ -582,7 +684,24 @@ ZP operator/(const ZP &x, const ZP &y) {
   else
     r.setOrder(y.order);
 
+  // DEBUG: Check values before division
+  #if defined(BP_WITH_MCL)
+  char x_val[256], y_val[256];
+  mclBnFr_getStr(x_val, sizeof(x_val), &x.m_ZP, 10);
+  mclBnFr_getStr(y_val, sizeof(y_val), &y.m_ZP, 10);
+  fprintf(stderr, "[ZP_DIV_DEBUG] Before div: x=%s, y=%s\n", x_val, y_val);
+  fprintf(stderr, "[ZP_DIV_DEBUG] r.m_ZP is_zero BEFORE=%d\n", mclBnFr_isZero(&r.m_ZP));
+  #endif
+
   zml_bignum_div(r.m_ZP, x.m_ZP, y.m_ZP, r.order);
+
+  // DEBUG: Check result after division
+  #if defined(BP_WITH_MCL)
+  char r_val[256];
+  mclBnFr_getStr(r_val, sizeof(r_val), &r.m_ZP, 10);
+  fprintf(stderr, "[ZP_DIV_DEBUG] After div: r=%s, is_zero=%d\n", r_val, mclBnFr_isZero(&r.m_ZP));
+  #endif
+
   return r;
 }
 
@@ -639,6 +758,22 @@ void ZP::setOrder(const bignum_t o) {
 void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
   if (!isInit) { fprintf(stderr, "%s:%s:%d: '%s'\
 ", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_ELEMENT_NOT_INITIALIZED)); return; }
+
+  // COMPILE-TIME DIAGNOSTIC: Print which backend is being used
+  static bool diag_printed = false;
+  if (!diag_printed) {
+#if defined(BP_WITH_MCL)
+    fprintf(stderr, "[COMPILE-TIME] BP_WITH_MCL is DEFINED\n");
+#elif defined(BP_WITH_OPENSSL)
+    fprintf(stderr, "[COMPILE-TIME] BP_WITH_OPENSSL is DEFINED\n");
+#elif defined(__wasm__)
+    fprintf(stderr, "[COMPILE-TIME] __wasm__ is DEFINED\n");
+#else
+    fprintf(stderr, "[COMPILE-TIME] Using RELIC (default)\n");
+#endif
+    diag_printed = true;
+  }
+
   // 1. get some number of bytes
   if (!this->isOrderSet) {
     this->isOrderSet = true;
@@ -648,7 +783,7 @@ void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
   // 2. call bignum_fromBin on the bytes obtained
   uint8_t buf[length];
   memset(buf, 0, length);
-#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL) || defined(__wasm__)
+#if defined(BP_WITH_OPENSSL) || defined(__wasm__)
   rng->getRandomBytes(buf, length);
 
   // DEBUG: Print first few bytes
@@ -668,11 +803,22 @@ void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
     zml_bignum_safe_free(str);
     call_count++;
   }
+#elif defined(BP_WITH_MCL)
+  // FIX Bug #15: For CCA security, we MUST use the provided PRNG, not MCL's system CSPRNG.
+  // Generate random bytes from the provided PRNG and convert to Fr element.
+  // MCL's mclBnFr_setLittleEndian automatically reduces modulo the curve order.
+  rng->getRandomBytes(buf, length);
+
+  // Convert bytes to Fr element (automatically reduced mod r)
+  int ret = mclBnFr_setLittleEndian(&this->m_ZP, buf, length);
+  if (ret != 0) {
+    fprintf(stderr, "[ZP::setRandom ERROR] mclBnFr_setLittleEndian failed with code %d\n", ret);
+  }
 #else
   oabe_rand_seed(&rng_trampoline, (void *)rng);
   zml_bignum_rand(this->m_ZP, this->order);
-#endif
   zml_bignum_mod(this->m_ZP, this->order);
+#endif
 
 #if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL) || defined(__wasm__)
   // DEBUG: Print final ZP value after mod
@@ -883,7 +1029,12 @@ G1::~G1() {
  */
 G1 operator*(const G1 &x, const G1 &y) {
   G1 z = x;
+#if defined(BP_WITH_MCL)
+  // FIX Bug #9: Pass pointers for MCL
+  g1_add_op(GET_GROUP(z.bgroup), &z.m_G1, &z.m_G1, &const_cast<G1&>(y).m_G1);
+#else
   g1_add_op(GET_GROUP(z.bgroup), z.m_G1, z.m_G1, y.m_G1);
+#endif
   return z;
 }
 
@@ -902,7 +1053,12 @@ G1 &G1::operator*=(const G1 &x) {
 G1 operator/(const G1 &x, const G1 &y) {
   // z = (x / y) => Point z = y; z = x - z;
   G1 z = y;
+#if defined(BP_WITH_MCL)
+  // FIX Bug #9: Pass pointers for MCL
+  g1_sub_op(GET_BP_GROUP(z.bgroup), &z.m_G1, &const_cast<G1&>(x).m_G1);
+#else
   g1_sub_op(GET_BP_GROUP(z.bgroup), z.m_G1, x.m_G1);
+#endif
 //#if defined(BP_WITH_OPENSSL)
 //  int rc = G1_ELEM_invert(GET_BP_GROUP(z.bgroup), z.m_G1, NULL);
 //  ASSERT(rc == 1, OpenABE_ERROR_INVALID_INPUT);
@@ -936,7 +1092,12 @@ G1 operator-(const G1 &x) {
  */
 G1 G1::exp(ZP z) {
   G1 g1(this->bgroup);
+#if defined(BP_WITH_MCL)
+  // FIX Bug #9: Pass pointers for MCL - CRITICAL for G1::exp
+  g1_mul_op(GET_BP_GROUP(g1.bgroup), &g1.m_G1, &this->m_G1, &z.m_ZP);
+#else
   g1_mul_op(GET_BP_GROUP(g1.bgroup), g1.m_G1, this->m_G1, z.m_ZP);
+#endif
   return g1;
 }
 
@@ -953,7 +1114,7 @@ bool G1::ismember(bignum_t order) {
       (G1_ELEM_is_on_curve(GET_BP_GROUP(this->bgroup), this->m_G1, NULL) == 1);
 #elif defined(BP_WITH_MCL)
   // MCL validates points on creation, so just check if initialized
-  result = mclBnG1_isValid(this->m_G1);
+  result = mclBnG1_isValid(&this->m_G1);
 #else
   g1_t r;
   g1_inits(r);
@@ -991,7 +1152,7 @@ void G1::setRandom(OpenABERNG *rng) {
     random_scalar.setRandom(rng, order);
 
     // Get a fixed base point by hashing a known string (same as g1_rand)
-    int ret = mclBnG1_hashAndMapTo(this->m_G1, "OpenABE-G1-base", 15);
+    int ret = mclBnG1_hashAndMapTo(&this->m_G1, "OpenABE-G1-base", 15);
     if (ret != 0) {
       fprintf(stderr, "[G1::setRandom ERROR] mclBnG1_hashAndMapTo failed with code %d\n", ret);
       zml_bignum_free(order);
@@ -999,7 +1160,7 @@ void G1::setRandom(OpenABERNG *rng) {
     }
 
     // Multiply by random scalar: g1 = base * random_scalar
-    mclBnG1_mul(this->m_G1, this->m_G1, random_scalar.m_ZP);
+    mclBnG1_mul(&this->m_G1, &this->m_G1, &random_scalar.m_ZP);
 
     zml_bignum_free(order);
 #else
@@ -1197,7 +1358,12 @@ G2 operator-(const G2& x)
 G2 G2::exp(ZP z)
 {
 	G2 g2(this->bgroup);
+#if defined(BP_WITH_MCL)
+	// FIX Bug #9: Pass pointers for MCL - CRITICAL for G2::exp
+	g2_mul_op(GET_BP_GROUP(g2.bgroup), &g2.m_G2, &this->m_G2, &z.m_ZP);
+#else
 	g2_mul_op(GET_BP_GROUP(g2.bgroup), g2.m_G2, this->m_G2, z.m_ZP);
+#endif
     return g2;
 }
 
@@ -1209,7 +1375,7 @@ bool G2::ismember(bignum_t order)
     result = (G2_ELEM_is_on_curve(GET_BP_GROUP(this->bgroup), this->m_G2, NULL) == 1);
 #elif defined(BP_WITH_MCL)
     // MCL validates points on creation, so just check if initialized
-    result = mclBnG2_isValid(this->m_G2);
+    result = mclBnG2_isValid(&this->m_G2);
 #else
 	g2_t r;
 	fp12_inits(r);
@@ -1243,7 +1409,7 @@ void G2::setRandom(OpenABERNG *rng)
 		random_scalar.setRandom(rng, order);
 
 		// Get a fixed base point by hashing a known string (same as g2_rand)
-		int ret = mclBnG2_hashAndMapTo(this->m_G2, "OpenABE-G2-base", 15);
+		int ret = mclBnG2_hashAndMapTo(&this->m_G2, "OpenABE-G2-base", 15);
 		if (ret != 0) {
 			fprintf(stderr, "[G2::setRandom ERROR] mclBnG2_hashAndMapTo failed with code %d\n", ret);
 			zml_bignum_free(order);
@@ -1251,7 +1417,7 @@ void G2::setRandom(OpenABERNG *rng)
 		}
 
 		// Multiply by random scalar: g2 = base * random_scalar
-		mclBnG2_mul(this->m_G2, this->m_G2, random_scalar.m_ZP);
+		mclBnG2_mul(&this->m_G2, &this->m_G2, &random_scalar.m_ZP);
 
 		zml_bignum_free(order);
 #else
@@ -1275,12 +1441,22 @@ ostream& operator<<(ostream& os, const G2& g2)
 
 bool operator==(const G2& x,const G2& y)
 {
+#if defined(BP_WITH_MCL)
+    // FIX Bug #9: Pass pointers for MCL
+    return (g2_cmp_op(GET_BP_GROUP(x.bgroup), &const_cast<G2&>(x).m_G2, &const_cast<G2&>(y).m_G2) == G_CMP_EQ);
+#else
     return (g2_cmp_op(GET_BP_GROUP(x.bgroup), const_cast<G2&>(x).m_G2, const_cast<G2&>(y).m_G2) == G_CMP_EQ);
+#endif
 }
 
 bool operator!=(const G2& x,const G2& y)
 {
+#if defined(BP_WITH_MCL)
+    // FIX Bug #9: Pass pointers for MCL
+    return (g2_cmp_op(GET_BP_GROUP(x.bgroup), &const_cast<G2&>(x).m_G2, &const_cast<G2&>(y).m_G2) != G_CMP_EQ);
+#else
     return (g2_cmp_op(GET_BP_GROUP(x.bgroup), const_cast<G2&>(x).m_G2, const_cast<G2&>(y).m_G2) != G_CMP_EQ);
+#endif
 }
 
 void
@@ -1392,7 +1568,12 @@ GT::~GT()
 GT operator*(const GT& x,const GT& y)
 {
 	GT z = x;
+#if defined(BP_WITH_MCL)
+	// FIX Bug #9: Pass pointers for MCL
+	gt_mul_op(GET_BP_GROUP(z.bgroup), &z.m_GT, &z.m_GT, &const_cast<GT&>(y).m_GT);
+#else
 	gt_mul_op(GET_BP_GROUP(z.bgroup), z.m_GT, z.m_GT, const_cast<GT&>(y).m_GT);
+#endif
 	return z;
 }
 
@@ -1408,14 +1589,24 @@ GT operator/(const GT& x,const GT& y)
 {
 	GT z = x;
 	// z = x * y^-1
+#if defined(BP_WITH_MCL)
+	// FIX Bug #9: Pass pointers for MCL
+	gt_div_op(GET_BP_GROUP(z.bgroup), &z.m_GT, &const_cast<GT&>(x).m_GT, &const_cast<GT&>(y).m_GT);
+#else
 	gt_div_op(GET_BP_GROUP(z.bgroup), z.m_GT, const_cast<GT&>(x).m_GT, const_cast<GT&>(y).m_GT);
+#endif
 	return z;
 }
 
 GT GT::exp(ZP z)
 {
 	GT gt(*this);
+#if defined(BP_WITH_MCL)
+	// FIX Bug #9: Pass pointers for MCL
+	gt_exp_op(GET_BP_GROUP(gt.bgroup), &gt.m_GT, &gt.m_GT, &z.m_ZP);
+#else
 	gt_exp_op(GET_BP_GROUP(gt.bgroup), gt.m_GT, gt.m_GT, z.m_ZP);
+#endif
 	return gt;
 }
 
@@ -1442,7 +1633,12 @@ void GT::setIdentity()
 
 bool GT::isInfinity()
 {
+#if defined(BP_WITH_MCL)
+    // FIX Bug #9: Pass pointers for MCL
+    return gt_is_unity_check(GET_BP_GROUP(this->bgroup), &this->m_GT);
+#else
     return gt_is_unity_check(GET_BP_GROUP(this->bgroup), this->m_GT);
+#endif
 }
 
 bool GT::ismember(bignum_t order)
@@ -1450,8 +1646,14 @@ bool GT::ismember(bignum_t order)
 	bool result;
 	gt_ptr r;
 	gt_init(GET_BP_GROUP(this->bgroup), &r);
+#if defined(BP_WITH_MCL)
+	// FIX Bug #9: Pass pointers for MCL
+	gt_exp_op(GET_BP_GROUP(this->bgroup), &r, &this->m_GT, &order);
+	result = gt_is_unity_check(GET_BP_GROUP(this->bgroup), &r);
+#else
 	gt_exp_op(GET_BP_GROUP(this->bgroup), r, this->m_GT, order);
 	result = gt_is_unity_check(GET_BP_GROUP(this->bgroup), r);
+#endif
 	gt_element_free(r);
 	return result;
 }
@@ -1460,7 +1662,7 @@ ostream& operator<<(ostream& os, const GT& gt)
 {
 #if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
     OpenABEByteString s;
-    gt_convert_to_bytestring(GET_BP_GROUP(gt.bgroup), s, gt.m_GT, NO_COMPRESS);
+    gt_convert_to_bytestring(GET_BP_GROUP(gt.bgroup), s, &gt.m_GT, NO_COMPRESS);
     os << "(" << s.toHex() << ")";
 #else
 	gt_write_ostream(os, const_cast<GT&>(gt).m_GT, DEC);
@@ -1498,7 +1700,8 @@ GT::serialize(OpenABEByteString &result) const
     int compress = shouldCompress_ ? COMPRESS : NO_COMPRESS;
 
     if(this->isInit) {
-        gt_convert_to_bytestring(GET_BP_GROUP(this->bgroup), tmp, const_cast<GT&>(*this).m_GT, compress);
+        // FIX Bug #8: Pass pointer to m_GT for MCL
+        gt_convert_to_bytestring(GET_BP_GROUP(this->bgroup), tmp, &const_cast<GT&>(*this).m_GT, compress);
         // pack the resulting ciphertext in result
         result.clear();
         result.insertFirstByte(OpenABE_ELEMENT_GT);
@@ -1521,7 +1724,8 @@ GT::deserialize(OpenABEByteString &input)
             if (is_elem_null(this->m_GT)) {
                 gt_init(GET_BP_GROUP(this->bgroup), &this->m_GT);
             }
-            gt_convert_to_point(GET_BP_GROUP(this->bgroup), gt_bytes, this->m_GT, this->bgroup->getCurveID());
+            // FIX Bug #8: Pass pointer to m_GT for MCL
+            gt_convert_to_point(GET_BP_GROUP(this->bgroup), gt_bytes, &this->m_GT, this->bgroup->getCurveID());
             return;
         }
     }
