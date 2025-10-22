@@ -81,6 +81,7 @@ public:
   OpenABEFunctionInputType getFunctionType() const { return this->m_Type; }
   virtual std::string toString() const = 0;
   virtual std::string toCompactString() const = 0;
+  virtual std::string toCanonicalString() const = 0;
 };
 
 // perform deep copy of a function input

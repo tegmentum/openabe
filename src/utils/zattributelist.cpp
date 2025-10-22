@@ -211,6 +211,33 @@ std::string OpenABEAttributeList::toCompactString() const {
   return s;
 }
 
+std::string OpenABEAttributeList::toCanonicalString() const {
+  // Create a sorted copy of the attributes for canonical form
+  std::vector<std::string> sorted_attrs = this->m_Attributes;
+  std::sort(sorted_attrs.begin(), sorted_attrs.end());
+
+  string s;
+  s.push_back(ATTR_SEP);
+  for (const auto &it : sorted_attrs) {
+    if (it.compare("") != 0) {
+      s += it;
+      s.push_back(ATTR_SEP);
+    }
+  }
+
+  // For canonical form, also sort and add original attributes
+  if (!this->m_OriginalAttributes.empty()) {
+    std::vector<std::string> sorted_orig = this->m_OriginalAttributes;
+    std::sort(sorted_orig.begin(), sorted_orig.end());
+    for (const auto &it : sorted_orig) {
+      s += it;
+      s.push_back(ATTR_SEP);
+    }
+  }
+
+  return s;
+}
+
 void OpenABEAttributeList::serialize(OpenABEByteString &result) const {
   result = this->toCompactString();
 }

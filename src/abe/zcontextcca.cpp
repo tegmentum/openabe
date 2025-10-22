@@ -247,21 +247,21 @@ OpenABEContextGenericCCA::encryptKEM(OpenABERNG *rng, const string &mpkID,
 
     // set M = r || K
     OpenABEByteString M = r + K;
-    // r || K || A
-    concat = M + encryptInput->toString();
+    // r || K || A (use canonical form for policy to ensure consistent hashing)
+    concat = M + encryptInput->toCanonicalString();
     // uint32_t target_len = concat.size();
 
     // u = H_1(r || K || A)
-    u = this->getPairing()->hashFromBytes(concat, keyByteLen,
+    u = this->abeSchemeContext->getPairing()->hashFromBytes(concat, keyByteLen,
                                           CCA_HASH_FUNCTION_ONE);
     // hashU = H_2(u)
-    nonceU = this->getPairing()->hashFromBytes(u, OpenABE_CTR_DRBG_NONCELEN,
+    nonceU = this->abeSchemeContext->getPairing()->hashFromBytes(u, OpenABE_CTR_DRBG_NONCELEN,
                                                CCA_HASH_FUNCTION_TWO);
 
     // Derive a deterministic UID from u (use first UID_LEN bytes)
     // This ensures encrypt and re-encrypt produce identical ciphertexts
     OpenABEByteString uid = u.getSubset(0, UID_LEN);
-    ciphertext->setHeader(this->getPairing()->getCurveID(), this->getSchemeType(), uid);
+    ciphertext->setHeader(this->abeSchemeContext->getPairing()->getCurveID(), this->getSchemeType(), uid);
 
     // construct a new PRNG
     // set the key and seed (or plaintext)
@@ -326,19 +326,19 @@ OpenABEContextGenericCCA::decryptKEM(const string &mpkID, const string &keyID,
       OpenABE_LOG_AND_THROW("Failed to get functional input.",
                         OpenABE_ERROR_INVALID_INPUT);
     }
-    // r' || K' || A
-    concat = r + K + encryptInput->toString();
+    // r' || K' || A (use canonical form for policy to ensure consistent hashing)
+    concat = r + K + encryptInput->toCanonicalString();
     // u = H_1(r' || K' || A)
-    u = this->getPairing()->hashFromBytes(concat, keyByteLen,
+    u = this->abeSchemeContext->getPairing()->hashFromBytes(concat, keyByteLen,
                                           CCA_HASH_FUNCTION_ONE);
     // nonceU = H_2(u)
-    nonceU = this->getPairing()->hashFromBytes(u, OpenABE_CTR_DRBG_NONCELEN,
+    nonceU = this->abeSchemeContext->getPairing()->hashFromBytes(u, OpenABE_CTR_DRBG_NONCELEN,
                                                CCA_HASH_FUNCTION_TWO);
 
     // Derive a deterministic UID from u (same as in encryptKEM)
     // This ensures the re-encrypted ciphertext has the same UID
     OpenABEByteString uid = u.getSubset(0, UID_LEN);
-    ciphertext2->setHeader(this->getPairing()->getCurveID(), this->getSchemeType(), uid);
+    ciphertext2->setHeader(this->abeSchemeContext->getPairing()->getCurveID(), this->getSchemeType(), uid);
 
     // construct a new PRNG
     // set the key and seed (or plaintext)

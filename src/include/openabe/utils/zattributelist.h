@@ -72,6 +72,7 @@ public:
   OpenABEAttributeList*    clone() const { return new OpenABEAttributeList(*this); }
   std::string toString() const;
   std::string toCompactString() const;
+  std::string toCanonicalString() const;
   void serialize(OpenABEByteString &result) const;
   void deserialize(const OpenABEByteString &input);
   bool isEqual(ZObject*) const;
