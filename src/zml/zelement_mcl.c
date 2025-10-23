@@ -21,22 +21,49 @@
  ********************************************************************************/
 
 static int mcl_initialized = 0;
+static int mcl_current_curve = -1;
+
+// Initialize MCL with specific curve (called from bp_group_init)
+int mcl_init_curve(int curve_id) {
+  if (mcl_initialized && mcl_current_curve == curve_id) {
+    // Already initialized with this curve
+    return 0;
+  }
+
+  if (mcl_initialized && mcl_current_curve != curve_id) {
+    // Need to switch curves - MCL requires re-initialization
+    fprintf(stderr, "MCL: Switching from curve %d to curve %d\n",
+            mcl_current_curve, curve_id);
+    mcl_initialized = 0;
+  }
+
+  int ret = mclBn_init(curve_id, MCLBN_COMPILED_TIME_VAR);
+  if (ret != 0) {
+    fprintf(stderr, "MCL initialization failed for curve %d: %d\n", curve_id, ret);
+    return -1;
+  }
+
+  mcl_initialized = 1;
+  mcl_current_curve = curve_id;
+  fprintf(stderr, "MCL: Initialized curve %d (%s)\n", curve_id,
+          curve_id == MCL_BLS12_381 ? "BLS12-381" :
+          curve_id == MCL_BLS12_377 ? "BLS12-377" :
+          curve_id == MCL_BN254 ? "BN254" : "Unknown");
+  return 0;
+}
 
 void zml_init() {
+  // Default initialization with BLS12-381 (for backwards compatibility)
+  // Note: bp_group_init will call mcl_init_curve with the actual curve needed
   if (!mcl_initialized) {
-    // Initialize MCL for BLS12-381 curve
-    int ret = mclBn_init(MCL_BLS12_381, MCLBN_COMPILED_TIME_VAR);
-    if (ret != 0) {
-      fprintf(stderr, "MCL initialization failed: %d\n", ret);
-      exit(1);
-    }
-    mcl_initialized = 1;
+    mcl_init_curve(MCL_BLS12_381);
   }
 }
 
 void zml_clean() {
   // MCL doesn't require explicit cleanup
   mcl_initialized = 0;
+  mcl_current_curve = -1;
 }
 
 /********************************************************************************
@@ -152,22 +179,40 @@ char *zml_bignum_toDec(const bignum_t b, int *length) {
  ********************************************************************************/
 
 int bp_group_init(bp_group_t *group, uint8_t id) {
-  // MCL is already initialized in zml_init()
-  // Just set group to a non-null value
-  *group = (void*)0x1;  // Dummy value
+  int mcl_curve_id = -1;
 
+  // Map OpenABE curve IDs to MCL curve IDs
   switch (id) {
-    case OpenABE_BN_P382_ID:
-      // BLS12-381 is set up (P382 maps to BLS12-381 with 384-bit field)
+    // BLS12 Curves (Pairing-friendly, modern, high security)
+    case OpenABE_BLS12_P381_ID:
+      mcl_curve_id = MCL_BLS12_381;  // 128-bit security
       break;
+
+    // BN Curves (Pairing-friendly, legacy support)
     case OpenABE_BN_P254_ID:
+      mcl_curve_id = MCL_BN254;      // ~100-bit security
+      break;
     case OpenABE_BN_P256_ID:
-      // These curves are not supported in BLS12-381 mode
-      fprintf(stderr, "MCL: Only BLS12-381 (P382) curve is currently supported\n");
-      return -1;
+      // BN256 is same as BN254 in MCL
+      mcl_curve_id = MCL_BN254;
+      break;
+    case OpenABE_BN_P382_ID:
+      // P382 maps to BLS12-381 for better standardization
+      mcl_curve_id = MCL_BLS12_381;
+      break;
+
     default:
+      fprintf(stderr, "MCL: Unsupported curve ID: %d (0x%x)\n", id, id);
       return -1;
   }
+
+  // Initialize MCL with the requested curve
+  if (mcl_init_curve(mcl_curve_id) != 0) {
+    return -1;
+  }
+
+  // Set group to a non-null value (MCL uses global state)
+  *group = (void*)0x1;
 
   return 0;
 }
