@@ -393,22 +393,55 @@ OpenABELSSS::calculateCoefficient(OpenABETreeNode *treeNode, uint32_t index, uin
   ZP local_iPlusOne, local_indexPlusOne;
   this->m_Pairing->initZP(local_indexPlusOne, index + 1);
 
+  fprintf(stderr, "[LSSS_COEFF] calculateCoefficient: index=%u, threshold=%u, total=%u\n",
+          index, threshold, total);
+  fprintf(stderr, "[LSSS_COEFF] Initial result = 1, indexPlusOne = %u\n", index + 1);
+
   // Product for all marked subnodes (excluding index) of ( (0 - (X(i))) / (X(subnode_index) - (X(i))) )
   // Note that X(i) = i+1.
   for (uint32_t i = 0; i < threshold; i++) {
     /* Check if this subnode is being used for the recovery.	*/
     this->m_Pairing->initZP(local_iPlusOne, i + 1);
     bool is_marked = treeNode->getSubnode(i)->getMark();
+
+    fprintf(stderr, "[LSSS_COEFF] i=%u: marked=%d\n", i, is_marked);
+
     if (is_marked) {
       if (i != index) {
         ZP numerator = this->zero - local_iPlusOne;
         ZP denominator = local_indexPlusOne - local_iPlusOne;
+
+        fprintf(stderr, "[LSSS_COEFF] i=%u (i!=index): Computing (0 - %u) / (%u - %u)\n",
+                i, i+1, index+1, i+1);
+
+        // Check if numerator or denominator is zero by serializing
+        OpenABEByteString num_bytes = numerator.getByteString();
+        OpenABEByteString den_bytes = denominator.getByteString();
+        bool num_zero = (num_bytes.size() == 0 || (num_bytes.size() == 1 && num_bytes.at(0) == 0));
+        bool den_zero = (den_bytes.size() == 0 || (den_bytes.size() == 1 && den_bytes.at(0) == 0));
+
+        fprintf(stderr, "[LSSS_COEFF] i=%u: numerator zero=%d, denominator zero=%d\n",
+                i, num_zero, den_zero);
+
         ZP term = numerator / denominator;
+
+        OpenABEByteString term_bytes = term.getByteString();
+        bool term_zero = (term_bytes.size() == 0 || (term_bytes.size() == 1 && term_bytes.at(0) == 0));
+        fprintf(stderr, "[LSSS_COEFF] i=%u: term zero=%d\n", i, term_zero);
+
         // BUG FIX: Removed extra "result *" that was squaring the coefficient each iteration
         result *= term;
+
+        OpenABEByteString result_bytes = result.getByteString();
+        bool result_zero = (result_bytes.size() == 0 || (result_bytes.size() == 1 && result_bytes.at(0) == 0));
+        fprintf(stderr, "[LSSS_COEFF] i=%u: After multiply, result zero=%d\n", i, result_zero);
       }
     }
   }
+
+  OpenABEByteString final_bytes = result.getByteString();
+  bool final_zero = (final_bytes.size() == 0 || (final_bytes.size() == 1 && final_bytes.at(0) == 0));
+  fprintf(stderr, "[LSSS_COEFF] Final coefficient zero=%d\n", final_zero);
 
   return result;
 }

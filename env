@@ -5,4 +5,5 @@ export PATH="$DEPS_INSTALL_ZROOT/bin:$PATH"
 export LD_LIBRARY_PATH="$DEPS_INSTALL_ZROOT/lib:$ZROOT/root/lib:$LD_LIBRARY_PATH"
 export DYLD_LIBRARY_PATH="$DEPS_INSTALL_ZROOT/lib:$ZROOT/root/lib:$DYLD_LIBRARY_PATH"
 export PKG_CONFIG_PATH="$DEPS_INSTALL_ZROOT/lib/pkgconfig:$PKG_CONFIG_PATH"
+# Backend selection: MCL is the default and only supported backend
 export ZML_LIB="with_mcl"

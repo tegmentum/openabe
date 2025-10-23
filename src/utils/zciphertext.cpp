@@ -140,8 +140,13 @@ void OpenABECiphertext::loadFromBytes(OpenABEByteString &input) {
     this->curveID = OpenABE_getCurveID(ciphertextHeader.at(1));
     this->algorithmID = OpenABE_getSchemeID(ciphertextHeader.at(2));
     this->uid = ciphertextHeader.getSubset(3, UID_LEN);
+
+    fprintf(stderr, "DEBUG loadFromBytes: curveID=%d, algorithmID=%d, group=%p\n",
+            this->curveID, this->algorithmID, (void*)this->group.get());
+
     if (this->group == nullptr && this->curveID != OpenABE_NONE_ID) {
       OpenABE_setGroupObject(this->group, this->curveID);
+      fprintf(stderr, "DEBUG loadFromBytes: After setGroupObject, group=%p\n", (void*)this->group.get());
     }
 
     this->deserialize(ciphertextBytes);

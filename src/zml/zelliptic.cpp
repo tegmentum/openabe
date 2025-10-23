@@ -236,10 +236,13 @@ ZP_t OpenABEEllipticCurve::getGroupOrder() {
 }
 
 void OpenABEEllipticCurve::getGroupOrder(bignum_t o) {
+#if !defined(BP_WITH_MCL)
+  // NULL check only makes sense when bignum_t is a pointer (RELIC backend)
   if (o == NULL) {
     fprintf(stderr, "%s:%s:%d: ASSERT_NOTNULL failed\n", __FILE__, __FUNCTION__, __LINE__);
     return;
   }
+#endif
   this->ecgroup->getGroupOrder(o);
 }
 

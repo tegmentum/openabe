@@ -132,6 +132,8 @@ OpenABEKey::exportKeyToBytes(OpenABEByteString &output) {
 
 OpenABE_ERROR
 OpenABEKey::loadKeyFromBytes(OpenABEByteString &input) {
+  // The header has already been unpacked by constructKeyFromBytes
+  // input contains just the key structure bytes
   this->deserialize(input);
   return OpenABE_NOERROR;
 }

@@ -87,6 +87,7 @@ public:
   void setSchemeType(OpenABE_SCHEME scheme_type) { this->m_KEM_->setSchemeType(scheme_type); }
   OpenABE_SCHEME getSchemeType() { return this->m_KEM_->getSchemeType(); }
 
+  OpenABEPairing* getPairing() { return this->m_KEM_->getPairing(); }
   OpenABEByteString* getHashKey(const std::string &mpkID);
   OpenABE_ERROR exportKey(const std::string &keyID, OpenABEByteString &keyBlob);
   OpenABE_ERROR loadMasterPublicParams(const std::string &mpkID, OpenABEByteString &mpkBlob);

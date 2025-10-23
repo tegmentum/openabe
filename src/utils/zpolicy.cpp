@@ -124,7 +124,37 @@ std::unique_ptr<OpenABEPolicy> createPolicyTree(std::string s) {
   /* construct policy now */
   try {
     driver.parse_string(POLICY_PREFIX, s);
-    return driver.getPolicy();
+    std::unique_ptr<OpenABEPolicy> policy = driver.getPolicy();
+    // CRITICAL FIX FOR BUG #15: Always canonicalize policy trees to ensure
+    // deterministic structure for CCA re-encryption verification.
+    // This ensures that createPolicyTree() is idempotent - calling it multiple
+    // times with the same string always produces identical tree structures.
+    if (policy) {
+      fprintf(stderr, "[ZPOLICY] Before canonicalize: %s\n", policy->toString().c_str());
+      // Print child node order
+      OpenABETreeNode* root = policy->getRootNode();
+      if (root && root->getNumSubnodes() > 0) {
+        fprintf(stderr, "[ZPOLICY] Root node type: %s, children count: %u\n",
+                OpenABETreeNode_ToString((zGateType)root->getNodeType()),
+                root->getNumSubnodes());
+        for (uint32_t i = 0; i < root->getNumSubnodes(); i++) {
+          OpenABETreeNode* child = root->getSubnode(i);
+          fprintf(stderr, "[ZPOLICY]   Child[%u]: %s\n", i, child->getLabel().c_str());
+        }
+      }
+      policy->canonicalize();
+      fprintf(stderr, "[ZPOLICY] After canonicalize: %s\n", policy->toString().c_str());
+      // Print child node order after canonicalization
+      if (root && root->getNumSubnodes() > 0) {
+        fprintf(stderr, "[ZPOLICY] After canonicalization - children count: %u\n",
+                root->getNumSubnodes());
+        for (uint32_t i = 0; i < root->getNumSubnodes(); i++) {
+          OpenABETreeNode* child = root->getSubnode(i);
+          fprintf(stderr, "[ZPOLICY]   Child[%u]: %s\n", i, child->getLabel().c_str());
+        }
+      }
+    }
+    return policy;
   } catch(OpenABE_ERROR & error) {
     cerr << "OpenABE Error: " << OpenABE_errorToString(error) << endl;
     return nullptr;
@@ -425,6 +455,31 @@ OpenABETreeNode::addSubnode(OpenABETreeNode *subnode) {
   this->m_numSubnodes++;
 }
 
+/*!
+ * Reorder subnodes to match the provided ordering.
+ * Used for canonicalization.
+ */
+void
+OpenABETreeNode::reorderSubnodes(const std::vector<OpenABETreeNode*>& new_order) {
+  if (new_order.size() != this->m_Subnodes.size()) {
+    fprintf(stderr, "ERROR: Reorder size mismatch\n");
+    return;
+  }
+
+  this->m_Subnodes = new_order;
+  this->m_numSubnodes = new_order.size();
+}
+
+/*!
+ * Replace all subnodes with a new set.
+ * Used for flattening associative operations during canonicalization.
+ */
+void
+OpenABETreeNode::replaceSubnodes(const std::vector<OpenABETreeNode*>& new_subnodes) {
+  this->m_Subnodes = new_subnodes;
+  this->m_numSubnodes = new_subnodes.size();
+}
+
 const char*
 OpenABETreeNode_ToString(zGateType type) {
   switch(type) {
@@ -459,6 +514,171 @@ std::vector<std::string> split(const std::string &s, char delim) {
   std::vector<std::string> elems;
   split(s, delim, elems);
   return elems;
+}
+
+/********************************************************************************
+ * Canonicalization implementation
+ ********************************************************************************/
+
+/*!
+ * Generate a canonical string representation of the policy.
+ * The canonical form ensures that logically equivalent policies
+ * produce identical strings.
+ */
+std::string
+OpenABEPolicy::toCanonicalString() const {
+  if (!this->m_rootNode) {
+    return "";
+  }
+
+  // Create a deep copy of the policy tree
+  OpenABEPolicy canonical_copy(*this);
+
+  // Canonicalize the copy
+  const_cast<OpenABEPolicy*>(&canonical_copy)->canonicalize();
+
+  // Return the string representation
+  return canonical_copy.toString();
+}
+
+/*!
+ * In-place canonicalization of the policy tree.
+ * Applies transformations to ensure consistent representation.
+ */
+void
+OpenABEPolicy::canonicalize() {
+  if (!this->m_rootNode) {
+    return;
+  }
+
+  canonicalizeNode(this->m_rootNode.get());
+}
+
+/*!
+ * Helper: Recursively canonicalize a tree node and its children.
+ */
+void
+OpenABEPolicy::canonicalizeNode(OpenABETreeNode* node) {
+  if (!node) {
+    return;
+  }
+
+  // Leaf nodes are already canonical
+  if (node->getNodeType() == GATE_TYPE_LEAF) {
+    return;
+  }
+
+  // First, recursively canonicalize all children
+  for (uint32_t i = 0; i < node->getNumSubnodes(); i++) {
+    canonicalizeNode(node->getSubnode(i));
+  }
+
+  // Then flatten associative operators if possible
+  flattenAssociative(node);
+
+  // Finally, sort children for commutative operators
+  sortChildren(node);
+}
+
+/*!
+ * Helper: Sort children of commutative gates (AND, OR) lexicographically.
+ */
+void
+OpenABEPolicy::sortChildren(OpenABETreeNode* node) {
+  if (!node) {
+    return;
+  }
+
+  zGateType nodeType = static_cast<zGateType>(node->getNodeType());
+
+  // Only sort for commutative operations: AND, OR, THRESHOLD
+  if (nodeType != GATE_TYPE_AND &&
+      nodeType != GATE_TYPE_OR &&
+      nodeType != GATE_TYPE_THRESHOLD) {
+    return;
+  }
+
+  if (node->getNumSubnodes() <= 1) {
+    return;
+  }
+
+  // Create a vector of child strings paired with their nodes
+  std::vector<std::pair<std::string, OpenABETreeNode*>> child_pairs;
+
+  for (uint32_t i = 0; i < node->getNumSubnodes(); i++) {
+    OpenABETreeNode* child = node->getSubnode(i);
+    child_pairs.push_back(std::make_pair(child->toString(), child));
+  }
+
+  // Sort by string representation
+  std::sort(child_pairs.begin(), child_pairs.end(),
+            [](const std::pair<std::string, OpenABETreeNode*>& a,
+               const std::pair<std::string, OpenABETreeNode*>& b) {
+              return a.first < b.first;
+            });
+
+  // Extract the sorted nodes
+  std::vector<OpenABETreeNode*> sorted_nodes;
+  for (const auto& pair : child_pairs) {
+    sorted_nodes.push_back(pair.second);
+  }
+
+  // Reorder the subnodes
+  node->reorderSubnodes(sorted_nodes);
+}
+
+/*!
+ * Helper: Flatten nested associative operators.
+ * For example: (a and (b and c)) -> (a and b and c)
+ */
+void
+OpenABEPolicy::flattenAssociative(OpenABETreeNode* node) {
+  if (!node) {
+    return;
+  }
+
+  zGateType nodeType = static_cast<zGateType>(node->getNodeType());
+
+  // Only flatten AND and OR gates
+  if (nodeType != GATE_TYPE_AND && nodeType != GATE_TYPE_OR) {
+    return;
+  }
+
+  // Check if any children have the same gate type
+  bool hasChildToFlatten = false;
+  for (uint32_t i = 0; i < node->getNumSubnodes(); i++) {
+    OpenABETreeNode* child = node->getSubnode(i);
+    if (child->getNodeType() == node->getNodeType()) {
+      hasChildToFlatten = true;
+      break;
+    }
+  }
+
+  if (!hasChildToFlatten) {
+    return;
+  }
+
+  // Collect all children, flattening those with the same gate type
+  std::vector<OpenABETreeNode*> new_children;
+
+  for (uint32_t i = 0; i < node->getNumSubnodes(); i++) {
+    OpenABETreeNode* child = node->getSubnode(i);
+
+    if (child->getNodeType() == node->getNodeType()) {
+      // Flatten: add this child's children directly
+      for (uint32_t j = 0; j < child->getNumSubnodes(); j++) {
+        new_children.push_back(child->getSubnode(j));
+      }
+      // Note: The flattened child node is not deleted here to avoid
+      // double-free issues. It will be cleaned up when the parent is destroyed.
+    } else {
+      // Keep as-is
+      new_children.push_back(child);
+    }
+  }
+
+  // Replace node's children with flattened list
+  node->replaceSubnodes(new_children);
 }
 
 }

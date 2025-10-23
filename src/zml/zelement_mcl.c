@@ -30,10 +30,7 @@ void zml_init() {
       fprintf(stderr, "MCL initialization failed: %d\n", ret);
       exit(1);
     }
-    fprintf(stderr, "[MCL INIT] MCL initialized successfully for BLS12-381\n");
     mcl_initialized = 1;
-  } else {
-    fprintf(stderr, "[MCL INIT] MCL already initialized\n");
   }
 }
 
@@ -386,18 +383,7 @@ void bp_map_op(const bp_group_t group, gt_ptr *gt, const g1_ptr *g1, const g2_pt
 // Random bignum generation
 // FIX Bug #7: bignum_t is mclBnFr struct, must pass by pointer for output!
 void zml_bignum_rand(bignum_t *a, const bignum_t *o) {
-  fprintf(stderr, "[zml_bignum_rand] Called\n");
   mclBnFr_setByCSPRNG(a);
-
-  // DEBUG: Check if result is zero
-  if (mclBnFr_isZero(a)) {
-    fprintf(stderr, "[zml_bignum_rand ERROR] Result is ZERO!\n");
-  } else {
-    char buf[256];
-    mclBnFr_getStr(buf, sizeof(buf), a, 10);
-    fprintf(stderr, "[zml_bignum_rand] Result: %s\n", buf);
-  }
-
   (void)o;  // MCL handles modular reduction automatically
 }
 
@@ -440,14 +426,8 @@ void g1_rand(g1_ptr *g) {
     return;
   }
 
-  int isZero = mclBnG1_isZero(g);
-  fprintf(stderr, "[G1_RAND DEBUG] After hashAndMapTo: isZero=%d\n", isZero);
-
   // Multiply by random scalar: g = generator * r
   mclBnG1_mul(g, g, &r);
-
-  isZero = mclBnG1_isZero(g);
-  fprintf(stderr, "[G1_RAND DEBUG] After mul: isZero=%d\n", isZero);
 }
 
 // G2 random generation
@@ -460,7 +440,6 @@ void g2_rand(g2_ptr *g) {
   // Get a fixed base point by hashing a known string
   int ret = mclBnG2_hashAndMapTo(g, "OpenABE-G2-base", 15);
   if (ret != 0) {
-    fprintf(stderr, "WARNING: g2_rand: mclBnG2_hashAndMapTo failed with code %d\n", ret);
     // Fallback: just return - the element will be invalid
     return;
   }

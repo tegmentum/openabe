@@ -251,6 +251,12 @@ OpenABEContextCPWaters::encryptKEM(OpenABERNG *rng, const string &mpkID,
       OpenABE_LOG_AND_THROW("Encryption input must be a Policy",
                         OpenABE_ERROR_INVALID_INPUT);
     }
+
+    // CRITICAL FIX FOR BUG #15: Policy normalization is handled in the CCA layer
+    // The policy passed to this function is already normalized by the CCA generic transform,
+    // so we can use it directly. Normalizing again here would be redundant and could
+    // potentially affect the deterministic PRNG state.
+
     // Load the master public key
     shared_ptr<OpenABEKey> MPK = this->getKeystore()->getPublicKey(mpkID);
     if (MPK == nullptr) {
@@ -271,7 +277,7 @@ OpenABEContextCPWaters::encryptKEM(OpenABERNG *rng, const string &mpkID,
 
     // Allocate the ciphertext object and add the policy and key length
     OpenABEByteString pol;
-    pol = policy->toCompactString();
+    pol = policy->toCanonicalString();
     ciphertext->setComponent("policy", &pol);
 
     // Compute Cprime = g1^s
@@ -362,15 +368,35 @@ OpenABEContextCPWaters::decryptKEM(const string &mpkID, const string &keyID,
       coeff = it->second.element();
       attr_key = OpenABEHashKey(it->first);
       attr_deckey = OpenABEHashKey(it->second.label());
+
       Kx = decKey->getG1(OpenABEMakeElementLabel("KX", attr_deckey));
+      ASSERT_NOTNULL(Kx);
       Cx = ciphertext->getG1(OpenABEMakeElementLabel("C", attr_key));
       ASSERT_NOTNULL(Cx);
       Dx = ciphertext->getG2(OpenABEMakeElementLabel("D", attr_key));
       ASSERT_NOTNULL(Dx);
+
+      // DEBUG: Check elements BEFORE exponentiation
+#if defined(BP_WITH_MCL)
+      fprintf(stderr, "[DECRYPT_DEBUG] attr_key='%s'\n", attr_key.c_str());
+      fprintf(stderr, "[DECRYPT_DEBUG] Kx before exp: isZero=%d\n",
+              mclBnG1_isZero(&Kx->m_G1));
+      fprintf(stderr, "[DECRYPT_DEBUG] Cx before exp: isZero=%d\n",
+              mclBnG1_isZero(&Cx->m_G1));
+      fprintf(stderr, "[DECRYPT_DEBUG] Dx: isZero=%d\n",
+              mclBnG2_isZero(&Dx->m_G2));
+#endif
+
       prod1 *= (Cx->exp(coeff));
-      // G1 Kxpr = Kx->exp(coeff);
-      // prodT *= this->getPairing()->pairing(Kxpr,  *Dx);
-      g1s.push_back(Kx->exp(coeff));
+      G1 kx_exp = Kx->exp(coeff);
+
+      // DEBUG: Check result AFTER exponentiation
+#if defined(BP_WITH_MCL)
+      fprintf(stderr, "[DECRYPT_DEBUG] Kx after exp: isZero=%d\n",
+              mclBnG1_isZero(&kx_exp.m_G1));
+#endif
+
+      g1s.push_back(kx_exp);
       g2s.push_back(*Dx);
     }
 

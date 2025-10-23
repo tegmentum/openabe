@@ -1275,7 +1275,7 @@ void StandardPairingSerializer::extractG1Coordinates(const G1& point, bignum_t x
     uint8_t buffer[fp_size * 3];  // x, y, z in Jacobian
 
     // Serialize the whole G1 point
-    size_t written = mclBnG1_serialize(buffer, sizeof(buffer), point.m_G1);
+    size_t written = mclBnG1_serialize(buffer, sizeof(buffer), &point.m_G1);
     if (written == 0) {
         throw OpenABE_ERROR_SERIALIZATION_FAILED;
     }
@@ -1284,7 +1284,7 @@ void StandardPairingSerializer::extractG1Coordinates(const G1& point, bignum_t x
     // We need affine coordinates, so deserialize to temp and extract
     // For now, use MCL's Fp serialization on the x and y fields directly
     mclBnG1 temp;
-    memcpy(&temp, point.m_G1, sizeof(mclBnG1));
+    memcpy(&temp, &point.m_G1, sizeof(mclBnG1));
 
     // Normalize the point (convert Jacobian to affine)
     // MCL provides normalized access via mclBnG1_normalize() - but it's not in public API
@@ -1332,7 +1332,7 @@ bool StandardPairingSerializer::isG1AtInfinity(const G1& point) {
 #if defined(BP_WITH_OPENSSL)
     return G1_ELEM_is_at_infinity(GET_BP_GROUP(point.bgroup), point.m_G1);
 #elif defined(BP_WITH_MCL)
-    return mclBnG1_isZero(point.m_G1);
+    return mclBnG1_isZero(&point.m_G1);
 #else
     return ep_is_infty(point.m_G1);
 #endif
@@ -1342,7 +1342,7 @@ void StandardPairingSerializer::setG1ToInfinity(G1& point) {
 #if defined(BP_WITH_OPENSSL)
     G1_ELEM_set_to_infinity(GET_BP_GROUP(point.bgroup), point.m_G1);
 #elif defined(BP_WITH_MCL)
-    mclBnG1_clear(point.m_G1);
+    mclBnG1_clear(&point.m_G1);
 #else
     ep_set_infty(point.m_G1);
 #endif
@@ -1389,7 +1389,7 @@ bool StandardPairingSerializer::isG2AtInfinity(const G2& point) {
 #if defined(BP_WITH_OPENSSL)
     return G2_ELEM_is_at_infinity(GET_BP_GROUP(point.bgroup), point.m_G2);
 #elif defined(BP_WITH_MCL)
-    return mclBnG2_isZero(point.m_G2);
+    return mclBnG2_isZero(&point.m_G2);
 #else
     return ep2_is_infty(const_cast<G2&>(point).m_G2);
 #endif
@@ -1399,7 +1399,7 @@ void StandardPairingSerializer::setG2ToInfinity(G2& point) {
 #if defined(BP_WITH_OPENSSL)
     G2_ELEM_set_to_infinity(GET_BP_GROUP(point.bgroup), point.m_G2);
 #elif defined(BP_WITH_MCL)
-    mclBnG2_clear(point.m_G2);
+    mclBnG2_clear(&point.m_G2);
 #else
     ep2_set_infty(point.m_G2);
 #endif
@@ -1492,7 +1492,7 @@ void LegacySerializer::convertLegacyGT(OpenABEByteString& out, const OpenABEByte
                                        std::shared_ptr<BPGroup> bgroup) {
     GT temp(bgroup);
     OpenABEByteString legacy_data = in;
-    gt_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, temp.m_GT);
+    gt_convert_to_point(GET_BP_GROUP(bgroup), legacy_data, &temp.m_GT);
     StandardPairingSerializer::serializeGT(out, temp, GT_CYCLOTOMIC_COMPRESSED, true);
 }
 

@@ -3,7 +3,7 @@ include ../Makefile.common
 
 CUR_DIR = .
 OBJS    = common.o
-BINOBJS = oabe_setup oabe_keygen oabe_enc oabe_dec oabe_curves
+BINOBJS = oabe_setup oabe_keygen oabe_enc oabe_dec
 OABE_LIB = $(OABE_LIB_ROOT)/$(OABELIB)
 
 all: $(BINOBJS)

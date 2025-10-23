@@ -170,7 +170,8 @@ const std::string DEFAULT_MATH_LIB = "OpenSSL";
 #else /* WITH RELIC */
 const std::string DEFAULT_MATH_LIB = "RELIC";
 #endif
-const std::string DEFAULT_BP_PARAM = "BN_P254";
+const std::string DEFAULT_BP_PARAM = "BLS12_P381";
+//const std::string DEFAULT_BP_PARAM = "BN_P254";
 //const std::string DEFAULT_BP_PARAM = "BN_P382";
 const std::string DEFAULT_EC_PARAM = "NIST_P256";
 

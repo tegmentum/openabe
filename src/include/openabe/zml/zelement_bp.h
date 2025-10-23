@@ -74,14 +74,28 @@ void ro_error(void);
 void g1_map_op(const bp_group_t group, g1_ptr g, oabe::OpenABEByteString& msg);
 const std::string g1_point_to_string(bp_group_t group, const g1_ptr p);
 void g1_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString & s, const g1_ptr p);
+// FIX Bug #16: For MCL, g1_ptr is struct value, must pass by reference for deserialization
+#if defined(BP_WITH_MCL)
+void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, g1_ptr& p, uint8_t curve_id);
+void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, g1_ptr& p);
+#else
+void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, g1_ptr p, uint8_t curve_id);
 void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, g1_ptr p);
+#endif
 
+// FIX Bug #16: For MCL, g2_ptr is struct value, must pass by reference for deserialization
+#if defined(BP_WITH_MCL)
+void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, g2_ptr& p, uint8_t curve_id);
+void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, g2_ptr& p);
+#else
+void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, g2_ptr p, uint8_t curve_id);
 void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, g2_ptr p);
+#endif
 const std::string g2_point_to_string(bp_group_t group, const g2_ptr p);
 void g2_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString & s, g2_ptr p);
 
-void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, gt_ptr p);
-void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString& s, gt_ptr p, int should_compress);
+void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString& s, gt_ptr *p);
+void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString& s, const gt_ptr *p, int should_compress);
 const std::string gt_point_to_string(const bp_group_t group, gt_ptr p);
 
 /// \class	ZP

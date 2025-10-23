@@ -50,7 +50,7 @@
 #define DEFAULT_SYM_KEY_BITS     DEFAULT_SYM_KEY_BYTES*8
 #define SHA256_LEN               32 // SHA-256
 #define OpenABE_KDF_ITERATION_COUNT  10000
-#define MAX_BUFFER_SIZE          512
+#define MAX_BUFFER_SIZE          1024  // Increased for MCL BLS12-381 GT serialization (needs 576 bytes)
 #define MAX_INT_BITS             32  // For numerical attributes (in policy/attribute list)
 
 // Data structures     // OpenABE_ELEMENT_UINT = 0x2D,

@@ -103,22 +103,40 @@ void WriteToFile(const char* filename, string outputStr)
 string ReadFile(const char* filename)
 {
     ifstream input(filename);
-    string line = "";
-    // read everthing between the headers
+    string line;
+    string begin_header = "";
+    string end_header = "";
+
+    // First pass: find the begin/end headers
     if (input.is_open()) {
-    	while(getline(input, line)) {
-    		/* finish this
-    		if(line.compare(begin_header) == 0)
-    		   continue;
-    		*/
-    		if(line.find(BLOCK) == std::string::npos) {
-    			break;
-    		}
-    	}
-    	input.close();
+        while(getline(input, line)) {
+            if(line.find("BEGIN") != std::string::npos && line.find("BLOCK") != std::string::npos) {
+                begin_header = line;
+                break;
+            }
+        }
+        input.close();
     }
 
-    return Base64Decode(line);
+    if (begin_header.empty()) {
+        cerr << "[ReadFile] No header found in file: " << filename << endl;
+        return "";  // No header found
+    }
+
+    // Derive end_header from begin_header
+    end_header = begin_header;
+    size_t pos = end_header.find("BEGIN");
+    if (pos != std::string::npos) {
+        end_header.replace(pos, 5, "END");
+    }
+
+    cerr << "[ReadFile] begin_header='" << begin_header << "'" << endl;
+    cerr << "[ReadFile] end_header='" << end_header << "'" << endl;
+
+    // Use ReadBlockFromFile to read multi-line base64 between headers
+    string result = ReadBlockFromFile(begin_header.c_str(), end_header.c_str(), filename);
+    cerr << "[ReadFile] result size=" << result.size() << " bytes" << endl;
+    return result;
 }
 
 string ReadBlockFromFile(const char* begin_header, const char* end_header, const char* filename)
@@ -136,7 +154,7 @@ string ReadBlockFromFile(const char* begin_header, const char* end_header, const
     		else if(line.compare(end_header) == 0) {
     			break;
     		}
-    		if(found_header) block = line;
+    		if(found_header) block += line;  // FIX: Append lines, don't replace
     	}
     	input.close();
     }

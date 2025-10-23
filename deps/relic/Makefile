@@ -59,7 +59,7 @@ relic-$(VERSION)/.built: relic-${VERSION}
 relic-$(VERSION): relic-$(VERSION).tar.gz
 	tar xf $^
 	cd relic-$(VERSION) && (patch -p1 < ../blake2_fix.patch || true)
-	cd relic-$(VERSION) && chmod +x ../apply_bls12_381_scalar_fix.sh && ../apply_bls12_381_scalar_fix.sh
+	cd relic-$(VERSION) && (patch -p1 < ../disable_glv_bls12_381.patch || true)
 
 relic-$(VERSION).tar.gz:
 	./download_relic.sh relic-$(VERSION)

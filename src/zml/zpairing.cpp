@@ -116,10 +116,13 @@ OpenABE_pairingParamsForSecurityLevel(OpenABESecurityLevel securityLevel)
  */
 
 OpenABEPairing::OpenABEPairing(const string &pairingParams) : ZObject()
-{    
+{
   AssertLibInit();
   // Look up the pairing parameters and set them
+  this->pairingParams = pairingParams;  // Store the pairing parameters string
   this->curveID = getPairingCurveID(pairingParams);
+  fprintf(stderr, "DEBUG OpenABEPairing constructor: pairingParams='%s', curveID=%d\n",
+          pairingParams.c_str(), this->curveID);
 
   this->bpgroup  = make_shared<BPGroup>(this->curveID);
   zml_bignum_init(&this->order);
@@ -265,7 +268,12 @@ OpenABEPairing::hashToG1(OpenABEByteString& keyPrefix, string msg)
   oabe::sha256(digest, str);
   uint8_t *xstr = (uint8_t *)digest.c_str();
   size_t xstr_len = digest.size();
+#if defined(BP_WITH_MCL)
+  // FIX Bug #9: Pass pointers for MCL - CRITICAL for hash-to-G1
+  g1_map_op(GET_BP_GROUP(this->bpgroup), &g1.m_G1, xstr, xstr_len);
+#else
   g1_map_op(GET_BP_GROUP(this->bpgroup), g1.m_G1, xstr, xstr_len);
+#endif
   return g1;
 }
 
@@ -273,7 +281,12 @@ GT
 OpenABEPairing::pairing(G1& g1, G2& g2)
 {
   GT result(this->bpgroup);
+#if defined(BP_WITH_MCL)
+  // FIX Bug #9: Pass pointers for MCL
+  bp_map_op(GET_BP_GROUP(this->bpgroup), &result.m_GT, &g1.m_G1, &g2.m_G2);
+#else
   bp_map_op(GET_BP_GROUP(this->bpgroup), result.m_GT, g1.m_G1, g2.m_G2);
+#endif
   if(result.isInfinity()) {
     result.setIdentity();
   }
@@ -335,6 +348,8 @@ getPairingCurveID(const string &paramsID)
     curveID = OpenABE_BN_P256_ID;
   } else if (paramsID == "BN_P382") {
     curveID = OpenABE_BN_P382_ID;
+  } else if (paramsID == "BLS12_P381" || paramsID == "BLS12_381") {
+    curveID = OpenABE_BLS12_P381_ID;
   } else {
     // Unrecognized parameter type - return sentinel
     return OpenABE_NONE_ID;

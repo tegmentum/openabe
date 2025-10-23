@@ -117,6 +117,10 @@ public:
   void setThresholdValue(uint32_t k) { if (this->m_Subnodes.size() > 0) { this->m_thresholdValue = k; } }
   uint32_t getThresholdValue();
   std::string toString();
+
+  // Canonicalization support methods
+  void reorderSubnodes(const std::vector<OpenABETreeNode*>& new_order);
+  void replaceSubnodes(const std::vector<OpenABETreeNode*>& new_subnodes);
 };
 
 ///
@@ -171,6 +175,10 @@ public:
     return this->m_attrCompleteSet;
   }
 
+  // Canonicalization methods
+  std::string toCanonicalString() const;
+  void canonicalize();
+
 #if 0
   void		ConstructTestPolicy();
 #endif
@@ -180,6 +188,12 @@ public:
   }
 
   void deserialize(const OpenABEByteString &input);
+
+private:
+  // Helper methods for canonicalization
+  void canonicalizeNode(OpenABETreeNode* node);
+  void sortChildren(OpenABETreeNode* node);
+  void flattenAssociative(OpenABETreeNode* node);
 };
 
 // split a string based on a delimiter and return a vector

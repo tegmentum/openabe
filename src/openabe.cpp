@@ -189,9 +189,11 @@ OpenABEContextABE *OpenABE_createContextABE(unique_ptr<OpenABERNG> *rng,
    * calls won't require a switch statement. */
   switch (scheme_type) {
   case OpenABE_SCHEME_CP_WATERS:
+  case OpenABE_SCHEME_CP_WATERS_CCA:  // CCA variant uses same base context
     newContext = (OpenABEContextABE *)new OpenABEContextCPWaters(std::move(*rng));
     break;
   case OpenABE_SCHEME_KP_GPSW:
+  case OpenABE_SCHEME_KP_GPSW_CCA:  // CCA variant uses same base context
     newContext = (OpenABEContextABE *)new OpenABEContextKPGPSW(std::move(*rng));
     break;
   default:
