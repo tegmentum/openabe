@@ -297,9 +297,10 @@ void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s, cons
   size_t len = GT_ELEM_elem2oct(group, *p, buf, MAX_BUFFER_SIZE, NULL);
   s.appendArray(buf, len);
 #else
-  size_t len = gt_elem_len(*p, should_compress);
+  // FIX Bug #18: For RELIC with BLS12-381, GT functions accept pointers
+  size_t len = gt_elem_len(p, should_compress);
   s.fillBuffer(0, len);
-  gt_elem_out(*p, s.getInternalPtr(), len, should_compress);
+  gt_elem_out(p, s.getInternalPtr(), len, should_compress);
 //  size_t len = gt_size_bin(p, should_compress);
 //  // cout << "G1::serialize => " << len << endl;
 //  s.fillBuffer(0, len);
@@ -325,7 +326,8 @@ void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr *p
   if (curve_id != 0) {
     bp_ensure_curve_params(curve_id);
   }
-  gt_elem_in(*p, xstr, xstr_len);
+  // FIX Bug #18: For RELIC with BLS12-381, GT functions accept pointers
+  gt_elem_in(p, xstr, xstr_len);
   if (!oabe::checkRelicError()) { fprintf(stderr, "%s:%s:%d: '%s'\
 ", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED)); return; }
 #endif

@@ -116,6 +116,14 @@ void zml_bignum_setzero(bignum_t a) {
 int zml_bignum_countbytes(const bignum_t a) {
 #if defined(BN_WITH_OPENSSL)
     return BN_num_bytes(a);
+#elif defined(BP_WITH_MCL)
+    // FIX Bug #15: MCL bignum_t is mclBnFr, use MCL serialization to get byte count
+    uint8_t buf[64];  // Fr elements are at most 32 bytes for BLS12-381
+    size_t len = mclBnFr_serialize(buf, sizeof(buf), &a);
+    char str[256];
+    mclBnFr_getStr(str, sizeof(str), &a, 10);
+    fprintf(stderr, "[zml_bignum_countbytes] MCL: value=%s, serialized_len=%zu\n", str, len);
+    return (int)len;
 #else
     return bn_size_bin(a);
 #endif
@@ -502,6 +510,26 @@ int bp_group_init(bp_group_t *group, uint8_t id) {
     ep_param_set(BN_P382);
     ep2_curve_set_twist(twist);
     break;
+  case OpenABE_BLS12_P377_ID:
+    ep_param_set(B12_P377);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P381_ID:
+    ep_param_set(B12_P381);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P446_ID:
+    ep_param_set(B12_P446);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P455_ID:
+    ep_param_set(B12_P455);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P638_ID:
+    ep_param_set(B12_P638);
+    ep2_curve_set_twist(twist);
+    break;
 #endif
   default:
       return -1;
@@ -531,6 +559,11 @@ void bp_ensure_curve_params(uint8_t id) {
       case OpenABE_BN_P254_ID: expected_id = BN_P254; break;
       case OpenABE_BN_P256_ID: expected_id = BN_P256; break;
       case OpenABE_BN_P382_ID: expected_id = BN_P382; break;
+      case OpenABE_BLS12_P377_ID: expected_id = B12_P377; break;
+      case OpenABE_BLS12_P381_ID: expected_id = B12_P381; break;
+      case OpenABE_BLS12_P446_ID: expected_id = B12_P446; break;
+      case OpenABE_BLS12_P455_ID: expected_id = B12_P455; break;
+      case OpenABE_BLS12_P638_ID: expected_id = B12_P638; break;
     }
 
     if (ctx->ep_id == expected_id) {
@@ -560,6 +593,26 @@ void bp_ensure_curve_params(uint8_t id) {
     break;
   case OpenABE_BN_P382_ID:
     ep_param_set(BN_P382);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P377_ID:
+    ep_param_set(B12_P377);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P381_ID:
+    ep_param_set(B12_P381);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P446_ID:
+    ep_param_set(B12_P446);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P455_ID:
+    ep_param_set(B12_P455);
+    ep2_curve_set_twist(twist);
+    break;
+  case OpenABE_BLS12_P638_ID:
+    ep_param_set(B12_P638);
     ep2_curve_set_twist(twist);
     break;
   default:
@@ -804,16 +857,18 @@ void g2_elem_out(g2_ptr g, uint8_t *out, size_t len) {
 #endif
 }
 
-size_t gt_elem_len(gt_ptr g, int should_compress) {
-  return fp12_size_bin(g, should_compress);
+// FIX Bug #18: For RELIC with BLS12-381, gt_ptr is fp12_t (array type)
+// Functions now accept pointers for consistency with MCL
+size_t gt_elem_len(const gt_ptr *g, int should_compress) {
+  return fp12_size_bin(*g, should_compress);
 }
 
-void gt_elem_in(gt_ptr g, uint8_t *in, size_t len) {
-    fp12_read_bin(g, in, (int)len);
+void gt_elem_in(gt_ptr *g, uint8_t *in, size_t len) {
+    fp12_read_bin(*g, in, (int)len);
 }
 
-void gt_elem_out(gt_ptr g, uint8_t *out, size_t len, int should_compress) {
-  fp12_write_bin(out, len, g, should_compress);
+void gt_elem_out(const gt_ptr *g, uint8_t *out, size_t len, int should_compress) {
+  fp12_write_bin(out, len, *g, should_compress);
 }
 
 #endif
@@ -845,8 +900,8 @@ void g2_mul_op(bp_group_t group, g2_ptr z, g2_ptr x, bignum_t r) {
 #if defined(BP_WITH_OPENSSL)
   G2_ELEM_mul(group, z, NULL, x, r, NULL);
 #else
-  // g2_mul(z, x, r);
-  ep2_mul_lwnaf(z, x, r);
+  // Use BP-labeled function for G2 scalar multiplication
+  g2_mul(z, x, r);
 #endif
 }
 

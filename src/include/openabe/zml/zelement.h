@@ -118,6 +118,51 @@ typedef mclBnFr bignum_t;
 // for structs. Use a macro that does struct assignment instead.
 #define zml_bignum_copy(to, from)         ((to) = (from))
 
+// FIX Bug #15: MCL bignum_t is struct (mclBnFr), arithmetic ops must use direct MCL calls
+// The function signatures pass bignum_t by value, creating local copies.
+// MCL functions modify the local copy, but callers never see the result.
+// Solution: Override with macros that correctly pass addresses to MCL.
+#define zml_bignum_add(r, x, y, o)        mclBnFr_add(&(r), &(x), &(y))
+#define zml_bignum_sub(r, x, y)           mclBnFr_sub(&(r), &(x), &(y))
+#define zml_bignum_sub_order(r, x, y, o)  mclBnFr_sub(&(r), &(x), &(y))
+#define zml_bignum_mul(r, x, y, o)        mclBnFr_mul(&(r), &(x), &(y))
+#define zml_bignum_div(r, x, y, o)        do { mclBnFr _inv; mclBnFr_clear(&_inv); mclBnFr_inv(&_inv, &(y)); mclBnFr_mul(&(r), &(x), &_inv); } while(0)
+#define zml_bignum_negate(b, o)           mclBnFr_neg(&(b), &(b))
+#define zml_bignum_mod(x, o)              /* no-op: MCL Fr elements are already reduced */
+#define zml_bignum_exp(r, x, y, o)        do { \
+    mclBnFr _result, _base; \
+    mclBnFr_setInt(&_result, 1); \
+    memcpy(&_base, &(x), sizeof(mclBnFr)); \
+    char _y_str[256]; \
+    mclBnFr_getStr(_y_str, sizeof(_y_str), &(y), 10); \
+    unsigned long _exp = strtoul(_y_str, NULL, 10); \
+    for (unsigned long _i = 0; _i < _exp; _i++) { \
+        mclBnFr_mul(&_result, &_result, &_base); \
+    } \
+    memcpy(&(r), &_result, sizeof(mclBnFr)); \
+} while(0)
+#define zml_bignum_lshift(r, a, n)        do { \
+    mclBnFr _two, _power; \
+    mclBnFr_setInt(&_two, 2); \
+    mclBnFr_setInt(&_power, 1); \
+    for (int _i = 0; _i < (n); _i++) { \
+        mclBnFr_mul(&_power, &_power, &_two); \
+    } \
+    mclBnFr_mul(&(r), &(a), &_power); \
+} while(0)
+#define zml_bignum_rshift(r, a, n)        do { \
+    mclBnFr _two, _power, _inv; \
+    mclBnFr_setInt(&_two, 2); \
+    mclBnFr_setInt(&_power, 1); \
+    for (int _i = 0; _i < (n); _i++) { \
+        mclBnFr_mul(&_power, &_power, &_two); \
+    } \
+    mclBnFr_inv(&_inv, &_power); \
+    mclBnFr_mul(&(r), &(a), &_inv); \
+} while(0)
+#define zml_bignum_mod_inv(a, b, o)       (mclBnFr_inv(&(a), &(b)), 1)
+#define zml_bignum_setzero(a)             mclBnFr_clear(&(a))
+
 #define BN_CMP_LT                     -1
 #define BN_CMP_EQ                     0
 #define BN_CMP_GT                     1
@@ -181,8 +226,14 @@ typedef EC_GROUP* ec_group_t;
 #define ec_get_ref(a)           a
 /* END of OpenSSL macro definitions */
 
+#elif defined(BP_WITH_MCL)
+/* When using MCL for BP operations, EC operations are not used.
+ * Define dummy types for compatibility with function declarations. */
+typedef void* ec_point_t;
+typedef void* ec_group_t;
+
 #else
-/* if EC_WITH_OPENSSL not specifically defined,
+/* if EC_WITH_OPENSSL and BP_WITH_MCL not specifically defined,
  * then we use RELIC EC operations by default */
 
  /* BEGIN RELIC macro definitions */
@@ -220,8 +271,37 @@ void zml_bignum_copy(bignum_t to, const bignum_t from);
 #endif
 int zml_bignum_sign(const bignum_t a);
 int zml_bignum_cmp(const bignum_t a, const bignum_t b);
-void zml_bignum_setzero(bignum_t a);
 int zml_bignum_countbytes(const bignum_t a);
+
+// Temporarily undefine macros to allow function declarations for non-MCL backends
+#if defined(BN_WITH_MCL)
+#pragma push_macro("zml_bignum_setzero")
+#pragma push_macro("zml_bignum_mod_inv")
+#pragma push_macro("zml_bignum_mod")
+#pragma push_macro("zml_bignum_negate")
+#pragma push_macro("zml_bignum_add")
+#pragma push_macro("zml_bignum_sub")
+#pragma push_macro("zml_bignum_sub_order")
+#pragma push_macro("zml_bignum_mul")
+#pragma push_macro("zml_bignum_div")
+#pragma push_macro("zml_bignum_exp")
+#pragma push_macro("zml_bignum_lshift")
+#pragma push_macro("zml_bignum_rshift")
+#undef zml_bignum_setzero
+#undef zml_bignum_mod_inv
+#undef zml_bignum_mod
+#undef zml_bignum_negate
+#undef zml_bignum_add
+#undef zml_bignum_sub
+#undef zml_bignum_sub_order
+#undef zml_bignum_mul
+#undef zml_bignum_div
+#undef zml_bignum_exp
+#undef zml_bignum_lshift
+#undef zml_bignum_rshift
+#endif
+
+void zml_bignum_setzero(bignum_t a);
 int zml_bignum_mod_inv(bignum_t a, const bignum_t b, const bignum_t o);
 void zml_bignum_mod(bignum_t x, const bignum_t o);
 void zml_bignum_negate(bignum_t b, const bignum_t o);
@@ -235,6 +315,21 @@ void zml_bignum_exp(bignum_t r, const bignum_t x, const bignum_t y, const bignum
 // logical operators for bignums
 void zml_bignum_lshift(bignum_t r, const bignum_t a, int n);
 void zml_bignum_rshift(bignum_t r, const bignum_t a, int n);
+
+#if defined(BN_WITH_MCL)
+#pragma pop_macro("zml_bignum_rshift")
+#pragma pop_macro("zml_bignum_lshift")
+#pragma pop_macro("zml_bignum_exp")
+#pragma pop_macro("zml_bignum_div")
+#pragma pop_macro("zml_bignum_mul")
+#pragma pop_macro("zml_bignum_sub_order")
+#pragma pop_macro("zml_bignum_sub")
+#pragma pop_macro("zml_bignum_add")
+#pragma pop_macro("zml_bignum_negate")
+#pragma pop_macro("zml_bignum_mod")
+#pragma pop_macro("zml_bignum_mod_inv")
+#pragma pop_macro("zml_bignum_setzero")
+#endif
 
 // NOTE: must free the memory that is returned from bignum_toHex and bignum_toDec using bignum_safe_free
 char *zml_bignum_toHex(const bignum_t b, int *length);
@@ -314,9 +409,11 @@ typedef mclBnGT gt_ptr;
 
 #define is_elem_null(e)   FALSE
 
-#define g1_cmp(a, b)   (memcmp(&a, &b, sizeof(mclBnG1)) == 0 ? CMP_EQ : CMP_NE)
-#define g2_cmp(a, b)   (memcmp(&a, &b, sizeof(mclBnG2)) == 0 ? CMP_EQ : CMP_NE)
-#define gt_cmp(a, b)   (memcmp(&a, &b, sizeof(mclBnGT)) == 0 ? CMP_EQ : CMP_NE)
+// FIX Bug #17: Use MCL's proper comparison functions instead of memcmp
+// MCL's isEqual functions return non-zero (true) if equal, 0 (false) if not equal
+#define g1_cmp(a, b)   (mclBnG1_isEqual(&(a), &(b)) ? CMP_EQ : CMP_NE)
+#define g2_cmp(a, b)   (mclBnG2_isEqual(&(a), &(b)) ? CMP_EQ : CMP_NE)
+#define gt_cmp(a, b)   (mclBnGT_isEqual(&(a), &(b)) ? CMP_EQ : CMP_NE)
 
 // MCL group operation macros
 #define g1_neg(r, p)         mclBnG1_neg(&r, &p)
@@ -444,9 +541,18 @@ void g2_elem_out(const g2_ptr *g, uint8_t *out, size_t len);
 void g2_elem_in(g2_ptr g, uint8_t *in, size_t len);
 void g2_elem_out(g2_ptr g, uint8_t *out, size_t len);
 #endif
-size_t gt_elem_len(gt_ptr g, int should_compress);
-void gt_elem_in(gt_ptr g, uint8_t *in, size_t len);
-void gt_elem_out(gt_ptr g, uint8_t *out, size_t len, int should_compress);
+#if defined(BP_WITH_MCL)
+// FIX Bug #9: For MCL, gt_ptr is struct so must pass by pointer
+size_t gt_elem_len(const gt_ptr *g, int should_compress);
+void gt_elem_in(gt_ptr *g, uint8_t *in, size_t len);
+void gt_elem_out(const gt_ptr *g, uint8_t *out, size_t len, int should_compress);
+#else
+// FIX Bug #18: For RELIC with BLS12-381, gt_ptr is fp12_t (multidimensional array)
+// Must pass by pointer to handle array types correctly
+size_t gt_elem_len(const gt_ptr *g, int should_compress);
+void gt_elem_in(gt_ptr *g, uint8_t *in, size_t len);
+void gt_elem_out(const gt_ptr *g, uint8_t *out, size_t len, int should_compress);
+#endif
 #endif
 
 // ZML abstract methods for G2
@@ -479,7 +585,9 @@ int gt_is_unity_check(const bp_group_t group, gt_ptr r);
 #endif
 
 // GT helper functions
+#if defined(BP_WITH_MCL)
 int gt_is_unity(const gt_ptr a);
+#endif
 
 // ZML (pairings & multi-pairings)
 #if defined(BP_WITH_MCL)
