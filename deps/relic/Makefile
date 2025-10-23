@@ -19,10 +19,13 @@ EC_TMP=$(shell mktemp -d tmp$(EC_LABEL)-XXXX)
 EC_HDR_PREFIX=_$(EC_LABEL)
 
 # Options: BN254 or BN382 (ARITH=x64-asm-382)
-BN_CURVE=254
+# Use 381 for BLS12-381 support
+BN_CURVE=381
 EC_CURVE=256
 
-all: package relic-$(VERSION)/.built
+all: relic-$(VERSION)/.built
+
+.NOTPARALLEL: relic-$(VERSION)
 
 # We remove the VERSION define from (the installed) relic_conf.h
 # because this conflicts with other libraries.  Actually, they
@@ -34,16 +37,16 @@ all: package relic-$(VERSION)/.built
 #-DLABEL="$(BP_LABEL)"
 relic-$(VERSION)/.built: relic-${VERSION}
 	cd $(BP_TMP); \
-	CFLAGS="-I$(DEPS_INSTALL_ZROOT)/include" $(CMAKE_VARS) COMP="-O2 -funroll-loops -fomit-frame-pointer -Wno-incompatible-pointer-types -Wno-unused-function -Wno-implicit-function-declaration -Wno-incompatible-pointer-types-discards-qualifiers" cmake $(COMPILER_VARS) -DCMAKE_OSX_ARCHITECTURES="$(ARCH_FLAG)" -DCMAKE_PREFIX_PATH="$(DEPS_INSTALL_ZROOT)" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_C_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_CXX_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_EXE_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_SHARED_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_INSTALL_PREFIX:PATH=$(DEPS_INSTALL_ZROOT) -DOPSYS=$(RELIC_OS) -DARCH="$(RELIC_ARCH)" -DWSIZE=64 \
-	-DWITH="BN;DV;FP;FPX;EP;EPX;PP;PC;MD" -DCHECK=off -DVERBS=off -DDEBUG=off -DMULTI=PTHREAD -DBENCH=0 -DTESTS=10 -DARITH=easy -DFP_PRIME=512 -DBN_PRECI=512 \
-	-DFP_QNRES=on -DEP_METHD="PROJC;BASIC;COMBS;INTER;SSWUM" -DFP_METHD="BASIC;COMBA;COMBA;MONTY;LOWER;JMPDS;SLIDE" -DFPX_METHD="INTEG;INTEG;LAZYR" -DPP_METHD="LAZYR;OATEP" \
-	-DRLC_WIDTH=8 -DRLC_DEPTH=8 -DSEED="UDEV" -DRAND="CALL" ../$<; \
+	$(CMAKE_VARS) COMP="-O2 -funroll-loops -fomit-frame-pointer -Wno-incompatible-pointer-types -Wno-unused-function -Wno-implicit-function-declaration -Wno-incompatible-pointer-types-discards-qualifiers" cmake $(COMPILER_VARS) -DCMAKE_OSX_ARCHITECTURES="$(ARCH_FLAG)" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_C_FLAGS="$(CCFLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)" -DCMAKE_INSTALL_PREFIX:PATH=$(DEPS_INSTALL_ZROOT) -DOPSYS=$(RELIC_OS) -DARCH="$(RELIC_ARCH)" -DWSIZE=64 \
+	-DWITH="BN;DV;FP;FPX;EP;EPX;PP;PC;MD" -DCHECK=off -DVERBS=off -DDEBUG=off -DMULTI=PTHREAD -DBENCH=0 -DTESTS=10 -DARITH=easy -DFP_PRIME=$(BN_CURVE) -DBN_PRECI=1024 \
+	-DFP_QNRES=on -DEP_METHD="PROJC;LWNAF;COMBS;INTER;SSWUM" -DFP_METHD="BASIC;COMBA;COMBA;MONTY;LOWER;JMPDS;SLIDE" -DFPX_METHD="INTEG;INTEG;LAZYR" -DPP_METHD="LAZYR;OATEP" \
+	-DSEED="UDEV" -DRAND="CALL" ../$<; \
 	make && \
 	make install && \
 	cd ../$(EC_TMP); \
-	CFLAGS="-I$(DEPS_INSTALL_ZROOT)/include" $(CMAKE_VARS) COMP="-O2 -funroll-loops -fomit-frame-pointer -Wno-unused-function -Wno-implicit-function-declaration -Wno-incompatible-pointer-types-discards-qualifiers" cmake $(COMPILER_VARS) -DCMAKE_OSX_ARCHITECTURES="$(ARCH_FLAG)" -DCMAKE_PREFIX_PATH="$(DEPS_INSTALL_ZROOT)" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_C_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_CXX_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_EXE_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_SHARED_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_INSTALL_PREFIX:PATH=$(DEPS_INSTALL_ZROOT) -DOPSYS=$(RELIC_OS) -DARCH="$(RELIC_ARCH)" -DWSIZE=64 \
+	$(CMAKE_VARS) COMP="-O2 -funroll-loops -fomit-frame-pointer -Wno-unused-function -Wno-implicit-function-declaration -Wno-incompatible-pointer-types-discards-qualifiers -I$(DEPS_INSTALL_ZROOT)/include" cmake $(COMPILER_VARS) -DCMAKE_OSX_ARCHITECTURES="$(ARCH_FLAG)" -DCMAKE_PREFIX_PATH="$(DEPS_INSTALL_ZROOT)" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_C_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_CXX_FLAGS="-I$(DEPS_INSTALL_ZROOT)/include" -DCMAKE_EXE_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_SHARED_LINKER_FLAGS="-L$(DEPS_INSTALL_ZROOT)/lib" -DCMAKE_INSTALL_PREFIX:PATH=$(DEPS_INSTALL_ZROOT) -DOPSYS=$(RELIC_OS) -DARCH="$(RELIC_ARCH)" -DWSIZE=64 \
 	-DWITH="BN;DV;FP;EP;MD" -DCHECK=off -DVERBS=off -DDEBUG=off -DMULTI=PTHREAD -DBENCH=0 -DTESTS=0 -DARITH=gmp -DFP_PRIME=$(EC_CURVE) \
-	-DFP_QNRES=off -DEP_METHD="PROJC;BASIC;COMBS;INTER;SSWUM" -DFP_METHD="BASIC;COMBA;COMBA;MONTY;LOWER;JMPDS;SLIDE" -DFPX_METHD="INTEG;INTEG;LAZYR" -DPP_METHD="LAZYR;OATEP" \
+	-DFP_QNRES=off -DEP_METHD="PROJC;LWNAF;COMBS;INTER;SSWUM" -DFP_METHD="BASIC;COMBA;COMBA;MONTY;LOWER;JMPDS;SLIDE" -DFPX_METHD="INTEG;INTEG;LAZYR" -DPP_METHD="LAZYR;OATEP" \
 	-DSEED="UDEV" -DRAND="CALL" -DLABEL="$(EC_LABEL)" ../$<; \
 	make && \
 	make install && \
@@ -56,18 +59,12 @@ relic-$(VERSION)/.built: relic-${VERSION}
 relic-$(VERSION): relic-$(VERSION).tar.gz
 	tar xf $^
 	cd relic-$(VERSION) && (patch -p1 < ../blake2_fix.patch || true)
-	# Apply WASM-safe fixes for Legendre symbol computation
-	./apply-wasm-safe-fixes.sh relic-$(VERSION)
-	# Fix pervasive buffer overflow bugs in RELIC 0.7.0 (51+ occurrences)
-	# Use hardcoded 512 bits (safe for BN_PRECI=254 with BN_MAGNI=DOUBLE giving RLC_BN_SIZE=640 bits)
-	cd relic-$(VERSION) && find src/ -name "*.c" -exec sed -i '' 's/\[RLC_FP_BITS + 1\]/[512]/g' {} +
-	cd relic-$(VERSION) && find src/ -name "*.c" -exec sed -i '' 's/\[2 \* RLC_FP_BITS + 1\]/[1024]/g' {} +
-	# Replace all length assignments
-	cd relic-$(VERSION) && find src/ -name "*.c" -exec sed -i '' 's/ = RLC_FP_BITS + 1;/ = 512;/g' {} +
-	cd relic-$(VERSION) && find src/ -name "*.c" -exec sed -i '' 's/ = 2 \* RLC_FP_BITS + 1;/ = 1024;/g' {} +
+	cd relic-$(VERSION) && chmod +x ../apply_bls12_381_scalar_fix.sh && ../apply_bls12_381_scalar_fix.sh
 
-package:
+relic-$(VERSION).tar.gz:
 	./download_relic.sh relic-$(VERSION)
+
+package: relic-$(VERSION).tar.gz
 
 clean:
 	rm -rf relic-$(VERSION) tmp*
