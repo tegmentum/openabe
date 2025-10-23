@@ -10,6 +10,17 @@ This bundle includes full source code, examples and three main sources of docume
 
 The software is available for use under the [AGPL 3.0 license](https://github.com/zeutro/openabe/blob/master/LICENSE).
 
+## Recent Improvements
+
+**Enhanced Security & Performance (October 2025):**
+- ✅ Full support for **BLS12-381** curve (128-bit security)
+- ✅ Support for **RELIC 0.7.0** cryptographic backend
+- ✅ Fixed CCA-security implementation for both RELIC and MCL backends
+- ✅ Automated build system with parallel build support
+- ✅ Comprehensive test coverage and bug fixes
+
+OpenABE now offers production-ready implementations with both 100-bit (BN-254) and 128-bit (BLS12-381) security levels.
+
 ## Quick Build
 
 OpenABE now includes a unified build script that supports multiple target platforms:
@@ -239,7 +250,15 @@ You can also execute the example that demonstrates use of the keystore with ABE 
 
 ## Benchmarking
 
-The OpenABE is built on top of the abstract Zeutro Math library which supplies all of our elliptic-curve operations.  We instantiate our schemes using the state-of-the-art Barreto-Naehrig (BN) curves with the embedding degree `k = 12` (or commonly referred to as `BN-254`). This particular asymmetric curve is known to yield a very efficient pairing implementation and a security level equivalent to `AES-128`. As a result, this boosts the overall performance of ABE scheme implementations over prior efforts. Other benefits of BN curves include the ability to compress the representation of group elements. This directly translates to making ABE ciphertexts more compact which considerably reduces transmission costs.
+The OpenABE is built on top of the abstract Zeutro Math library which supplies all of our elliptic-curve operations. OpenABE supports multiple pairing-friendly curves with different security levels:
+
+**Supported Curves:**
+- **BN-254** (Barreto-Naehrig): 100-bit security level, equivalent to AES-128
+- **BLS12-381**: 128-bit security level, recommended for new applications
+
+The BN-254 curve provides a very efficient pairing implementation and is known to yield excellent performance for ABE schemes. The BLS12-381 curve offers higher security and is increasingly adopted as the industry standard for pairing-based cryptography. Both curves support compression of group elements, which makes ABE ciphertexts more compact and reduces transmission costs.
+
+OpenABE can be built with either the RELIC or MCL cryptographic backend, both supporting BN-254 and BLS12-381 curves.
 
 We include a benchmark utility for all the ABE schemes provided in the OpenABE:
 
