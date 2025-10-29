@@ -117,6 +117,10 @@ void
 OpenABEPolicy::serialize(OpenABEByteString &result) const {  }
 
 std::unique_ptr<OpenABEPolicy> createPolicyTree(std::string s) {
+  static int call_count = 0;
+  call_count++;
+  fprintf(stderr, "[CREATE_POLICY] Call #%d, input='%s'\n", call_count, s.c_str());
+
   oabe::Driver driver(false);
   if(s.size() == 0) {
       return nullptr;
@@ -130,6 +134,15 @@ std::unique_ptr<OpenABEPolicy> createPolicyTree(std::string s) {
     // This ensures that createPolicyTree() is idempotent - calling it multiple
     // times with the same string always produces identical tree structures.
     if (policy) {
+      // CRITICAL: Clear any duplicate info from parsing before canonicalization.
+      // The driver may have incorrectly marked attributes as duplicates during
+      // parsing (especially for threshold syntax where the same driver state may
+      // be reused). After canonicalization, duplicate info should be recomputed
+      // based on the actual tree structure, not parsing state.
+      std::map<std::string, int> empty_count;
+      std::set<std::string> empty_dup;
+      policy->setDuplicateInfo(empty_count, empty_dup);
+
       fprintf(stderr, "[ZPOLICY] Before canonicalize: %s\n", policy->toString().c_str());
       // Print child node order
       OpenABETreeNode* root = policy->getRootNode();
@@ -390,6 +403,9 @@ OpenABETreeNode::toString() {
     if(this->m_nodeType == GATE_TYPE_AND || this->m_nodeType == GATE_TYPE_OR) {
       tmp << threshold << " of ";
       tree = tmp.str();
+    } else if(this->m_nodeType == GATE_TYPE_THRESHOLD) {
+      // For proper threshold gates, use the already-set op string
+      tree = op;
     }
     tree += "(";
     for (uint32_t i = 0; i < this->m_Subnodes.size(); i++) {
@@ -399,6 +415,7 @@ OpenABETreeNode::toString() {
     tree += ")";
   }
 
+  fprintf(stderr, "[TOSTRING] nodeType=%d, returned='%s'\n", this->m_nodeType, tree.c_str());
   return tree;
 }
 

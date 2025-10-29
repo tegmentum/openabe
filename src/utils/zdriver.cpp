@@ -115,6 +115,14 @@ void Driver::set_policy(OpenABETreeNode *subtree) {
   }
   if (this->debug)
     std::cout << "Final policy set!" << std::endl;
+  fprintf(stderr, "[DRIVER] Setting duplicate info: attr_count.size()=%zu, attr_dup.size()=%zu\n",
+          this->attr_count.size(), this->attr_dup.size());
+  for (const auto& pair : this->attr_count) {
+    fprintf(stderr, "[DRIVER]   attr_count['%s'] = %d\n", pair.first.c_str(), pair.second);
+  }
+  for (const auto& attr : this->attr_dup) {
+    fprintf(stderr, "[DRIVER]   attr_dup contains '%s'\n", attr.c_str());
+  }
   this->final_policy->setDuplicateInfo(this->attr_count, this->attr_dup);
   if (this->attr_prefix.size() > 0) {
     this->final_policy->setPrefixSet(this->attr_prefix);
@@ -237,13 +245,17 @@ OpenABETreeNode *Driver::leaf_node(const std::string &c) {
   const string prefix = attr.first;
   const string attribute = attr.second;
 
+  fprintf(stderr, "[LEAF_NODE] Processing '%s', current count=%d\n",
+          c.c_str(), this->attr_count.count(c) ? this->attr_count[c] : 0);
   if (this->attr_count.count(c) == 0) {
     // first time, set to 1
     this->attr_count[c] = 1;
+    fprintf(stderr, "[LEAF_NODE] First occurrence, set count to 1, index=%d\n", index);
   } else { // already exist, so increment by 1
     index = this->attr_count[c];
     this->attr_count[c] += 1;
     this->attr_dup.insert(c);
+    fprintf(stderr, "[LEAF_NODE] Duplicate! index=%d, new count=%d\n", index, this->attr_count[c]);
   }
 
   if (prefix != "") {
@@ -286,16 +298,15 @@ OpenABETreeNode *Driver::kofn_tree(uint32_t threshold_k,
   zGateType node_type;
   size_t k;
 
-  switch (threshold_k) {
-  case 1:
+  // Determine node type based on threshold and attribute count
+  if (threshold_k == 1) {
     node_type = GATE_TYPE_OR;
-    break;
-  case 2:
+  } else if (threshold_k == attributeList.size()) {
+    // If k equals n (all attributes required), it's an AND gate
     node_type = GATE_TYPE_AND;
-    break;
-  default:
+  } else {
+    // Otherwise it's a proper threshold gate (k of n where 1 < k < n)
     node_type = GATE_TYPE_THRESHOLD;
-    break;
   }
 
   rootNode->setNodeType(node_type);
@@ -310,6 +321,30 @@ OpenABETreeNode *Driver::kofn_tree(uint32_t threshold_k,
     std::cout << "Constructing " << OpenABETreeNode_ToString(node_type)
               << " type.\n" << std::endl;
   return rootNode;
+}
+
+OpenABETreeNode *Driver::threshold_tree(uint32_t threshold_k, std::vector<std::string> *attrList) {
+  // Convert attribute strings to leaf nodes
+  // IMPORTANT: We create leaf nodes directly WITHOUT going through leaf_node()
+  // because leaf_node() increments the duplicate counter, which would incorrectly
+  // mark all attributes in a threshold gate as duplicates.
+  std::vector<OpenABETreeNode*> nodeList;
+  for (size_t i = 0; i < attrList->size(); i++) {
+    // Parse the attribute to check for prefix
+    pair<string, string> attr = check_attribute((*attrList)[i]);
+    const string& prefix = attr.first;
+    const string& attribute = attr.second;
+
+    // Record prefix if applicable
+    if (prefix != "") {
+      this->attr_prefix.insert(prefix);
+    }
+
+    // Create leaf node directly with index 0 (no duplicates in threshold syntax)
+    nodeList.push_back(new OpenABETreeNode(attribute, prefix, 0));
+  }
+  // Use kofn_tree to create the threshold tree
+  return kofn_tree(threshold_k, nodeList);
 }
 
 OpenABEUInteger *create_expint(uint32_t value, uint16_t bits) {

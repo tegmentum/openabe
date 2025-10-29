@@ -43,14 +43,23 @@ static int curve_id_to_nid(uint8_t id) {
  ********************************************************************************/
 
 int ec_group_init(ec_group_t *group, uint8_t id) {
+    // Handle OpenABE_NONE_ID (0x00) - set group to NULL and return success
+    // This allows deferred initialization when the actual curve is set later
+    if (id == 0x00) {
+        *group = NULL;
+        return 0;
+    }
+
     int nid = curve_id_to_nid(id);
     if (nid == 0) {
+        *group = NULL;
         return -1;
     }
 
     EC_GROUP *ec_group = EC_GROUP_new_by_curve_name(nid);
     if (ec_group == NULL) {
         fprintf(stderr, "ec_group_init: Failed to create EC_GROUP for nid %d\n", nid);
+        *group = NULL;
         return -1;
     }
 
@@ -61,11 +70,11 @@ int ec_group_init(ec_group_t *group, uint8_t id) {
     return 0;
 }
 
-void ec_get_order(ec_group_t group, bignum_t order) {
+void ec_get_order(ec_group_t group, ec_bignum_t order) {
     if (!group || !order) return;
 
     EC_GROUP *ec_group = static_cast<EC_GROUP*>(group);
-    BIGNUM *bn_order = static_cast<BIGNUM*>(order);
+    BIGNUM *bn_order = order;  // ec_bignum_t is already BIGNUM*
 
     if (!EC_GROUP_get_order(ec_group, bn_order, NULL)) {
         fprintf(stderr, "ec_get_order: Failed to get group order\n");
@@ -91,13 +100,15 @@ void ec_point_init(ec_group_t group, ec_point_t *e) {
     *e = point;
 }
 
-void ec_point_copy(ec_point_t to, const ec_point_t from) {
-    if (!to || !from) return;
+void ec_point_copy(ec_group_t group, ec_point_t to, const ec_point_t from) {
+    if (!group || !to || !from) return;
 
-    // We need the group for copy, but we don't have it here
-    // This is a limitation of the current API
-    // For now, we'll do a memcpy which works for the internal representation
-    memcpy(to, from, sizeof(EC_POINT));
+    EC_POINT *ec_to = static_cast<EC_POINT*>(to);
+    const EC_POINT *ec_from = static_cast<const EC_POINT*>(from);
+
+    if (!EC_POINT_copy(ec_to, ec_from)) {
+        fprintf(stderr, "ec_point_copy: Failed to copy EC point\n");
+    }
 }
 
 void ec_point_set_inf(ec_group_t group, ec_point_t p) {
@@ -153,13 +164,13 @@ void ec_get_generator(ec_group_t group, ec_point_t p) {
     }
 }
 
-void ec_get_coordinates(ec_group_t group, bignum_t x, bignum_t y, const ec_point_t p) {
+void ec_get_coordinates(ec_group_t group, ec_bignum_t x, ec_bignum_t y, const ec_point_t p) {
     if (!group || !p) return;
 
     EC_GROUP *ec_group = static_cast<EC_GROUP*>(group);
     const EC_POINT *point = static_cast<const EC_POINT*>(p);
-    BIGNUM *bn_x = static_cast<BIGNUM*>(x);
-    BIGNUM *bn_y = static_cast<BIGNUM*>(y);
+    BIGNUM *bn_x = x;  // ec_bignum_t is already BIGNUM*
+    BIGNUM *bn_y = y;  // ec_bignum_t is already BIGNUM*
 
     BN_CTX *ctx = BN_CTX_new();
     if (!ctx) {
@@ -225,13 +236,13 @@ void ec_point_add(ec_group_t g, ec_point_t r, const ec_point_t x, const ec_point
     BN_CTX_free(ctx);
 }
 
-void ec_point_mul(ec_group_t g, ec_point_t r, const ec_point_t x, const bignum_t y) {
+void ec_point_mul(ec_group_t g, ec_point_t r, const ec_point_t x, const ec_bignum_t y) {
     if (!g || !r || !x || !y) return;
 
     EC_GROUP *ec_group = static_cast<EC_GROUP*>(g);
     EC_POINT *result = static_cast<EC_POINT*>(r);
     const EC_POINT *point = static_cast<const EC_POINT*>(x);
-    const BIGNUM *scalar = static_cast<const BIGNUM*>(y);
+    const BIGNUM *scalar = y;  // ec_bignum_t is already BIGNUM*
 
     BN_CTX *ctx = BN_CTX_new();
     if (!ctx) {

@@ -18,8 +18,8 @@ CXX11FLAGS += $(CXXFLAGS)
 GTESTLIBS  = -lgtest -lpthread
 
 OABE_SHLIB = libopenabe.$(SHLIB)
-OABE_KEYS = keys/zkdf.o keys/zkey.o keys/zpkey.o keys/zkeystore.o keys/zsymkey.o
-OABE_LOW = ske/zcontextske.o pke/zcontextpke.o pksig/zcontextpksig.o \
+OABE_KEYS = keys/zkdf.o keys/zkey.o keys/zkeystore.o keys/zsymkey.o
+OABE_LOW = ske/zcontextske.o \
           abe/zcontextabe.o abe/zcontextcca.o abe/zcontextcpwaters.o abe/zcontextkpgpsw.o
 OABE_TOOLS = tools/zlsss.o tools/zprng.o
 
@@ -37,8 +37,8 @@ OABE_OBJ_TARGETS = zobject.o openabe.o zcontext.o zcrypto_box.o zsymcrypto.o zpa
 
 # MCL is the only supported backend
 OABE_OBJ_FILES = zobject.o openabe.o zgroup.o zlsss.o zerror.o zpairing.o zelliptic.o zelement_ec.o zelement_bp.o zelement_mcl.o $(OABE_EC_IMPL) zcontainer.o zciphertext.o \
-	     zkey.o zpkey.o zkeystore.o zfunctioninput.o zcontext.o zpolicy.o zsymkey.o zprng.o zattributelist.o \
-	     zcontextske.o zcontextpke.o zcontextpksig.o zcontextabe.o zcontextcpwaters.o zcontextkpgpsw.o \
+	     zkey.o zkeystore.o zfunctioninput.o zcontext.o zpolicy.o zsymkey.o zprng.o zattributelist.o \
+	     zcontextske.o zcontextabe.o zcontextcpwaters.o zcontextkpgpsw.o \
 	     zcontextcca.o zkdf.o zkeymgr.o zcryptoutils.o zcrypto_box.o zbenchmark.o zparser.o zscanner.o zdriver.o zsymcrypto.o \
 	     openssl_init.o zstandard_serialization.o zcurveinfo.o $(OS_OBJS)
 	     
@@ -58,12 +58,12 @@ LIBRARYH=header
 
 GENFILES = location.hh position.hh stack.hh *.tab.* zscanner.cpp
 
-PROGRAMS = test_libopenabe test_zml test_zml1 test_zml2 test_policy test_abe test_pke test_ske test_zsym test_keystore bench_libopenabe profile_libopenabe fuzz_policy fuzz_attrlist test_standard_serialization
+PROGRAMS = test_libopenabe test_zml test_zml1 test_zml2 test_policy test_abe test_ske test_zsym test_keystore bench_libopenabe profile_libopenabe fuzz_policy fuzz_attrlist test_standard_serialization
 
 all: $(OABELIB) $(ZSYMLIB) $(PROGRAMS)
 
 zml/zelement_mcl.o:
-	$(CC) $(CCFLAGS) -c zml/zelement_mcl.c -o zelement_mcl.o
+	$(CXX) $(CXXFLAGS) -c zml/zelement_mcl.cpp -o zelement_mcl.o
 
 zecdsa_openssl.o: zml/zecdsa_openssl.cpp
 	$(CXX) $(CXXFLAGS) -c zml/zecdsa_openssl.cpp -o zecdsa_openssl.o
@@ -104,7 +104,6 @@ test:
 	./test_libopenabe || exit 1
 	./test_zml || exit 1
 	./test_abe || exit 1
-	./test_pke || exit 1
 	./test_ske || exit 1
 	./test_keystore || exit 1
 
@@ -125,9 +124,6 @@ test_policy: $(OABELIB)
 
 test_abe: $(OABELIB)
 	$(CXX) -o test_abe $(CXX11FLAGS) $(LDFLAGS) -L. test_abe.cpp $(OABELIB) $(OABELDLIBS) $(GTESTLIBS)
-
-test_pke: $(OABELIB)
-	$(CXX) -o test_pke $(CXX11FLAGS) $(LDFLAGS) -L. test_pke.cpp $(OABELIB) $(OABELDLIBS) $(GTESTLIBS)
 
 test_ske: $(OABELIB)
 	$(CXX) -o test_ske $(CXX11FLAGS) $(LDFLAGS) -L. test_ske.cpp $(OABELIB) $(OABELDLIBS) $(GTESTLIBS)

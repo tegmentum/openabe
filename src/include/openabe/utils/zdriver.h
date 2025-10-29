@@ -146,6 +146,7 @@ public:
                                                  OpenABEUInteger *m, OpenABEUInteger *d, OpenABEUInteger *y);
   OpenABETreeNode* kof2_tree(int k, OpenABETreeNode *l, OpenABETreeNode *r);
   OpenABETreeNode* kofn_tree(uint32_t threshold_k, std::vector<OpenABETreeNode*>& attributeList);
+  OpenABETreeNode* threshold_tree(uint32_t threshold_k, std::vector<std::string> *attrList);
 
   OpenABEUInteger* create_expint(uint32_t value, uint16_t bits);
   OpenABEUInteger* create_flexint(uint32_t value);

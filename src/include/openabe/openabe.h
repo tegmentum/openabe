@@ -128,9 +128,7 @@ typedef uint32_t OpenABESecurityLevel;
 #if !defined(BP_WITH_MCL)
 #include <gmpxx.h>
 #endif
-extern "C" {
 #include <openabe/zml/zelement.h>
-}
 #include <openabe/zml/zgroup.h>
 #include <openabe/zml/zelement_bp.h>
 #include <openabe/zml/zelement_ec.h>
@@ -144,15 +142,12 @@ extern "C" {
 #include <openabe/utils/zciphertext.h>
 #include <openabe/utils/zattributelist.h>
 #include <openabe/keys/zkey.h>
-#include <openabe/keys/zpkey.h>
 #include <openabe/keys/zsymkey.h>
 #include <openabe/keys/zkeystore.h>
 #include <openabe/tools/zlsss.h>
 #include <openabe/keys/zkdf.h>
 #include <openabe/zcontext.h>
 #include <openabe/low/ske/zcontextske.h>
-#include <openabe/low/pke/zcontextpke.h>
-#include <openabe/low/pksig/zcontextpksig.h>
 #include <openabe/zcontextabe.h>
 #include <openabe/zsymcrypto.h>
 #include <openabe/zcontextcca.h>
@@ -197,15 +192,10 @@ void AssertLibInit();
 const char *OpenABE_errorToString(OpenABE_ERROR err);
 const uint32_t OpenABE_getLibraryVersion();
 
-// creates KEM context for PKE & ABE schemes
-OpenABEContextPKE *OpenABE_createContextPKE(std::unique_ptr<OpenABERNG> *rng,
-                                    OpenABE_SCHEME scheme_type);
+// creates KEM context for ABE schemes
 OpenABEContextABE *OpenABE_createContextABE(std::unique_ptr<OpenABERNG> *rng,
                                     OpenABE_SCHEME scheme_type);
 
-// PKE scheme context API
-std::unique_ptr<OpenABEContextSchemePKE>
-OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME scheme_type);
 std::unique_ptr<OpenABEContextCCA>
 OpenABE_createABEContextForKEM(OpenABE_SCHEME scheme_type);
 
@@ -220,9 +210,6 @@ OpenABE_createContextABESchemeCCA(OpenABE_SCHEME scheme_type);
 // CCA scheme context API with amortization support
 std::unique_ptr<OpenABEContextSchemeCCAWithATZN>
 OpenABE_createContextABESchemeCCAWithATZN(OpenABE_SCHEME scheme_type);
-
-// PKSIG scheme context API
-std::unique_ptr<OpenABEContextSchemePKSIG> OpenABE_createContextPKSIGScheme();
 
 // curve to/from string conversion functions
 OpenABECurveID OpenABE_getCurveID(uint8_t id);

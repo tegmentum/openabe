@@ -73,6 +73,7 @@
 %token     <uintVal> UINT     "an integer"
 %type     <uInteger> number   "OpenABEUInteger"
 %type	  <treeNode> policy   "OpenABE tree node"
+%type     <oabeAttrList> threshold_attrs "threshold attribute list"
 %type <oabeAttrList>  attrlist "OpenABE attribute list"
 
 %left OR
@@ -126,6 +127,8 @@ number:   UINT '#' UINT         {
 policy:   LEAF                  { $$ = driver.leaf_node(*$1); delete $1; }
         | policy OR policy      { $$ = driver.kof2_tree(1, $1, $3); }
         | policy AND policy     { $$ = driver.kof2_tree(2, $1, $3); }
+        | UINT OF '(' threshold_attrs ')'
+                                { $$ = driver.threshold_tree($1, $4); delete $4; }
         | LEAF '<' number       { $$ = driver.lt_policy(*$1, $3); delete $1; delete $3; }
         | LEAF '>' number       { $$ = driver.gt_policy(*$1, $3); delete $1; delete $3; }
         | LEAF LEQ number       { $$ = driver.le_policy(*$1, $3); delete $1; delete $3; }
@@ -179,12 +182,15 @@ attrlist:   LEAF                { $$ = driver.leaf_attr(*$1); delete $1; }
         | attrlist '|' attrlist { $$ = driver.concat_attr($1, $3); delete $3; }
         | LEAF '=' number       { $$ = driver.attr_num(*$1, $3); delete $1; delete $3; }
         | LEAF '=' LEAF number ',' number
-                { std::unique_ptr<OpenABEUInteger> month(oabe::get_month(*$3)); 
-                  $$ = driver.set_date_in_attrlist(*$1, *$3, month.get(), $4, $6); 
+                { std::unique_ptr<OpenABEUInteger> month(oabe::get_month(*$3));
+                  $$ = driver.set_date_in_attrlist(*$1, *$3, month.get(), $4, $6);
                   delete $1; delete $3; delete $4; delete $6;
                 }
 ;
 
+threshold_attrs:   LEAF                { $$ = driver.leaf_attr(*$1); delete $1; }
+        | threshold_attrs ',' LEAF      { $$ = driver.concat_attr($1, driver.leaf_attr(*$3)); delete $3; }
+;
 
 
  /*** END EXAMPLE - Change the example grammar rules above ***/

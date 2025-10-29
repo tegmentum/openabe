@@ -248,114 +248,114 @@ build_openssl() {
     fi
 }
 
-# Build RELIC for WASM
-build_relic() {
-    info "Building RELIC 0.7.0 for WebAssembly..."
+# Build MCL for WASM using C API
+build_mcl() {
+    info "Building MCL for WebAssembly using C API..."
 
     cd "$WASM_DEPS_DIR"
 
-    # Use RELIC 0.7.0 which has better C99 compatibility and includes MIN/MAX macros
-    if [ ! -d "relic-0.7.0" ]; then
-        info "Downloading RELIC 0.7.0..."
-        curl -L https://github.com/relic-toolkit/relic/archive/refs/tags/0.7.0.tar.gz -o relic-0.7.0.tar.gz
-        tar xzf relic-0.7.0.tar.gz
+    # Download MCL if not present
+    local MCL_VERSION="3.04"
+    local MCL_ARCHIVE="mcl-${MCL_VERSION}.tar.gz"
+    local MCL_DIR="mcl-${MCL_VERSION}"
+
+    if [ ! -f "$MCL_ARCHIVE" ]; then
+        info "Downloading MCL ${MCL_VERSION}..."
+        curl -L "https://github.com/herumi/mcl/archive/refs/tags/v${MCL_VERSION}.tar.gz" -o "$MCL_ARCHIVE"
     fi
 
-    cd relic-0.7.0
+    if [ ! -d "$MCL_DIR" ]; then
+        info "Extracting MCL ${MCL_VERSION}..."
+        tar -xzf "$MCL_ARCHIVE"
+    fi
 
-    # Patch CMakeLists.txt to use compatible CMake version
-    sed -i.bak 's/cmake_minimum_required(VERSION 3.1)/cmake_minimum_required(VERSION 3.5)/' CMakeLists.txt
+    cd "$MCL_DIR"
 
-    # Patch BLAKE2 to disable 64-byte alignment for WASM (alignment must divide element size)
-    sed -i.bak 's/ALIGNME( 64 )//' src/md/blake2.h
+    # Generate MCL config header for WASM
+    mkdir -p include/mcl
+    cat > include/mcl/config.hpp << 'EOF'
+#pragma once
+#define MCL_FP_BIT 384
+#define MCL_FR_BIT 256
+#define MCL_USE_LLVM 0
+#define MCL_USE_GMP 0
+#define MCL_USE_OPENSSL 0
+#define MCL_MAX_FP_BIT_SIZE 384
+#define MCL_MAX_FR_BIT_SIZE 256
+#define MCL_SIZEOF_UNIT 8
+#define MCL_USE_XBYAK 0
+#define MCL_DONT_USE_XBYAK
+#define CYBOZU_DONT_USE_EXCEPTION
+#define CYBOZU_DONT_USE_STRING
+#define MCL_NO_AUTOLINK
+#define MCL_DLL_API
+EOF
 
-    # Patch relic_rand_core.c to use WASI random API instead of /dev/urandom
-    info "Patching RELIC random seeding for WASM compatibility..."
+    # Install MCL headers
+    info "Installing MCL headers to $WASM_PREFIX..."
+    mkdir -p "$WASM_PREFIX/include/mcl"
+    mkdir -p "$WASM_PREFIX/include/cybozu"
+    mkdir -p "$WASM_PREFIX/lib"
 
-    # Add WASI header include and guard POSIX headers
-    sed -i.bak '/^#include "relic_err.h"/a\
-\
-#ifdef __wasm__\
-#include <wasi/api.h>\
-#endif
-' src/rand/relic_rand_core.c
+    # Copy C headers (not C++ headers - zelement_mcl.cpp uses C API for WASM)
+    cp -r include/mcl/*.h "$WASM_PREFIX/include/mcl/" 2>/dev/null || warn "No .h files found"
+    # Also copy .hpp for native builds (zelement_mcl.cpp conditionally includes)
+    cp -r include/mcl/*.hpp "$WASM_PREFIX/include/mcl/" 2>/dev/null || warn "No .hpp files found"
+    cp -r include/cybozu/*.hpp "$WASM_PREFIX/include/cybozu/" 2>/dev/null || warn "Failed to copy cybozu headers"
 
-    sed -i.bak2 's/#if RAND == UDEV || SEED == UDEV/#if RAND == UDEV || SEED == UDEV\
-\
-#ifndef __wasm__/' src/rand/relic_rand_core.c
+    # Build MCL C implementation for WASM
+    info "Compiling MCL C implementation for WASM..."
+    mkdir -p lib/wasm
 
-    sed -i.bak3 '/^#include <unistd.h>/a\
-#endif
-' src/rand/relic_rand_core.c
+    # MCL C API implementation - compile our custom WASM version
+    local MCL_CXXFLAGS="$CXXFLAGS"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -I./include"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -I./src"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_FP_BIT=384"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_FR_BIT=256"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCLBN_FP_UNIT_SIZE=6"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCLBN_FR_UNIT_SIZE=4"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_MAX_BIT_SIZE=384"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_DONT_USE_XBYAK"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_USE_LLVM=0"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_USE_GMP=0"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DCYBOZU_DONT_USE_EXCEPTION"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DCYBOZU_DONT_USE_STRING"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_NO_AUTOLINK"
 
-    # Replace /dev/urandom code with WASI random for WASM
-    sed -i.bak4 '/#elif SEED == DEV || SEED == UDEV/,/^#elif SEED == LIBC/{
-        /int fd, c, l;/a\
-\
-#ifdef __wasm__\
-	/* Use WASI random API for WebAssembly builds */\
-	__wasi_errno_t err = __wasi_random_get(buf, RLC_RAND_SEED);\
-	if (err != __WASI_ERRNO_SUCCESS) {\
-		RLC_THROW(ERR_NO_RAND);\
-		return;\
-	}\
-	/* Successfully seeded from WASI random */\
-#else
-        /close(fd);$/a\
-#endif
-    }' src/rand/relic_rand_core.c
+    # Compile our custom bn_c384_256_wasm.cpp which includes C++ API
+    if [ -f "src/bn_c384_256_wasm.cpp" ]; then
+        info "Compiling bn_c384_256_wasm.cpp with C++ templates..."
+        $CXX $MCL_CXXFLAGS -c src/bn_c384_256_wasm.cpp -o lib/wasm/bn_c384_256_wasm.o 2>&1 | tee /tmp/mcl_build.log || {
+            error "Failed to compile MCL C API implementation"
+            warn "Error log:"
+            tail -50 /tmp/mcl_build.log | grep -E "error:|warning:" | head -20
+            exit 1
+        }
 
-    # Fix rand_call signature mismatch (int -> size_t)
-    sed -i.bak 's/void (\*rand_call)(uint8_t \*, int, void \*);/void (*rand_call)(uint8_t *, size_t, void *);/' include/relic_core.h
+        # Create library from object file
+        $AR rcs lib/libmcl.a lib/wasm/bn_c384_256_wasm.o
+        info "Created libmcl.a from bn_c384_256_wasm.o"
+    else
+        error "bn_c384_256_wasm.cpp not found!"
+        exit 1
+    fi
 
-    # CRITICAL FIX: Patch fp2_srt to use old algorithm for WASM
-    # The new 2024 algorithm has bugs in WASM that corrupt G2 point decompression
-    info "Patching fp2_srt to use proven algorithm for WASM..."
-    sed -i.fp2fix 's/if (fp_prime_get_mod8() % 4 == 3) {/#ifdef __wasm__\
-		\/* WASM FIX: Force old algorithm - new 2024 algorithm has WASM bugs *\/\
-		if (0) {\
-#else\
-		if (fp_prime_get_mod8() % 4 == 3) {\
-#endif/' src/fpx/relic_fpx_srt.c
+    # Create stub libmclecdsa.a (not needed for pairing operations)
+    touch lib/wasm/stub.c
+    $CC $CFLAGS -c lib/wasm/stub.c -o lib/wasm/stub.o 2>/dev/null || true
+    $AR rcs lib/libmclecdsa.a lib/wasm/stub.o 2>/dev/null || $AR rcs lib/libmclecdsa.a lib/wasm/bn_c384_256_wasm.o
 
-    # Note: RELIC 0.7.0 already has RLC_MIN/RLC_MAX defined in relic_util.h
+    # Copy libraries
+    cp lib/libmcl.a "$WASM_PREFIX/lib/"
+    cp lib/libmclecdsa.a "$WASM_PREFIX/lib/"
 
-    mkdir -p build-wasm
-    cd build-wasm
-
-    # Configure RELIC for WASM using CMake
-    # Add setjmp/longjmp support for RELIC's error handling
-    # Add pthread support for thread-local storage (__thread) to fix CCA verification
-    # RELIC's CMakeLists.txt uses $ENV{COMP} environment variable for compiler flags
-    export COMP="$CFLAGS -mllvm -wasm-enable-sjlj -pthread"
-
-    cmake .. \
-        -DCMAKE_TOOLCHAIN_FILE="$WASI_SDK_PATH/share/cmake/wasi-sdk-pthread.cmake" \
-        -DCMAKE_INSTALL_PREFIX="$WASM_PREFIX" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_C_FLAGS="-matomics -mbulk-memory" \
-        -DCMAKE_EXE_LINKER_FLAGS="-Wl,--shared-memory,--max-memory=4294967296" \
-        -DSTATIC=on \
-        -DSHLIB=off \
-        -DARITH=easy \
-        -DFP_PRIME=254 \
-        -DWITH="BN;MD;DV;FP;EP;FPX;EPX;PP;PC" \
-        -DBP_WITH_OPENSSL=on \
-        -DSEED=ZERO \
-        -DRAND=CALL \
-        -DMULTI=PTHREAD \
-        -DCHECK=off \
-        -DTESTS=0 \
-        -DBENCH=0 \
-        -DFP_METHD="BASIC;COMBA;COMBA;MONTY;LOWER;JMPDS;SLIDE" \
-        -DFPX_METHD="INTEG;INTEG;LAZYR" \
-        -DPP_METHD="LAZYR;OATEP" \
-        -DEP_METHD="PROJC;LWNAF;COMBS;INTER;SSWUM"
-
-    make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-    make install
-
-    info "RELIC build complete"
+    if [ -f "$WASM_PREFIX/lib/libmcl.a" ]; then
+        info "MCL WASM build complete (size: $(du -h $WASM_PREFIX/lib/libmcl.a | cut -f1))"
+    else
+        error "MCL library not created"
+        exit 1
+    fi
 }
 
 # Main execution
@@ -364,7 +364,7 @@ main() {
 
     build_gmp
     build_openssl
-    build_relic
+    build_mcl
 
     info "All dependencies built successfully!"
     info "Install prefix: $WASM_PREFIX"

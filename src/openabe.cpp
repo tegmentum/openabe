@@ -267,66 +267,6 @@ OpenABE_createContextABESchemeCCAWithATZN(OpenABE_SCHEME scheme_type) {
 }
 
 
-/*!
- * Create a new OpenABEContextPKE for a specific scheme type.
- *
- * @param[in]   a RNG object
- * @param[in]   the scheme type
- * @return      A pointer to the OpenABE context structure
- */
-
-OpenABEContextPKE *OpenABE_createContextPKE(unique_ptr<OpenABERNG> *rng,
-                                    OpenABE_SCHEME scheme_type) {
-  OpenABEContextPKE *newContext = NULL;
-
-  /* Depending on the scheme, set up the context using the appropriate
-   * constructor.
-   * This will set appropriate function pointers within the context so the other
-   * calls won't require a switch statement. */
-    switch(scheme_type) {
-    case OpenABE_SCHEME_PK_OPDH:
-      newContext = (OpenABEContextPKE *)new OpenABEContextOPDH(std::move(*rng));
-      break;
-    default:
-      // gErrorLog.log("Could not instantiate unknown scheme type", __LINE__,
-      // __FILE__);
-      newContext = NULL;
-    }
-
-    return newContext;
-}
-
-/*!
- * Create a new OpenABEContextSchemePKE for a specific scheme type (includes CCA security).
- *
- * @param[in]   the scheme type
- * @return      A pointer to the OpenABE context structure
- */
-
-unique_ptr<OpenABEContextSchemePKE>
-OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME scheme_type) {
-  // consruct an RNG object
-  unique_ptr<OpenABERNG> rng(new OpenABERNG);
-  // create a KEM context for PKE given the RNG object
-  unique_ptr<OpenABEContextPKE> pkeKEMContext(
-      OpenABE_createContextPKE(&rng, scheme_type));
-  if (!pkeKEMContext) {
-    // Return nullptr for error, not error code
-    return nullptr;
-  }
-  // return a scheme context for PKE given the KEM context
-  return unique_ptr<OpenABEContextSchemePKE>(
-      new OpenABEContextSchemePKE(std::move(pkeKEMContext)));
-}
-
-unique_ptr<OpenABEContextSchemePKSIG> OpenABE_createContextPKSIGScheme() {
-  // first create a PKSIG context (wrapper around OpenSSL)
-  unique_ptr<OpenABEContextPKSIG> pksig(new OpenABEContextPKSIG);
-  // return a unique ptr to a PKSIG scheme context (smoothen out API)
-  // with an underlying PKSIG context
-  return unique_ptr<OpenABEContextSchemePKSIG>(
-      new OpenABEContextSchemePKSIG(std::move(pksig)));
-}
 
 /*!
  * Return the OpenABE version.

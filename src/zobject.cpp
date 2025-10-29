@@ -194,7 +194,7 @@ string Base64Decode(string const& encoded_string) {
     }
     if (tmp != encoded_string.size()) {
         fprintf(stderr, "Invalid Base64 input: invalid terminating characters\n");
-        return "";
+        throw OpenABE_ERROR_INVALID_INPUT;
     }
   }
 

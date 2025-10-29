@@ -162,19 +162,19 @@ endif
 
 # Zeutro Math library config: MCL is the default and only supported backend
 # RELIC support has been removed
+# OpenABE is now focused exclusively on Attribute-Based Encryption (ABE)
+# PKE operations (ECDSA, ECDH, OPDH) are not supported - use OpenSSL directly
 OPENSSL_ZML = -DSSL_LIB_INIT
 # MCL build for math ops (no GMP needed)
 # MCL library is built for BLS12-381 (384-bit field prime, 256-bit scalar field)
 OPENSSL_ZML += -DBP_WITH_MCL -DMCL_FP_BIT=384 -DMCL_FR_BIT=256
 CXXFLAGS += $(OPENSSL_ZML)
 CCFLAGS += -g -O2 $(OPENSSL_ZML) $(ADD_CFLAGS)
-OABELDLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a
-OABELDSHLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a
-# Elliptic Curve library config: Always use OpenSSL for EC operations
-# MCL is used for pairing-based cryptography only
-# OpenSSL provides ECDSA/secp256k1 support
-CXXFLAGS += -DEC_WITH_OPENSSL
-CCFLAGS += -DEC_WITH_OPENSSL
+OABELDLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a
+OABELDSHLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a
+# Note: EC_WITH_OPENSSL has been removed. OpenABE is now ABE-only.
+# MCL provides all cryptographic operations (pairing, hashing, serialization)
+# OpenSSL is used only for symmetric crypto (AES, HMAC) via -DSSL_LIB_INIT
 
 # remaining deps
 # MCL doesn't need GMP (unlike RELIC)

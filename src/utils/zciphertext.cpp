@@ -114,7 +114,7 @@ void OpenABECiphertext::loadFromBytes(OpenABEByteString &input) {
   size_t hdrLen = 3 + UID_LEN;
   if (input.size() < hdrLen) {
     fprintf(stderr, "loadFromBytes: invalid input\n");
-    return;
+    throw OpenABE_ERROR_INVALID_INPUT;
   }
 
   OpenABEByteString ciphertextHeader, ciphertextBytes;
@@ -152,7 +152,7 @@ void OpenABECiphertext::loadFromBytes(OpenABEByteString &input) {
     this->deserialize(ciphertextBytes);
   } else {
     fprintf(stderr, "loadFromBytes: invalid ciphertext header\n");
-    return;
+    throw OpenABE_ERROR_INVALID_INPUT;
   }
   return;
 }
@@ -202,10 +202,15 @@ void OpenABECiphertext::setHeader(OpenABECurveID curveID, OpenABE_SCHEME scheme_
   this->curveID = curveID;
   this->algorithmID = scheme_type;
   this->libraryVersion = OpenABE_LIBRARY_VERSION;
+  fprintf(stderr, "DEBUG setHeader(rng): uid_set_extern = %s\n", this->uid_set_extern ? "true" : "false");
   if (!this->uid_set_extern) {
     // only if one hasn't been set externally
     ASSERT_NOTNULL_VOID(rng);
     rng->getRandomBytes(&this->uid, UID_LEN);
+    fprintf(stderr, "DEBUG setHeader(rng): Generated new UID from RNG\n");
+  } else {
+    fprintf(stderr, "DEBUG setHeader(rng): Keeping external UID, first 8 bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+            this->uid[0], this->uid[1], this->uid[2], this->uid[3], this->uid[4], this->uid[5], this->uid[6], this->uid[7]);
   }
 }
 
@@ -217,6 +222,10 @@ void OpenABECiphertext::setHeader(OpenABECurveID curveID, OpenABE_SCHEME scheme_
   this->libraryVersion = OpenABE_LIBRARY_VERSION;
   this->uid.clear();
   this->uid = uid;
+  // Mark that UID was set externally so setHeader(rng) won't override it
+  this->uid_set_extern = true;
+  fprintf(stderr, "DEBUG setHeader(uid): uid_set_extern = true, uid first 8 bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+          uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6], uid[7]);
 }
 
 /*!

@@ -104,10 +104,16 @@ OpenABELSSS::~OpenABELSSS()
 void
 OpenABELSSS::shareSecret(const OpenABEFunctionInput *input, ZP &elt)
 {
+  // Check for null input
+  if (input == nullptr) {
+      fprintf(stderr, "ERROR: Input cannot be null\n");
+      throw OpenABE_ERROR_INVALID_INPUT;
+  }
   // Verify that the input is a supported type (OpenABEPolicy)
   const OpenABEPolicy *policy = dynamic_cast<const OpenABEPolicy*>(input);
   if (policy == nullptr) {
-      OpenABE_LOG_AND_THROW_VOID("Sharing input must be a Policy");
+      fprintf(stderr, "ERROR: Sharing input must be a Policy\n");
+      throw OpenABE_ERROR_INVALID_INPUT;
   }
   // Clear any existing results
   this->clearExistingResults();
@@ -169,8 +175,16 @@ OpenABELSSS::performSecretSharing(const OpenABEPolicy *policy, ZP &elt)
 {
   OpenABETreeNode *node = NULL;
 
+  // CRITICAL FIX: Clear duplicate info before using it.
+  // The policy may have incorrect duplicate info from parsing artifacts.
+  this->m_AttrCount.clear();
+
   if(policy->hasDuplicateNodes()) {
-    policy->getDuplicateInfo(this->m_AttrCount);
+    fprintf(stderr, "[LSSS_DUPL_ENC] Policy reports having duplicate nodes - IGNORING (cleared)\n");
+    // DON'T use the potentially incorrect duplicate info
+    // policy->getDuplicateInfo(this->m_AttrCount);
+  } else {
+    fprintf(stderr, "[LSSS_DUPL_ENC] Policy reports NO duplicate nodes\n");
   }
 
   node = policy->getRootNode();
@@ -194,8 +208,17 @@ OpenABELSSS::performCoefficientRecovery(OpenABEPolicy *policy, OpenABEAttributeL
 {
   OpenABETreeNode *node = NULL;
 
+  // CRITICAL FIX: Clear duplicate info before using it.
+  // The policy may have incorrect duplicate info from parsing artifacts.
+  // We should recompute it by traversing the tree if needed.
+  this->m_AttrCount.clear();
+
   if(policy->hasDuplicateNodes()) {
-    policy->getDuplicateInfo(this->m_AttrCount);
+    fprintf(stderr, "[LSSS_DUPL] Policy reports having duplicate nodes - IGNORING (cleared)\n");
+    // DON'T use the potentially incorrect duplicate info
+    // policy->getDuplicateInfo(this->m_AttrCount);
+  } else {
+    fprintf(stderr, "[LSSS_DUPL] Policy reports NO duplicate nodes\n");
   }
 
   node = policy->getRootNode();
@@ -343,7 +366,6 @@ OpenABELSSS::iterativeCoefficientRecover(OpenABETreeNode *treeNode, ZP &inCoeff)
         case GATE_TYPE_OR:
           threshold = 1;              // OR gate: any one subnodes satisfied
           break;
-#if 0
         case GATE_TYPE_THRESHOLD:
           threshold = visitedNode->getThresholdValue();
           break;
@@ -351,7 +373,6 @@ OpenABELSSS::iterativeCoefficientRecover(OpenABETreeNode *treeNode, ZP &inCoeff)
           // Unrecognized node type
           fprintf(stderr, "ERROR: Unrecognized node type\n");
           return false;
-#endif
       }
 
       // Now for each subnode in our list, calculate the coefficient and recurse
@@ -515,8 +536,12 @@ OpenABELSSS::makeUniqueLabel(const OpenABETreeNode *treeNode)
   string label = treeNode->getCompleteLabel();
   // if the label is duplicated in the policy tree, then add index
   if(this->m_AttrCount.count(label) != 0) {
-    return label + "%" + to_string(treeNode->getIndex());
+    string unique_label = label + "%" + to_string(treeNode->getIndex());
+    fprintf(stderr, "[LSSS_LABEL] Label '%s' is duplicate, index=%d, unique='%s'\n",
+            label.c_str(), treeNode->getIndex(), unique_label.c_str());
+    return unique_label;
   }
+  fprintf(stderr, "[LSSS_LABEL] Label '%s' is unique (no suffix)\n", label.c_str());
   return label;
 }
 
@@ -552,12 +577,15 @@ bool iterativeScanTree(OpenABETreeNode *treeNode, OpenABEAttributeList *attribut
           // OR gate: any one subnode will satisfy the entire subtree
           threshold = 1;
           break;
-#if 0
       case GATE_TYPE_THRESHOLD:
           // THRESHOLD gate: any k-of-n subnodes will satisfy the entire subtree
           threshold = topNode->getThresholdValue();
+          if (threshold == 0 || threshold > topNode->getNumSubnodes()) {
+            fprintf(stderr, "ERROR: Invalid threshold value %u for gate with %u subnodes\n",
+                    threshold, topNode->getNumSubnodes());
+            throw OpenABE_ERROR_INVALID_INPUT;
+          }
           break;
-#endif
       case GATE_TYPE_LEAF:
           isInternalNode = false;
           break;
@@ -582,6 +610,7 @@ bool iterativeScanTree(OpenABETreeNode *treeNode, OpenABEAttributeList *attribut
       // cout << "Find attribute: " << topNode->getLabel() << " in " << attributeList->toString() << endl;
       // cout << "Result: " << attributeList->matchAttribute(topNode->getLabel()) << endl;
       bool leaf_matched = attributeList->matchAttribute(topNode->getCompleteLabel());
+      fprintf(stderr, "[LSSS_SCAN] Leaf '%s' matched: %s\n", topNode->getCompleteLabel().c_str(), leaf_matched ? "YES" : "NO");
       topNode->setMark(leaf_matched, leaf_matched ? 1 : 0);
       // mark this node as visited then pop from the stack
       topNode->m_Visited = true;
@@ -635,8 +664,9 @@ bool determineIfNodeShouldBeMarked(uint32_t threshold, OpenABETreeNode *node)
     } else {
       node->setMark(false, 0);
     }
-  } else if(node->getNodeType() == GATE_TYPE_OR) {
+  } else if(node->getNodeType() == GATE_TYPE_OR || node->getNodeType() == GATE_TYPE_THRESHOLD) {
     result = false;
+    fprintf(stderr, "[LSSS_MARK] OR/THRESHOLD gate: threshold=%u, num_subnodes=%u\n", threshold, node->getNumSubnodes());
     // build up list
     for (uint32_t i = 0; i < node->getNumSubnodes(); i++) {
       cnt = node->getSubnode(i)->getNumSubnodes();
@@ -645,7 +675,10 @@ bool determineIfNodeShouldBeMarked(uint32_t threshold, OpenABETreeNode *node)
       }
       // only sorting nodes that are marked 'true'
       if (node->getSubnode(i)->getMark()) {
+        fprintf(stderr, "[LSSS_MARK]   Subnode %u is marked TRUE\n", i);
         list.push_back(std::make_pair(i, cnt));
+      } else {
+        fprintf(stderr, "[LSSS_MARK]   Subnode %u is marked FALSE\n", i);
       }
     }
     // sort the list (usually size 2)

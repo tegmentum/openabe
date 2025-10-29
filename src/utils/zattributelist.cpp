@@ -68,7 +68,7 @@ OpenABEAttributeList::OpenABEAttributeList(uint32_t numArgs, std::vector<string>
   string c;
   if (numArgs != args.size()) {
     fprintf(stderr, "OpenABEAttributeList: invalid input\n");
-    return;
+    throw OpenABE_ERROR_INVALID_INPUT;
   }
 
   for (size_t i = 0; i < args.size(); i++) {
@@ -245,6 +245,9 @@ void OpenABEAttributeList::serialize(OpenABEByteString &result) const {
 void OpenABEAttributeList::deserialize(const OpenABEByteString &input) {}
 
 bool OpenABEAttributeList::isEqual(ZObject *z) const {
+  if (z == nullptr) {
+    throw OpenABE_ERROR_INVALID_INPUT;
+  }
   OpenABEAttributeList *z1 = dynamic_cast<OpenABEAttributeList *>(z);
   if (z1 != NULL) {
     vector<string> list(z1->m_Attributes.size() + this->m_Attributes.size());

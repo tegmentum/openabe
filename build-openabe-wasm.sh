@@ -25,18 +25,22 @@ export RANLIB="$WASI_SDK_PATH/bin/llvm-ranlib"
 
 # WASM target and sysroot
 # Note: Using wasm32-wasi-threads for pthread support
-# This matches the RELIC build configuration
+# This matches the MCL build configuration
 WASM_SYSROOT="$WASI_SDK_PATH/share/wasi-sysroot"
 WASM_TARGET="wasm32-wasi-threads"
 
 # Compiler flags for building static library
-# Add setjmp/longjmp support for OpenABE's RELIC error handling
+# Add setjmp/longjmp support for error handling
 # Add pthread support for thread-local storage (__thread) to fix CCA verification
 # Add atomics and bulk-memory for pthread shared memory support
 CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT"
 CFLAGS="$CFLAGS -O2 -g"
 CFLAGS="$CFLAGS -D__wasm__"
+CFLAGS="$CFLAGS -DBP_WITH_MCL"
 CFLAGS="$CFLAGS -DSSL_LIB_INIT"
+CFLAGS="$CFLAGS -DEC_WITH_MCL"  # WASM: Use EC stubs since OpenSSL EC isn't available
+CFLAGS="$CFLAGS -DMCL_FP_BIT=384"
+CFLAGS="$CFLAGS -DMCL_FR_BIT=256"
 CFLAGS="$CFLAGS -I$ZROOT/src/include"
 CFLAGS="$CFLAGS -I$WASM_PREFIX/include"
 CFLAGS="$CFLAGS -I$WASM_SYSROOT/include"
@@ -67,7 +71,9 @@ OABE_ZML_SRC=(
     "zml/zpairing.cpp"
     "zml/zelliptic.cpp"
     "zml/zelement_ec.cpp"
+    "zml/zelement_ec_stubs_mcl.cpp"  # WASM: EC stubs for MCL backend
     "zml/zelement_bp.cpp"
+    "zml/zelement_mcl.cpp"
 )
 
 OABE_KEYS_SRC=(
@@ -115,7 +121,6 @@ OABE_CORE_SRC=(
     "zsymcrypto.cpp"
     "openssl_init.cpp"
     "wasm_exception_stubs.cpp"  # WASM-only: exception runtime stubs
-    "wasm_safe_wrapper.cpp"     # WASM-only: exception-to-error-code wrappers
 )
 
 # Compile C file (zelement.c)
@@ -218,13 +223,14 @@ build_parser() {
 compile_sources() {
     info "Compiling OpenABE sources for WebAssembly..."
 
-    # Compile C file
-    compile_c_file "zml/zelement.c"
-
-    # Compile all C++ sources
+    # Compile all C++ and C sources
     for src in "${OABE_ZML_SRC[@]}" "${OABE_KEYS_SRC[@]}" "${OABE_LOW_SRC[@]}" \
                "${OABE_TOOLS_SRC[@]}" "${OABE_UTILS_SRC[@]}" "${OABE_CORE_SRC[@]}"; do
-        compile_cpp_file "$src" || true
+        if [[ "$src" == *.c ]]; then
+            compile_c_file "$src" || true
+        else
+            compile_cpp_file "$src" || true
+        fi
     done
 
     # Build parser/scanner
@@ -260,20 +266,15 @@ create_wasm_module() {
         -Wl,--allow-undefined \
         "$WASM_BUILD_DIR/libopenabe.a" \
         -L"$WASM_PREFIX/lib" \
-        -lrelic_s -lcrypto -lgmp
+        "$WASM_PREFIX/lib/libmcl.a" "$WASM_PREFIX/lib/libmclecdsa.a" \
+        -lcrypto -lssl
 
     info "WebAssembly module created: $WASM_BUILD_DIR/openabe.wasm"
 }
 
 # Main execution
 main() {
-    info "Building OpenABE for WebAssembly..."
-
-    # Create relic_ec symlink for compatibility (OpenABE expects relic_ec/relic.h)
-    if [ ! -e "$WASM_PREFIX/include/relic_ec" ]; then
-        info "Creating relic_ec symlink for compatibility..."
-        ln -s relic "$WASM_PREFIX/include/relic_ec"
-    fi
+    info "Building OpenABE for WebAssembly with MCL backend..."
 
     compile_sources
     create_library

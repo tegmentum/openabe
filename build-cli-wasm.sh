@@ -30,7 +30,11 @@ WASM_TARGET="wasm32-wasi"
 # Compiler flags
 CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT"
 CFLAGS="$CFLAGS -O2 -g"
+CFLAGS="$CFLAGS -DBP_WITH_MCL"
 CFLAGS="$CFLAGS -DSSL_LIB_INIT"
+CFLAGS="$CFLAGS -DEC_WITH_OPENSSL"
+CFLAGS="$CFLAGS -DMCL_FP_BIT=384"
+CFLAGS="$CFLAGS -DMCL_FR_BIT=256"
 CFLAGS="$CFLAGS -I$ZROOT/src/include"
 CFLAGS="$CFLAGS -I$ZROOT/cli"
 CFLAGS="$CFLAGS -I$WASM_PREFIX/include"
@@ -47,11 +51,11 @@ WASI_CXX_RT_PATH="$WASI_SDK_PATH/share/wasi-sysroot/lib/wasm32-wasi"
 # Linker flags
 LDFLAGS="-L$WASM_PREFIX/lib -L$WASI_CXX_RT_PATH"
 
-# Libraries (order matters: OpenABE, then RELIC, then dependencies)
+# Libraries (order matters: OpenABE, then MCL, then dependencies)
 # Note: Static libraries need to be specified as direct file paths for WASM
-# Note: GMP is NOT included - RELIC uses its own bignum (causes bn_init symbol conflict with OpenSSL)
 LIBS="$WASM_BUILD_DIR/libopenabe.a"
-LIBS="$LIBS $WASM_PREFIX/lib/librelic_s.a"
+LIBS="$LIBS $WASM_PREFIX/lib/libmcl.a"
+LIBS="$LIBS $WASM_PREFIX/lib/libmclecdsa.a"
 LIBS="$LIBS $WASM_PREFIX/lib/libcrypto.a $WASM_PREFIX/lib/libssl.a"
 
 # C++ runtime libraries (needed for exceptions, RTTI)
@@ -109,25 +113,53 @@ build_cli_tool() {
 
 # Main execution
 main() {
-    info "Building OpenABE CLI tools for WebAssembly (wasm32-wasip2)..."
+    info "Building OpenABE CLI tools for WebAssembly with MCL backend..."
 
     # Verify dependencies exist
     if [ ! -f "$WASM_BUILD_DIR/libopenabe.a" ]; then
         error "libopenabe.a not found. Run ./build-openabe-wasm.sh first"
     fi
 
-    if [ ! -f "$WASM_PREFIX/lib/librelic_s.a" ]; then
-        error "librelic_s.a not found. Run ./build-deps-wasm.sh first"
+    if [ ! -f "$WASM_PREFIX/lib/libmcl.a" ]; then
+        error "libmcl.a not found. Run ./build-deps-wasm.sh first"
+    fi
+
+    if [ ! -f "$WASM_PREFIX/lib/libmclecdsa.a" ]; then
+        error "libmclecdsa.a not found. Run ./build-deps-wasm.sh first"
     fi
 
     # Compile common object file
     compile_common
 
-    # Build all CLI tools
-    build_cli_tool "oabe_setup" "setup.cpp"
-    build_cli_tool "oabe_keygen" "keygen.cpp"
-    build_cli_tool "oabe_enc" "encrypt.cpp"
-    build_cli_tool "oabe_dec" "decrypt.cpp"
+    # If building a specific tool (passed as $1), build only that
+    if [ -n "$1" ]; then
+        case "$1" in
+            benchmark_comprehensive)
+                build_cli_tool "benchmark_comprehensive" "../src/benchmark_comprehensive.cpp"
+                ;;
+            oabe_setup)
+                build_cli_tool "oabe_setup" "setup.cpp"
+                ;;
+            oabe_keygen)
+                build_cli_tool "oabe_keygen" "keygen.cpp"
+                ;;
+            oabe_enc)
+                build_cli_tool "oabe_enc" "encrypt.cpp"
+                ;;
+            oabe_dec)
+                build_cli_tool "oabe_dec" "decrypt.cpp"
+                ;;
+            *)
+                warn "Unknown tool: $1"
+                ;;
+        esac
+    else
+        # Build all CLI tools
+        build_cli_tool "oabe_setup" "setup.cpp"
+        build_cli_tool "oabe_keygen" "keygen.cpp"
+        build_cli_tool "oabe_enc" "encrypt.cpp"
+        build_cli_tool "oabe_dec" "decrypt.cpp"
+    fi
 
     info "CLI tools build complete!"
     info "Output directory: $CLI_WASM_DIR"

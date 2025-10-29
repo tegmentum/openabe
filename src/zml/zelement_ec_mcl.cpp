@@ -86,7 +86,8 @@ void ec_point_init(ec_group_t group, ec_point_t *e) {
     }
 }
 
-void ec_point_copy(ec_point_t to, const ec_point_t from) {
+void ec_point_copy(ec_group_t group, ec_point_t to, const ec_point_t from) {
+    (void)group;  // Not needed for MCL
     if (to && from) {
         *static_cast<Ec*>(to) = *static_cast<const Ec*>(from);
     }

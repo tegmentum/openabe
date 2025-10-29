@@ -622,14 +622,13 @@ ZP operator-(const ZP &x, const ZP &y) {
   fprintf(stderr, "[ZP_SUB_DEBUG]   x.isOrderSet=%d, y.isOrderSet=%d, zr.isOrderSet=%d\n",
           x.isOrderSet, y.isOrderSet, zr.isOrderSet);
   fprintf(stderr, "[ZP_SUB_DEBUG]   x.isZero=%d, y.isZero=%d\n",
-          mclBnFr_isZero(&x.m_ZP), mclBnFr_isZero(&y.m_ZP));
+          x.m_ZP.isZero(), y.m_ZP.isZero());
 
   // Get string representation
-  char x_str[256], y_str[256];
-  mclBnFr_getStr(x_str, sizeof(x_str), &x.m_ZP, 10);
-  mclBnFr_getStr(y_str, sizeof(y_str), &y.m_ZP, 10);
-  fprintf(stderr, "[ZP_SUB_DEBUG]   x value: %s\n", x_str);
-  fprintf(stderr, "[ZP_SUB_DEBUG]   y value: %s\n", y_str);
+  std::string x_str = x.m_ZP.getStr(10);
+  std::string y_str = y.m_ZP.getStr(10);
+  fprintf(stderr, "[ZP_SUB_DEBUG]   x value: %s\n", x_str.c_str());
+  fprintf(stderr, "[ZP_SUB_DEBUG]   y value: %s\n", y_str.c_str());
 #endif
 
   zml_bignum_sub_order(zr.m_ZP, x.m_ZP, y.m_ZP, zr.order);
@@ -637,10 +636,9 @@ ZP operator-(const ZP &x, const ZP &y) {
 #if defined(BP_WITH_MCL)
   // DEBUG: Check result after subtraction
   fprintf(stderr, "[ZP_SUB_DEBUG] After subtraction:\n");
-  fprintf(stderr, "[ZP_SUB_DEBUG]   result.isZero=%d\n", mclBnFr_isZero(&zr.m_ZP));
-  char r_str[256];
-  mclBnFr_getStr(r_str, sizeof(r_str), &zr.m_ZP, 10);
-  fprintf(stderr, "[ZP_SUB_DEBUG]   result value: %s\n", r_str);
+  fprintf(stderr, "[ZP_SUB_DEBUG]   result.isZero=%d\n", zr.m_ZP.isZero());
+  std::string r_str = zr.m_ZP.getStr(10);
+  fprintf(stderr, "[ZP_SUB_DEBUG]   result value: %s\n", r_str.c_str());
 #endif
 
   return zr;
@@ -688,20 +686,18 @@ ZP operator/(const ZP &x, const ZP &y) {
 
   // DEBUG: Check values before division
   #if defined(BP_WITH_MCL)
-  char x_val[256], y_val[256];
-  mclBnFr_getStr(x_val, sizeof(x_val), &x.m_ZP, 10);
-  mclBnFr_getStr(y_val, sizeof(y_val), &y.m_ZP, 10);
-  fprintf(stderr, "[ZP_DIV_DEBUG] Before div: x=%s, y=%s\n", x_val, y_val);
-  fprintf(stderr, "[ZP_DIV_DEBUG] r.m_ZP is_zero BEFORE=%d\n", mclBnFr_isZero(&r.m_ZP));
+  std::string x_val = x.m_ZP.getStr(10);
+  std::string y_val = y.m_ZP.getStr(10);
+  fprintf(stderr, "[ZP_DIV_DEBUG] Before div: x=%s, y=%s\n", x_val.c_str(), y_val.c_str());
+  fprintf(stderr, "[ZP_DIV_DEBUG] r.m_ZP is_zero BEFORE=%d\n", r.m_ZP.isZero());
   #endif
 
   zml_bignum_div(r.m_ZP, x.m_ZP, y.m_ZP, r.order);
 
   // DEBUG: Check result after division
   #if defined(BP_WITH_MCL)
-  char r_val[256];
-  mclBnFr_getStr(r_val, sizeof(r_val), &r.m_ZP, 10);
-  fprintf(stderr, "[ZP_DIV_DEBUG] After div: r=%s, is_zero=%d\n", r_val, mclBnFr_isZero(&r.m_ZP));
+  std::string r_val = r.m_ZP.getStr(10);
+  fprintf(stderr, "[ZP_DIV_DEBUG] After div: r=%s, is_zero=%d\n", r_val.c_str(), r.m_ZP.isZero());
   #endif
 
   return r;
@@ -808,14 +804,11 @@ void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
 #elif defined(BP_WITH_MCL)
   // FIX Bug #15: For CCA security, we MUST use the provided PRNG, not MCL's system CSPRNG.
   // Generate random bytes from the provided PRNG and convert to Fr element.
-  // MCL's mclBnFr_setLittleEndian automatically reduces modulo the curve order.
+  // MCL's setLittleEndianMod automatically reduces modulo the curve order.
   rng->getRandomBytes(buf, length);
 
   // Convert bytes to Fr element (automatically reduced mod r)
-  int ret = mclBnFr_setLittleEndian(&this->m_ZP, buf, length);
-  if (ret != 0) {
-    fprintf(stderr, "[ZP::setRandom ERROR] mclBnFr_setLittleEndian failed with code %d\n", ret);
-  }
+  this->m_ZP.setLittleEndianMod(buf, length);
 #else
   oabe_rand_seed(&rng_trampoline, (void *)rng);
   zml_bignum_rand(this->m_ZP, this->order);
@@ -1162,7 +1155,11 @@ void G1::setRandom(OpenABERNG *rng) {
     }
 
     // Multiply by random scalar: g1 = base * random_scalar
-    mclBnG1_mul(&this->m_G1, &this->m_G1, &random_scalar.m_ZP);
+    // MCL C++ API: G1::mul(result, point, scalar)
+    // Note: g1_ptr is mclBnG1 (C struct), need to cast to G1 (C++ class)
+    mcl::bls12::G1::mul(*reinterpret_cast<mcl::bls12::G1*>(&this->m_G1),
+                         *reinterpret_cast<mcl::bls12::G1*>(&this->m_G1),
+                         random_scalar.m_ZP);
 
     zml_bignum_free(order);
 #else
@@ -1419,7 +1416,11 @@ void G2::setRandom(OpenABERNG *rng)
 		}
 
 		// Multiply by random scalar: g2 = base * random_scalar
-		mclBnG2_mul(&this->m_G2, &this->m_G2, &random_scalar.m_ZP);
+		// MCL C++ API: G2::mul(result, point, scalar)
+		// Note: g2_ptr is mclBnG2 (C struct), need to cast to G2 (C++ class)
+		mcl::bls12::G2::mul(*reinterpret_cast<mcl::bls12::G2*>(&this->m_G2),
+		                     *reinterpret_cast<mcl::bls12::G2*>(&this->m_G2),
+		                     random_scalar.m_ZP);
 
 		zml_bignum_free(order);
 #else

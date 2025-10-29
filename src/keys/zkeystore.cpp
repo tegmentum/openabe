@@ -281,7 +281,7 @@ OpenABEKeystore::parseKeyHeader(const std::string keyID, OpenABEByteString &keyB
   key = this->constructKeyFromBytes(keyID, keyBlob, outputKeyBytes);
   if(key == nullptr) {
       fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__, OpenABE_errorToString(OpenABE_ERROR_INVALID_INPUT));
-      return nullptr;
+      throw OpenABE_ERROR_INVALID_INPUT;
   }
 
   return key;

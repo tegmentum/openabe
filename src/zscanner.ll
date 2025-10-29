@@ -71,7 +71,7 @@ typedef oabe::Parser::token_type token_type;
        return token::UINT;
 }
 
-[A-Za-z/\\.\[\]$~][A-Za-z0-9_/\\,.\*\-:!~\[\]\&\$\#\@\%\^{}]* {
+[A-Za-z/\\.\[\]$~][A-Za-z0-9_/\\.\*\-:!~\[\]\&\$\#\@\%\^{}]* {
     yylval->stringVal = new std::string(yytext, yyleng);
     if(yylval->stringVal->compare("[0]:") == 0) {
          delete yylval->stringVal;
@@ -88,6 +88,9 @@ typedef oabe::Parser::token_type token_type;
     } else if(yylval->stringVal->compare("in") == 0 || yylval->stringVal->compare("IN") == 0) {
          delete yylval->stringVal;
          return token::IN;
+    } else if(yylval->stringVal->compare("of") == 0 || yylval->stringVal->compare("OF") == 0) {
+         delete yylval->stringVal;
+         return token::OF;
     } else if(yylval->stringVal->find(EXPINT_KEYWORD) != std::string::npos) {
          std::cerr << *yylloc << ": '" << EXPINT_KEYWORD << "' is reserved and cannot be user-specified." << std::endl;
          return token::ERROR;
