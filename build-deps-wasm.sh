@@ -358,6 +358,34 @@ EOF
     fi
 }
 
+# Build tinycbor for WASM
+build_tinycbor() {
+    info "Building tinycbor for WebAssembly..."
+
+    cd "$ZROOT/deps/tinycbor"
+
+    # Clean previous WASM build if exists
+    if [ -f "Makefile" ]; then
+        info "Cleaning previous tinycbor build..."
+        make clean 2>/dev/null || true
+    fi
+
+    # Build tinycbor for WASM
+    info "Compiling tinycbor with WASI-SDK..."
+    make lib/libtinycbor.a \
+        CC="$CC" \
+        CFLAGS="$CFLAGS -I./src" \
+        AR="$AR" \
+        RANLIB="$RANLIB"
+
+    if [ -f "lib/libtinycbor.a" ]; then
+        info "tinycbor WASM build complete (size: $(du -h lib/libtinycbor.a | cut -f1))"
+    else
+        error "tinycbor library not created"
+        exit 1
+    fi
+}
+
 # Main execution
 main() {
     info "Building OpenABE dependencies for WebAssembly..."
@@ -365,6 +393,7 @@ main() {
     build_gmp
     build_openssl
     build_mcl
+    build_tinycbor
 
     info "All dependencies built successfully!"
     info "Install prefix: $WASM_PREFIX"

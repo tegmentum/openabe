@@ -22,6 +22,9 @@ LOCAL_INSTALL_BIN ?= /usr/local/bin
 #  Dependencies (C/C++) - MUST come first to override system headers (especially OpenSSL)
 CCFLAGS = -I$(DEPS_INSTALL_ZROOT)/include
 CXXFLAGS := -I$(DEPS_INSTALL_ZROOT)/include
+#  tinycbor includes
+CCFLAGS += -I$(ZROOT)/deps/tinycbor/src
+CXXFLAGS += -I$(ZROOT)/deps/tinycbor/src
 #  Local includes (for generated headers from bison/flex)
 CXXFLAGS += -I$(ZROOT)/src
 #  Common includes (C/C++)
@@ -170,8 +173,8 @@ OPENSSL_ZML = -DSSL_LIB_INIT
 OPENSSL_ZML += -DBP_WITH_MCL -DMCL_FP_BIT=384 -DMCL_FR_BIT=256
 CXXFLAGS += $(OPENSSL_ZML)
 CCFLAGS += -g -O2 $(OPENSSL_ZML) $(ADD_CFLAGS)
-OABELDLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a
-OABELDSHLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a
+OABELDLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a $(ZROOT)/deps/tinycbor/lib/libtinycbor.a
+OABELDSHLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a $(ZROOT)/deps/tinycbor/lib/libtinycbor.a
 # Note: EC_WITH_OPENSSL has been removed. OpenABE is now ABE-only.
 # MCL provides all cryptographic operations (pairing, hashing, serialization)
 # OpenSSL is used only for symmetric crypto (AES, HMAC) via -DSSL_LIB_INIT

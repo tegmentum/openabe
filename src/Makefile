@@ -22,6 +22,7 @@ OABE_KEYS = keys/zkdf.o keys/zkey.o keys/zkeystore.o keys/zsymkey.o
 OABE_LOW = ske/zcontextske.o \
           abe/zcontextabe.o abe/zcontextcca.o abe/zcontextcpwaters.o abe/zcontextkpgpsw.o
 OABE_TOOLS = tools/zlsss.o tools/zprng.o
+OABE_CBOR = cbor/zcbor_wrapper.o
 
 # EC implementation: Always use OpenSSL for ECDSA (MCL is for pairings only)
 # MCL pairing backend uses stubs for low-level EC ops (PKSIG/ECDSA works via abstraction)
@@ -33,14 +34,14 @@ OABE_UTILS = utils/zkeymgr.o utils/zcryptoutils.o utils/zcontainer.o utils/zbenc
             utils/zciphertext.o utils/zpolicy.o utils/zattributelist.o utils/zdriver.o utils/zfunctioninput.o utils/zcurveinfo.o
             
 OABE_OBJ_TARGETS = zobject.o openabe.o zcontext.o zcrypto_box.o zsymcrypto.o zparser.o zscanner.o \
-                  $(OABE_ZML) $(OABE_KEYS) $(OABE_LOW) $(OABE_TOOLS) $(OABE_UTILS) openssl_init.o $(OS_OBJS)
+                  $(OABE_ZML) $(OABE_KEYS) $(OABE_LOW) $(OABE_TOOLS) $(OABE_CBOR) $(OABE_UTILS) openssl_init.o $(OS_OBJS)
 
 # MCL is the only supported backend
 OABE_OBJ_FILES = zobject.o openabe.o zgroup.o zlsss.o zerror.o zpairing.o zelliptic.o zelement_ec.o zelement_bp.o zelement_mcl.o $(OABE_EC_IMPL) zcontainer.o zciphertext.o \
 	     zkey.o zkeystore.o zfunctioninput.o zcontext.o zpolicy.o zsymkey.o zprng.o zattributelist.o \
 	     zcontextske.o zcontextabe.o zcontextcpwaters.o zcontextkpgpsw.o \
 	     zcontextcca.o zkdf.o zkeymgr.o zcryptoutils.o zcrypto_box.o zbenchmark.o zparser.o zscanner.o zdriver.o zsymcrypto.o \
-	     openssl_init.o zstandard_serialization.o zcurveinfo.o $(OS_OBJS)
+	     zcbor_wrapper.o openssl_init.o zstandard_serialization.o zcurveinfo.o $(OS_OBJS)
 	     
 ifeq ($(OS),Windows_NT)
     LDFLAGS += -L/mingw64/bin
@@ -58,7 +59,7 @@ LIBRARYH=header
 
 GENFILES = location.hh position.hh stack.hh *.tab.* zscanner.cpp
 
-PROGRAMS = test_libopenabe test_zml test_zml1 test_zml2 test_policy test_abe test_ske test_zsym test_keystore bench_libopenabe profile_libopenabe fuzz_policy fuzz_attrlist test_standard_serialization
+PROGRAMS = test_libopenabe test_zml test_zml1 test_zml2 test_policy test_abe test_ske test_zsym test_keystore bench_libopenabe profile_libopenabe fuzz_policy fuzz_attrlist test_standard_serialization test_cbor_basic
 
 all: $(OABELIB) $(ZSYMLIB) $(PROGRAMS)
 
@@ -133,6 +134,9 @@ test_keystore: $(OABELIB)
 
 test_standard_serialization: $(OABELIB)
 	$(CXX) -o test_standard_serialization $(CXX11FLAGS) $(LDFLAGS) -L. test_standard_serialization.cpp $(OABELIB) $(OABELDLIBS) -lpthread
+
+test_cbor_basic: $(OABELIB)
+	$(CXX) -o test_cbor_basic $(CXX11FLAGS) $(LDFLAGS) -L. test_cbor_basic.cpp $(OABELIB) $(OABELDLIBS) $(GTESTLIBS)
 
 bench_libopenabe: $(OABELIB)
 	$(CXX) -o bench_libopenabe $(CXX11FLAGS) $(LDFLAGS) -L. bench_libopenabe.cpp $(OABELIB) $(OABELDLIBS) $(BOOST_SYSTEM) $(BOOST_THREAD)
