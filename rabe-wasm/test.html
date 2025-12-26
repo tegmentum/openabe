@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>OpenABE-RABE WASM Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .success { color: #4CAF50; font-weight: bold; }
+        .error { color: #f44336; font-weight: bold; }
+        .info { color: #2196F3; }
+        #status { font-size: 18px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>OpenABE-RABE WASM Test</h1>
+
+    <div id="status">Loading WASM module...</div>
+
+    <div class="test-section">
+        <h2>Quick Tests</h2>
+        <button id="testWasm" disabled>Test WASM Module</button>
+        <button id="testBswRoundtrip" disabled>BSW Roundtrip Test</button>
+        <button id="testAc17Roundtrip" disabled>AC17 Roundtrip Test</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Custom BSW CP-ABE Test</h2>
+        <p>
+            <label>Attributes (comma-separated):</label><br>
+            <input type="text" id="attributes" value="admin,developer" style="width: 100%; padding: 8px; margin: 5px 0;">
+        </p>
+        <p>
+            <label>Policy:</label><br>
+            <input type="text" id="policy" value='"admin" or "developer"' style="width: 100%; padding: 8px; margin: 5px 0;">
+        </p>
+        <p>
+            <label>Message:</label><br>
+            <input type="text" id="message" value="Hello from WASM ABE!" style="width: 100%; padding: 8px; margin: 5px 0;">
+        </p>
+        <button id="runCustomTest" disabled>Run Custom Test</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Output</h2>
+        <pre id="output">Waiting for tests...</pre>
+    </div>
+
+    <script type="module">
+        import init, {
+            test_wasm,
+            test_bsw_roundtrip,
+            bsw_setup,
+            bsw_keygen,
+            bsw_encrypt,
+            bsw_decrypt,
+            ac17_cp_setup,
+            ac17_cp_keygen,
+            ac17_cp_encrypt,
+            ac17_cp_decrypt
+        } from './pkg/openabe_rabe.js';
+
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
+
+        function log(msg, type = 'info') {
+            const line = document.createElement('div');
+            line.className = type;
+            line.textContent = msg;
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearLog() {
+            output.innerHTML = '';
+        }
+
+        async function initialize() {
+            try {
+                await init();
+                status.innerHTML = '<span class="success">WASM module loaded successfully!</span>';
+
+                // Enable buttons
+                document.querySelectorAll('button').forEach(b => b.disabled = false);
+
+                log('WASM module initialized', 'success');
+                log('Ready to run tests!', 'info');
+            } catch (e) {
+                status.innerHTML = '<span class="error">Failed to load WASM module</span>';
+                log('Error: ' + e.message, 'error');
+            }
+        }
+
+        document.getElementById('testWasm').addEventListener('click', () => {
+            clearLog();
+            log('Testing WASM module...');
+            const result = test_wasm();
+            log(result, 'success');
+        });
+
+        document.getElementById('testBswRoundtrip').addEventListener('click', () => {
+            clearLog();
+            log('Running BSW CP-ABE roundtrip test...');
+            const result = test_bsw_roundtrip();
+            if (result.success) {
+                log(result.data, 'success');
+            } else {
+                log('Error: ' + result.error, 'error');
+            }
+        });
+
+        document.getElementById('testAc17Roundtrip').addEventListener('click', () => {
+            clearLog();
+            log('Running AC17 CP-ABE roundtrip test...');
+
+            try {
+                // Setup
+                log('1. Setup...');
+                const setupResult = ac17_cp_setup();
+                if (!setupResult.success) {
+                    log('Setup failed: ' + setupResult.error, 'error');
+                    return;
+                }
+                const keys = JSON.parse(setupResult.data);
+                log('   Setup OK', 'success');
+
+                // Keygen
+                log('2. Keygen (attributes: A, B)...');
+                const keygenResult = ac17_cp_keygen(
+                    JSON.stringify(keys.mpk),
+                    JSON.stringify(keys.msk),
+                    '["A", "B"]'
+                );
+                if (!keygenResult.success) {
+                    log('Keygen failed: ' + keygenResult.error, 'error');
+                    return;
+                }
+                log('   Keygen OK', 'success');
+
+                // Encrypt
+                log('3. Encrypt (policy: "A" and "B")...');
+                const plaintext = 'Hello from AC17!';
+                const plaintextB64 = btoa(plaintext);
+                const encryptResult = ac17_cp_encrypt(
+                    JSON.stringify(keys.mpk),
+                    '"A" and "B"',
+                    plaintextB64
+                );
+                if (!encryptResult.success) {
+                    log('Encrypt failed: ' + encryptResult.error, 'error');
+                    return;
+                }
+                log('   Encrypt OK', 'success');
+
+                // Decrypt
+                log('4. Decrypt...');
+                const decryptResult = ac17_cp_decrypt(
+                    keygenResult.data,
+                    encryptResult.data
+                );
+                if (!decryptResult.success) {
+                    log('Decrypt failed: ' + decryptResult.error, 'error');
+                    return;
+                }
+                const decrypted = atob(decryptResult.data);
+                log('   Decrypt OK', 'success');
+
+                // Verify
+                log('5. Verify: "' + decrypted + '"');
+                if (decrypted === plaintext) {
+                    log('AC17 CP-ABE test PASSED!', 'success');
+                } else {
+                    log('Decrypted text does not match!', 'error');
+                }
+            } catch (e) {
+                log('Error: ' + e.message, 'error');
+            }
+        });
+
+        document.getElementById('runCustomTest').addEventListener('click', () => {
+            clearLog();
+            const attributes = document.getElementById('attributes').value.split(',').map(a => a.trim());
+            const policy = document.getElementById('policy').value;
+            const message = document.getElementById('message').value;
+
+            log('Running custom BSW CP-ABE test...');
+            log('Attributes: ' + JSON.stringify(attributes));
+            log('Policy: ' + policy);
+            log('Message: ' + message);
+            log('');
+
+            try {
+                // Setup
+                log('1. Setup...');
+                const setupResult = bsw_setup();
+                if (!setupResult.success) {
+                    log('Setup failed: ' + setupResult.error, 'error');
+                    return;
+                }
+                const keys = JSON.parse(setupResult.data);
+                log('   Setup OK', 'success');
+
+                // Keygen
+                log('2. Keygen...');
+                const keygenResult = bsw_keygen(
+                    JSON.stringify(keys.mpk),
+                    JSON.stringify(keys.msk),
+                    JSON.stringify(attributes)
+                );
+                if (!keygenResult.success) {
+                    log('Keygen failed: ' + keygenResult.error, 'error');
+                    return;
+                }
+                log('   Keygen OK', 'success');
+
+                // Encrypt
+                log('3. Encrypt...');
+                const plaintextB64 = btoa(message);
+                const encryptResult = bsw_encrypt(
+                    JSON.stringify(keys.mpk),
+                    policy,
+                    plaintextB64
+                );
+                if (!encryptResult.success) {
+                    log('Encrypt failed: ' + encryptResult.error, 'error');
+                    return;
+                }
+                log('   Encrypt OK', 'success');
+
+                // Decrypt
+                log('4. Decrypt...');
+                const decryptResult = bsw_decrypt(
+                    keygenResult.data,
+                    encryptResult.data
+                );
+                if (!decryptResult.success) {
+                    log('Decrypt failed: ' + decryptResult.error, 'error');
+                    return;
+                }
+                const decrypted = atob(decryptResult.data);
+                log('   Decrypt OK', 'success');
+
+                // Verify
+                log('');
+                log('Decrypted: "' + decrypted + '"');
+                if (decrypted === message) {
+                    log('', 'info');
+                    log('Custom BSW CP-ABE test PASSED!', 'success');
+                } else {
+                    log('Decrypted text does not match!', 'error');
+                }
+            } catch (e) {
+                log('Error: ' + e.message, 'error');
+            }
+        });
+
+        // Initialize on page load
+        initialize();
+    </script>
+</body>
+</html>
