@@ -39,6 +39,8 @@
 #define BN_WITH_OPENSSL
 #elif defined(BP_WITH_MCL)
 #define BN_WITH_MCL
+#elif defined(BP_WITH_RABE)
+#define BN_WITH_RABE
 #endif
 
 #if defined(BP_WITH_OPENSSL)
@@ -58,6 +60,9 @@
   #include <new>  // For placement new
   #include <string>  // For std::string
  #endif
+#elif defined(BP_WITH_RABE)
+ // RABE backend - uses Rust FFI
+ #include <rabe_bls12381.h>
 #elif !defined(BP_WITH_OPENSSL)
  #include <relic/relic.h>
  #include <relic_ec/relic.h>
@@ -275,6 +280,44 @@ typedef mclBnFr bignum_t;
 int zml_check_error();
 void zml_bignum_rand(bignum_t *a, const bignum_t *o);
 
+#elif defined(BN_WITH_RABE)
+
+/* BEGIN RABE C API definitions */
+
+// RABE uses opaque pointer types for all elements
+// Memory is managed by the Rust library via FFI
+
+typedef RabeFr* bignum_t;
+
+#define zml_bignum_free(b)            rabe_fr_free(b)
+#define zml_bignum_safe_free(b)       if(b != NULL) free(b)
+
+#define zml_bignum_setuint(b, x)      rabe_fr_set_int(b, x)
+#define zml_bignum_is_zero(b)         rabe_fr_is_zero(b)
+#define zml_bignum_is_one(b)          (0)  /* TODO: implement */
+
+#define BN_CMP_LT                     -1
+#define BN_CMP_EQ                     0
+#define BN_CMP_GT                     1
+
+#define BN_POSITIVE                   0
+#define BN_NEGATIVE                   1
+#define G_CMP_EQ                      0
+
+/* Bignum conversion functions - implemented in zelement_rabe.cpp */
+#ifdef __cplusplus
+extern "C" {
+#endif
+void zml_bignum_fromHex(bignum_t b, const char* str, size_t len);
+void zml_bignum_fromBin(bignum_t b, const uint8_t* data, size_t len);
+void zml_bignum_toBin(const bignum_t b, uint8_t* data, size_t len);
+int zml_check_error();
+void zml_bignum_rand(bignum_t *a, const bignum_t *o);
+#ifdef __cplusplus
+}
+#endif
+/* END of RABE C API definitions */
+
 #else
 
 /* BEGIN RELIC macro definitions (default if BN_WITH_OPENSSL/MCL not set) */
@@ -339,8 +382,21 @@ typedef void* ec_group_t;
 #define is_ec_point_null(e)     (e == nullptr)
 #define ec_get_ref(a)           a
 
+#elif defined(BP_WITH_RABE)
+/* When using RABE for BP operations, EC operations are not used.
+ * Define dummy types and no-op macros for compatibility. */
+typedef void* ec_point_t;
+typedef void* ec_group_t;
+
+/* Define no-op EC macros for RABE-only builds */
+#define ec_point_free(e)        /* no-op */
+#define ec_group_free(g)        /* no-op */
+#define ec_point_set_null(e)    e = nullptr
+#define is_ec_point_null(e)     (e == nullptr)
+#define ec_get_ref(a)           a
+
 #else
-/* if EC_WITH_OPENSSL and BP_WITH_MCL not specifically defined,
+/* if EC_WITH_OPENSSL and BP_WITH_MCL/RABE not specifically defined,
  * then we use RELIC EC operations by default */
 
  /* BEGIN RELIC macro definitions */
@@ -497,6 +553,52 @@ typedef mclBnGT gt_ptr;
 
 /* END of MCL macro definitions */
 
+#elif defined(BP_WITH_RABE)
+
+/* BEGIN RABE macro definitions */
+
+typedef void* bp_group_t;
+#define bp_group_free(g)   g = nullptr;
+
+// RABE uses wrapper structs containing opaque pointers
+// This matches MCL's struct-based approach for API compatibility
+typedef struct { RabeG1* ptr; } g1_ptr;
+typedef struct { RabeG2* ptr; } g2_ptr;
+typedef struct { RabeGt* ptr; } gt_ptr;
+
+// RABE comparison constants (matching RELIC behavior)
+#define CMP_EQ   0
+#define CMP_NE   1
+#define CMP_LT   -1
+#define CMP_GT   1
+
+#define g_set_null(g)   (g).ptr = nullptr
+#define g1_copy_const(r, p)   rabe_g1_copy((r).ptr, (p).ptr)
+#define g2_copy_const(r, p)   rabe_g2_copy((r).ptr, (p).ptr)
+#define gt_copy_const(r, p)   rabe_gt_copy((r).ptr, (p).ptr)
+
+#define g1_element_free(e)   do { if ((e).ptr) rabe_g1_free((e).ptr); (e).ptr = nullptr; } while(0)
+#define g2_element_free(e)   do { if ((e).ptr) rabe_g2_free((e).ptr); (e).ptr = nullptr; } while(0)
+#define gt_element_free(e)   do { if ((e).ptr) rabe_gt_free((e).ptr); (e).ptr = nullptr; } while(0)
+
+#define is_elem_null(e)   ((e).ptr == nullptr)
+
+// RABE comparison macros - return CMP_EQ (0) if equal, CMP_NE (1) otherwise
+#define g1_cmp(a, b)   rabe_g1_cmp((a).ptr, (b).ptr)
+#define g2_cmp(a, b)   rabe_g2_cmp((a).ptr, (b).ptr)
+#define gt_cmp(a, b)   rabe_gt_cmp((a).ptr, (b).ptr)
+
+// RABE group operation macros
+#define g1_neg(r, p)         rabe_g1_neg((r).ptr, (p).ptr)
+#define g2_add(r, a, b)      rabe_g2_add((r).ptr, (a).ptr, (b).ptr)
+#define g2_sub(r, a, b)      rabe_g2_sub((r).ptr, (a).ptr, (b).ptr)
+#define g2_neg(r, p)         rabe_g2_neg((r).ptr, (p).ptr)
+#define g2_norm(r, p)        rabe_g2_copy((r).ptr, (p).ptr)  // No normalization needed
+#define gt_inv(r, p)         rabe_gt_inv((r).ptr, (p).ptr)
+#define gt_set_unity(g)      rabe_gt_set_one((g).ptr)
+
+/* END of RABE macro definitions */
+
 #else
 /* if BP_WITH_OPENSSL and BP_WITH_MCL not defined,
  * then we use RELIC EC operations by default */
@@ -574,8 +676,8 @@ void bp_ensure_curve_params(uint8_t id);
 // ZML abstract methods for G1
 void g1_init(bp_group_t group, g1_ptr *e);
 void g1_set_to_infinity(bp_group_t group, g1_ptr *e);
-#if defined(BP_WITH_MCL)
-// FIX Bug #9: For MCL, g1_ptr is struct so must pass by pointer
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, g1_ptr is struct/pointer so must pass by pointer
 void g1_add_op(bp_group_t group, g1_ptr *z, const g1_ptr *x, const g1_ptr *y);
 void g1_sub_op(bp_group_t group, g1_ptr *z, const g1_ptr *x);
 void g1_mul_op(bp_group_t group, g1_ptr *z, const g1_ptr *x, const bignum_t *r);
@@ -586,8 +688,8 @@ void g1_sub_op(bp_group_t group, g1_ptr z, const g1_ptr x);
 void g1_mul_op(bp_group_t group, g1_ptr z, const g1_ptr x, const bignum_t r);
 void g1_map_op(const bp_group_t group, g1_ptr g, uint8_t *msg, int msg_len);
 #endif
-#if defined(BP_WITH_MCL)
-// FIX Bug #9: For MCL, g1_ptr is struct so must pass by pointer
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, g1_ptr is struct/pointer so must pass by pointer
 void g1_rand_op(g1_ptr *g);
 #else
 void g1_rand_op(g1_ptr g);
@@ -595,8 +697,8 @@ void g1_rand_op(g1_ptr g);
 
 #if !defined(BP_WITH_OPENSSL)
 size_t g1_elem_len(const g1_ptr g);
-#if defined(BP_WITH_MCL)
-// FIX Bug #9: For MCL, g1_ptr is struct so must pass by pointer
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, g1_ptr is struct/pointer so must pass by pointer
 void g1_elem_in(g1_ptr *g, uint8_t *in, size_t len);
 void g1_elem_out(const g1_ptr *g, uint8_t *out, size_t len);
 #else
@@ -604,16 +706,16 @@ void g1_elem_in(g1_ptr g, uint8_t *in, size_t len);
 void g1_elem_out(const g1_ptr g, uint8_t *out, size_t len);
 #endif
 size_t g2_elem_len(g2_ptr g);
-#if defined(BP_WITH_MCL)
-// FIX Bug #9: For MCL, g2_ptr is struct so must pass by pointer
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, g2_ptr is struct/pointer so must pass by pointer
 void g2_elem_in(g2_ptr *g, uint8_t *in, size_t len);
 void g2_elem_out(const g2_ptr *g, uint8_t *out, size_t len);
 #else
 void g2_elem_in(g2_ptr g, uint8_t *in, size_t len);
 void g2_elem_out(g2_ptr g, uint8_t *out, size_t len);
 #endif
-#if defined(BP_WITH_MCL)
-// FIX Bug #9: For MCL, gt_ptr is struct so must pass by pointer
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, gt_ptr is struct/pointer so must pass by pointer
 size_t gt_elem_len(const gt_ptr *g, int should_compress);
 void gt_elem_in(gt_ptr *g, uint8_t *in, size_t len);
 void gt_elem_out(const gt_ptr *g, uint8_t *out, size_t len, int should_compress);
@@ -629,8 +731,8 @@ void gt_elem_out(const gt_ptr *g, uint8_t *out, size_t len, int should_compress)
 // ZML abstract methods for G2
 void g2_init(bp_group_t group, g2_ptr *e);
 void g2_set_to_infinity(bp_group_t group, g2_ptr *e);
-#if defined(BP_WITH_MCL)
-// FIX Bug #9: For MCL, g2_ptr is struct so must pass by pointer
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, g2_ptr is struct/pointer so must pass by pointer
 int g2_cmp_op(bp_group_t group, const g2_ptr *x, const g2_ptr *y);
 void g2_mul_op(bp_group_t group, g2_ptr *z, const g2_ptr *x, const bignum_t *r);
 #else
@@ -642,8 +744,8 @@ void g2_rand_op(g2_ptr g);
 // ZML abstract methods for GT
 void gt_init(const bp_group_t group, gt_ptr *e);
 void gt_set_to_infinity(bp_group_t group, gt_ptr *e);
-#if defined(BP_WITH_MCL)
-// FIX Bug #9: For MCL, gt_ptr is struct so must pass by pointer
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, gt_ptr is struct/pointer so must pass by pointer
 void gt_mul_op(const bp_group_t group, gt_ptr *z, const gt_ptr *x, const gt_ptr *y);
 void gt_div_op(const bp_group_t group, gt_ptr *z, const gt_ptr *x, const gt_ptr *y);
 void gt_exp_op(const bp_group_t group, gt_ptr *y, const gt_ptr *x, const bignum_t *r);
@@ -656,13 +758,13 @@ int gt_is_unity_check(const bp_group_t group, gt_ptr r);
 #endif
 
 // GT helper functions
-#if defined(BP_WITH_MCL)
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
 int gt_is_unity(const gt_ptr a);
 #endif
 
 // ZML (pairings & multi-pairings)
-#if defined(BP_WITH_MCL)
-// FIX Bug #9: For MCL, all ptr types are structs so must pass by pointer
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, all ptr types are structs/pointers so must pass by pointer
 void bp_map_op(const bp_group_t group, gt_ptr *gt, const g1_ptr *g1, const g2_ptr *g2);
 #else
 void bp_map_op(const bp_group_t group, gt_ptr gt, g1_ptr g1, g2_ptr g2);

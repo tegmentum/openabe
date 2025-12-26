@@ -1,0 +1,39 @@
+[package]
+name = "rabe-bls12381"
+version = "0.1.0"
+edition = "2021"
+description = "BLS12-381 pairing library - drop-in replacement for rabe-bn"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "ark-serialize/derive"]
+borsh = ["dep:borsh"]
+wasm = ["getrandom/js"]
+ffi = []  # Enable C FFI bindings
+
+[dependencies]
+# Arkworks ecosystem for BLS12-381
+ark-ff = "0.4"
+ark-ec = "0.4"
+ark-bls12-381 = "0.4"
+ark-serialize = "0.4"
+ark-std = "0.4"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"], optional = true }
+borsh = { version = "1.0", optional = true }
+
+# Random number generation
+rand = "0.8"
+getrandom = { version = "0.2", optional = true }
+
+# For hash-to-curve
+sha2 = "0.10"
+digest = "0.10"
+
+# For thread-safe global state in FFI
+once_cell = "1.18"

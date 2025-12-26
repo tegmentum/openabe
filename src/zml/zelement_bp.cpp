@@ -37,6 +37,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <algorithm>
 #include <openabe/openabe.h>
 #include <openssl/rand.h>
 
@@ -65,6 +66,17 @@ const string g1_point_to_string(bp_group_t group, const g1_ptr p) {
   // Parse to extract x and y coordinates
   string s(buf, len);
   return "[" + s + "]";
+#elif defined(BP_WITH_RABE)
+  // RABE: serialize to hex for string representation
+  uint8_t buf[96];
+  size_t len = rabe_g1_serialize(buf, sizeof(buf), p.ptr);
+  string hex;
+  for (size_t i = 0; i < len; i++) {
+    char tmp[3];
+    snprintf(tmp, sizeof(tmp), "%02x", buf[i]);
+    hex += tmp;
+  }
+  return "[" + hex + "]";
 #else
   bignum_t x, y;
   zml_bignum_init(&x);
@@ -99,6 +111,15 @@ void g1_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
     return;
   }
   s.appendArray(buf, len);
+#elif defined(BP_WITH_RABE)
+  uint8_t buf[MAX_BUFFER_SIZE];
+  memset(buf, 0, MAX_BUFFER_SIZE);
+  size_t len = rabe_g1_serialize(buf, MAX_BUFFER_SIZE, p.ptr);
+  if (len == 0) {
+    fprintf(stderr, "g1_convert_to_bytestring: rabe_g1_serialize failed\n");
+    return;
+  }
+  s.appendArray(buf, len);
 #elif defined(BP_WITH_OPENSSL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE);
@@ -112,8 +133,8 @@ void g1_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 #endif
 }
 
-#if defined(BP_WITH_MCL)
-// FIX Bug #16: For MCL, g1_ptr is mclBnG1 (struct value, not pointer).
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, g1_ptr is struct value, not pointer.
 // Must pass by reference so deserialization modifies the original, not a copy.
 void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr& p, uint8_t curve_id) {
 #else
@@ -131,6 +152,16 @@ void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p,
   }
   fprintf(stderr, "[g1_convert_to_point] AFTER deserialize: read=%zu, p_is_zero=%d, p_is_valid=%d\n",
           read, mclBnG1_isZero(&p), mclBnG1_isValid(&p));
+#elif defined(BP_WITH_RABE)
+  if (p.ptr == nullptr) {
+    p.ptr = rabe_g1_new();
+  }
+  int result = rabe_g1_deserialize(p.ptr, xstr, xstr_len);
+  if (result != 0) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
+            OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
+    return;
+  }
 #elif defined(BP_WITH_OPENSSL)
   G1_ELEM_oct2point(group, p, xstr, xstr_len, NULL);
 #else
@@ -145,7 +176,7 @@ void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p,
 }
 
 // Wrapper for external callers without curve_id parameter
-#if defined(BP_WITH_MCL)
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
 void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr& p) {
 #else
 void g1_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g1_ptr p) {
@@ -163,6 +194,17 @@ const string g2_point_to_string(bp_group_t group, const g2_ptr p) {
   // MCL returns format for G2 points
   string s(buf, len);
   return "[" + s + "]";
+#elif defined(BP_WITH_RABE)
+  // RABE: serialize to hex for string representation
+  uint8_t buf[192];
+  size_t len = rabe_g2_serialize(buf, sizeof(buf), p.ptr);
+  string hex;
+  for (size_t i = 0; i < len; i++) {
+    char tmp[3];
+    snprintf(tmp, sizeof(tmp), "%02x", buf[i]);
+    hex += tmp;
+  }
+  return "[" + hex + "]";
 #else
   bignum_t x[2], y[2];
   zml_bignum_init(&x[0]);
@@ -215,6 +257,15 @@ void g2_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
     return;
   }
   s.appendArray(buf, len);
+#elif defined(BP_WITH_RABE)
+  uint8_t buf[MAX_BUFFER_SIZE];
+  memset(buf, 0, MAX_BUFFER_SIZE);
+  size_t len = rabe_g2_serialize(buf, MAX_BUFFER_SIZE, p.ptr);
+  if (len == 0) {
+    fprintf(stderr, "g2_convert_to_bytestring: rabe_g2_serialize failed\n");
+    return;
+  }
+  s.appendArray(buf, len);
 #elif defined(BP_WITH_OPENSSL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE); // ideal => POINT_CONVERSION_COMPRESSED
@@ -233,8 +284,8 @@ void g2_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s,
 #endif
 }
 
-#if defined(BP_WITH_MCL)
-// FIX Bug #16: For MCL, g2_ptr is mclBnG2 (struct value, not pointer).
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+// For MCL/RABE, g2_ptr is struct value, not pointer.
 // Must pass by reference so deserialization modifies the original, not a copy.
 void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr& p, uint8_t curve_id) {
 #else
@@ -245,6 +296,16 @@ void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p,
 #if defined(BP_WITH_MCL)
   size_t read = mclBnG2_deserialize(&p, xstr, xstr_len);
   if (read == 0) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
+            OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
+    return;
+  }
+#elif defined(BP_WITH_RABE)
+  if (p.ptr == nullptr) {
+    p.ptr = rabe_g2_new();
+  }
+  int result = rabe_g2_deserialize(p.ptr, xstr, xstr_len);
+  if (result != 0) {
     fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
             OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
     return;
@@ -263,7 +324,7 @@ void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p,
 }
 
 // Wrapper for external callers without curve_id parameter
-#if defined(BP_WITH_MCL)
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
 void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr& p) {
 #else
 void g2_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, g2_ptr p) {
@@ -291,6 +352,15 @@ void gt_convert_to_bytestring(bp_group_t group, oabe::OpenABEByteString &s, cons
   }
   fprintf(stderr, "[gt_convert_to_bytestring] Serialized %zu bytes\n", len);
   s.appendArray(buf, len);
+#elif defined(BP_WITH_RABE)
+  uint8_t buf[MAX_BUFFER_SIZE];
+  memset(buf, 0, MAX_BUFFER_SIZE);
+  size_t len = rabe_gt_serialize(buf, MAX_BUFFER_SIZE, p->ptr);
+  if (len == 0) {
+    fprintf(stderr, "gt_convert_to_bytestring: rabe_gt_serialize failed\n");
+    return;
+  }
+  s.appendArray(buf, len);
 #elif defined(BP_WITH_OPENSSL)
   uint8_t buf[MAX_BUFFER_SIZE];
   memset(buf, 0, MAX_BUFFER_SIZE);
@@ -315,6 +385,16 @@ void gt_convert_to_point(bp_group_t group, oabe::OpenABEByteString &s, gt_ptr *p
   // FIX Bug #8: gt_ptr is mclBnGT struct, must pass by pointer!
   size_t read = mclBnGT_deserialize(p, xstr, xstr_len);  // p is now already a pointer
   if (read == 0) {
+    fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
+            OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
+    return;
+  }
+#elif defined(BP_WITH_RABE)
+  if (p->ptr == nullptr) {
+    p->ptr = rabe_gt_new();
+  }
+  int result = rabe_gt_deserialize(p->ptr, xstr, xstr_len);
+  if (result != 0) {
     fprintf(stderr, "%s:%s:%d: '%s'\n", __FILE__, __FUNCTION__, __LINE__,
             OpenABE_errorToString(oabe::OpenABE_ERROR_SERIALIZATION_FAILED));
     return;
@@ -345,20 +425,42 @@ void multi_bp_map_op(const bp_group_t group, oabe::GT &gt,
     throw oabe::OpenABE_ERROR_INVALID_LENGTH;
   }
   const size_t n = g1.size();
-#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
   #if defined(BP_WITH_OPENSSL)
   const G1_ELEM *ps[n];
   const G2_ELEM *qs[n];
+  #elif defined(BP_WITH_RABE)
+  // RABE: collect pointers to G1/G2 elements
+  std::vector<const RabeG1*> ps(n);
+  std::vector<const RabeG2*> qs(n);
   #else /* BP_WITH_MCL */
   g1_ptr ps[n];
   g2_ptr qs[n];
   #endif
   for (size_t i = 0; i < n; i++) {
+    #if defined(BP_WITH_RABE)
+    ps[i] = g1.at(i).m_G1.ptr;
+    qs[i] = g2.at(i).m_G2.ptr;
+    #else
     ps[i] = g1.at(i).m_G1;
     qs[i] = g2.at(i).m_G2;
+    #endif
   }
   #if defined(BP_WITH_OPENSSL)
   GT_ELEMs_pairing(group, gt.m_GT, n, ps, qs, NULL);
+  #elif defined(BP_WITH_RABE)
+  // RABE: compute multi-pairing
+  fprintf(stderr, "[MULTI_PAIRING_RABE] Computing %zu pairings\n", n);
+  // IMPORTANT: Always ensure GT is initialized before use
+  if (gt.m_GT.ptr == nullptr) {
+    gt.m_GT.ptr = rabe_gt_new();
+  }
+  if (n == 0) {
+    rabe_gt_set_one(gt.m_GT.ptr);
+  } else {
+    // Use multi-pairing FFI function
+    rabe_multi_pairing(gt.m_GT.ptr, ps.data(), qs.data(), n);
+  }
   #else /* BP_WITH_MCL */
   // For MCL, compute multi-pairing
   fprintf(stderr, "[MULTI_PAIRING_MCL] Computing %zu pairings\n", n);
@@ -760,7 +862,9 @@ void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
   // COMPILE-TIME DIAGNOSTIC: Print which backend is being used
   static bool diag_printed = false;
   if (!diag_printed) {
-#if defined(BP_WITH_MCL)
+#if defined(BP_WITH_RABE)
+    fprintf(stderr, "[COMPILE-TIME] BP_WITH_RABE is DEFINED\n");
+#elif defined(BP_WITH_MCL)
     fprintf(stderr, "[COMPILE-TIME] BP_WITH_MCL is DEFINED\n");
 #elif defined(BP_WITH_OPENSSL)
     fprintf(stderr, "[COMPILE-TIME] BP_WITH_OPENSSL is DEFINED\n");
@@ -807,8 +911,26 @@ void ZP::setRandom(OpenABERNG *rng, bignum_t o) {
   // MCL's setLittleEndianMod automatically reduces modulo the curve order.
   rng->getRandomBytes(buf, length);
 
+  // DEBUG: Print random bytes from PRNG
+  static int mcl_call_count = 0;
+  if (mcl_call_count < 10) {
+    fprintf(stderr, "[ZP::setRandom MCL #%d] Got %d bytes from PRNG: ", mcl_call_count, length);
+    for (int i = 0; i < std::min(length, 16); i++) {
+      fprintf(stderr, "%02x", buf[i]);
+    }
+    if (length > 16) fprintf(stderr, "...");
+    fprintf(stderr, "\n");
+    fflush(stderr);
+    mcl_call_count++;
+  }
+
   // Convert bytes to Fr element (automatically reduced mod r)
   this->m_ZP.setLittleEndianMod(buf, length);
+#elif defined(BP_WITH_RABE)
+  // For RABE: Use the provided PRNG to generate random bytes
+  rng->getRandomBytes(buf, length);
+  // Interpret bytes as a field element (reduce mod curve order)
+  rabe_fr_from_bytes_mod_order(this->m_ZP, buf, length);
 #else
   oabe_rand_seed(&rng_trampoline, (void *)rng);
   zml_bignum_rand(this->m_ZP, this->order);
@@ -966,6 +1088,10 @@ void ZP::getLengthAndByteString(OpenABEByteString &z) const {
 G1::G1(std::shared_ptr<BPGroup> bgroup) {
   this->isInit = true;
   this->bgroup = bgroup;
+#if defined(BP_WITH_RABE)
+  // Initialize pointer before g1_set_to_infinity
+  this->m_G1.ptr = nullptr;
+#endif
   // does init and sets the point to infinity
   g1_set_to_infinity(GET_BP_GROUP(this->bgroup), &this->m_G1);
 }
@@ -1024,8 +1150,8 @@ G1::~G1() {
  */
 G1 operator*(const G1 &x, const G1 &y) {
   G1 z = x;
-#if defined(BP_WITH_MCL)
-  // FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+  // Pass pointers for MCL/RABE
   g1_add_op(GET_GROUP(z.bgroup), &z.m_G1, &z.m_G1, &const_cast<G1&>(y).m_G1);
 #else
   g1_add_op(GET_GROUP(z.bgroup), z.m_G1, z.m_G1, y.m_G1);
@@ -1048,8 +1174,8 @@ G1 &G1::operator*=(const G1 &x) {
 G1 operator/(const G1 &x, const G1 &y) {
   // z = (x / y) => Point z = y; z = x - z;
   G1 z = y;
-#if defined(BP_WITH_MCL)
-  // FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+  // Pass pointers for MCL/RABE
   g1_sub_op(GET_BP_GROUP(z.bgroup), &z.m_G1, &const_cast<G1&>(x).m_G1);
 #else
   g1_sub_op(GET_BP_GROUP(z.bgroup), z.m_G1, x.m_G1);
@@ -1087,8 +1213,8 @@ G1 operator-(const G1 &x) {
  */
 G1 G1::exp(ZP z) {
   G1 g1(this->bgroup);
-#if defined(BP_WITH_MCL)
-  // FIX Bug #9: Pass pointers for MCL - CRITICAL for G1::exp
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+  // Pass pointers for MCL/RABE - CRITICAL for G1::exp
   g1_mul_op(GET_BP_GROUP(g1.bgroup), &g1.m_G1, &this->m_G1, &z.m_ZP);
 #else
   g1_mul_op(GET_BP_GROUP(g1.bgroup), g1.m_G1, this->m_G1, z.m_ZP);
@@ -1110,6 +1236,9 @@ bool G1::ismember(bignum_t order) {
 #elif defined(BP_WITH_MCL)
   // MCL validates points on creation, so just check if initialized
   result = mclBnG1_isValid(&this->m_G1);
+#elif defined(BP_WITH_RABE)
+  // RABE validates points on creation, so just check if not zero
+  result = (this->m_G1.ptr != nullptr) && !rabe_g1_is_zero(this->m_G1.ptr);
 #else
   g1_t r;
   g1_inits(r);
@@ -1161,19 +1290,52 @@ void G1::setRandom(OpenABERNG *rng) {
                          *reinterpret_cast<mcl::bls12::G1*>(&this->m_G1),
                          random_scalar.m_ZP);
 
+    // DEBUG: Print G1 element coordinates to detect non-determinism
+    static int g1_call_count = 0;
+    if (g1_call_count < 10) {
+      // Serialize G1 to bytes to see its value
+      char buf[256];
+      size_t len = mclBnG1_getStr(buf, sizeof(buf), &this->m_G1, 16); // hex format
+      fprintf(stderr, "[G1::setRandom MCL #%d] Resulting G1 element: %s\n", g1_call_count, buf);
+      fflush(stderr);
+      g1_call_count++;
+    }
+
+    zml_bignum_free(order);
+#elif defined(BP_WITH_RABE)
+    // For RABE: Use provided RNG to generate random G1 element
+    // Get group order
+    bignum_t order;
+    zml_bignum_init(&order);
+    bp_get_order(GET_BP_GROUP(this->bgroup), order);
+
+    // Generate random scalar from provided RNG
+    ZP random_scalar(order);
+    random_scalar.setRandom(rng, order);
+
+    // Hash a known string to get a base point
+    if (this->m_G1.ptr == nullptr) {
+      this->m_G1.ptr = rabe_g1_new();
+    }
+    const char* base_str = "OpenABE-G1-base";
+    rabe_g1_hash(this->m_G1.ptr, (const uint8_t*)base_str, strlen(base_str));
+
+    // Multiply by random scalar: g1 = base * random_scalar
+    rabe_g1_mul(this->m_G1.ptr, this->m_G1.ptr, random_scalar.m_ZP);
+
     zml_bignum_free(order);
 #else
 #ifndef __wasm__
     oabe_rand_seed(&rng_trampoline, (void *)rng);
 #endif
     // g1_rand(this->m_G1);
-    g1_rand_op(this->m_G1);
+    g1_rand_op(&this->m_G1);
 #endif
   }
 }
 
 ostream &operator<<(ostream &os, const G1 &g1) {
-#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
   os << g1_point_to_string(GET_BP_GROUP(g1.bgroup), g1.m_G1);
 #else
   ep_write_ostream(os, const_cast<G1 &>(g1).m_G1, DEC);
@@ -1253,6 +1415,10 @@ G2::G2(std::shared_ptr<BPGroup> bgroup)
 {
     this->isInit = true;
     this->bgroup = bgroup;
+#if defined(BP_WITH_RABE)
+    // Initialize pointer before g2_set_to_infinity
+    this->m_G2.ptr = nullptr;
+#endif
     // does init and sets the point to infinity
     g2_set_to_infinity(GET_BP_GROUP(this->bgroup), &this->m_G2);
 }
@@ -1357,8 +1523,8 @@ G2 operator-(const G2& x)
 G2 G2::exp(ZP z)
 {
 	G2 g2(this->bgroup);
-#if defined(BP_WITH_MCL)
-	// FIX Bug #9: Pass pointers for MCL - CRITICAL for G2::exp
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+	// Pass pointers for MCL/RABE - CRITICAL for G2::exp
 	g2_mul_op(GET_BP_GROUP(g2.bgroup), &g2.m_G2, &this->m_G2, &z.m_ZP);
 #else
 	g2_mul_op(GET_BP_GROUP(g2.bgroup), g2.m_G2, this->m_G2, z.m_ZP);
@@ -1375,6 +1541,9 @@ bool G2::ismember(bignum_t order)
 #elif defined(BP_WITH_MCL)
     // MCL validates points on creation, so just check if initialized
     result = mclBnG2_isValid(&this->m_G2);
+#elif defined(BP_WITH_RABE)
+    // RABE validates points on creation, so just check if not zero
+    result = (this->m_G2.ptr != nullptr) && !rabe_g2_is_zero(this->m_G2.ptr);
 #else
 	g2_t r;
 	fp12_inits(r);
@@ -1423,6 +1592,26 @@ void G2::setRandom(OpenABERNG *rng)
 		                     random_scalar.m_ZP);
 
 		zml_bignum_free(order);
+#elif defined(BP_WITH_RABE)
+		// For RABE: Use provided RNG to generate random G2 element
+		bignum_t order;
+		zml_bignum_init(&order);
+		bp_get_order(GET_BP_GROUP(this->bgroup), order);
+
+		// Generate random scalar from provided RNG
+		ZP random_scalar(order);
+		random_scalar.setRandom(rng, order);
+
+		// Generate a base G2 point by using the generator
+		if (this->m_G2.ptr == nullptr) {
+			this->m_G2.ptr = rabe_g2_new();
+		}
+		rabe_g2_set_generator(this->m_G2.ptr);
+
+		// Multiply by random scalar: g2 = base * random_scalar
+		rabe_g2_mul(this->m_G2.ptr, this->m_G2.ptr, random_scalar.m_ZP);
+
+		zml_bignum_free(order);
 #else
 #ifndef __wasm__
 		oabe_rand_seed(&rng_trampoline, (void *) rng);
@@ -1434,7 +1623,7 @@ void G2::setRandom(OpenABERNG *rng)
 
 ostream& operator<<(ostream& os, const G2& g2)
 {
-#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
     os << g2_point_to_string(GET_BP_GROUP(g2.bgroup), g2.m_G2);
 #else
 	g2_write_ostream(os, const_cast<G2&>(g2).m_G2, DEC);
@@ -1444,8 +1633,8 @@ ostream& operator<<(ostream& os, const G2& g2)
 
 bool operator==(const G2& x,const G2& y)
 {
-#if defined(BP_WITH_MCL)
-    // FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+    // Pass pointers for MCL/RABE
     return (g2_cmp_op(GET_BP_GROUP(x.bgroup), &const_cast<G2&>(x).m_G2, &const_cast<G2&>(y).m_G2) == G_CMP_EQ);
 #else
     return (g2_cmp_op(GET_BP_GROUP(x.bgroup), const_cast<G2&>(x).m_G2, const_cast<G2&>(y).m_G2) == G_CMP_EQ);
@@ -1454,8 +1643,8 @@ bool operator==(const G2& x,const G2& y)
 
 bool operator!=(const G2& x,const G2& y)
 {
-#if defined(BP_WITH_MCL)
-    // FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+    // Pass pointers for MCL/RABE
     return (g2_cmp_op(GET_BP_GROUP(x.bgroup), &const_cast<G2&>(x).m_G2, &const_cast<G2&>(y).m_G2) != G_CMP_EQ);
 #else
     return (g2_cmp_op(GET_BP_GROUP(x.bgroup), const_cast<G2&>(x).m_G2, const_cast<G2&>(y).m_G2) != G_CMP_EQ);
@@ -1516,6 +1705,10 @@ GT::GT(std::shared_ptr<BPGroup> bgroup)
 {
     this->isInit = true;
     this->bgroup = bgroup;
+#if defined(BP_WITH_RABE)
+    // Initialize pointer before gt_set_to_infinity
+    this->m_GT.ptr = nullptr;
+#endif
     // does init and sets the point to infinity
     gt_set_to_infinity(GET_BP_GROUP(this->bgroup), &this->m_GT);
     shouldCompress_ = true;
@@ -1571,8 +1764,8 @@ GT::~GT()
 GT operator*(const GT& x,const GT& y)
 {
 	GT z = x;
-#if defined(BP_WITH_MCL)
-	// FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+	// Pass pointers for MCL/RABE
 	gt_mul_op(GET_BP_GROUP(z.bgroup), &z.m_GT, &z.m_GT, &const_cast<GT&>(y).m_GT);
 #else
 	gt_mul_op(GET_BP_GROUP(z.bgroup), z.m_GT, z.m_GT, const_cast<GT&>(y).m_GT);
@@ -1592,8 +1785,8 @@ GT operator/(const GT& x,const GT& y)
 {
 	GT z = x;
 	// z = x * y^-1
-#if defined(BP_WITH_MCL)
-	// FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+	// Pass pointers for MCL/RABE
 	gt_div_op(GET_BP_GROUP(z.bgroup), &z.m_GT, &const_cast<GT&>(x).m_GT, &const_cast<GT&>(y).m_GT);
 #else
 	gt_div_op(GET_BP_GROUP(z.bgroup), z.m_GT, const_cast<GT&>(x).m_GT, const_cast<GT&>(y).m_GT);
@@ -1604,8 +1797,8 @@ GT operator/(const GT& x,const GT& y)
 GT GT::exp(ZP z)
 {
 	GT gt(*this);
-#if defined(BP_WITH_MCL)
-	// FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+	// Pass pointers for MCL/RABE
 	gt_exp_op(GET_BP_GROUP(gt.bgroup), &gt.m_GT, &gt.m_GT, &z.m_ZP);
 #else
 	gt_exp_op(GET_BP_GROUP(gt.bgroup), gt.m_GT, gt.m_GT, z.m_ZP);
@@ -1636,8 +1829,8 @@ void GT::setIdentity()
 
 bool GT::isInfinity()
 {
-#if defined(BP_WITH_MCL)
-    // FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+    // Pass pointers for MCL/RABE
     return gt_is_unity_check(GET_BP_GROUP(this->bgroup), &this->m_GT);
 #else
     return gt_is_unity_check(GET_BP_GROUP(this->bgroup), this->m_GT);
@@ -1649,8 +1842,8 @@ bool GT::ismember(bignum_t order)
 	bool result;
 	gt_ptr r;
 	gt_init(GET_BP_GROUP(this->bgroup), &r);
-#if defined(BP_WITH_MCL)
-	// FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+	// Pass pointers for MCL/RABE
 	gt_exp_op(GET_BP_GROUP(this->bgroup), &r, &this->m_GT, &order);
 	result = gt_is_unity_check(GET_BP_GROUP(this->bgroup), &r);
 #else
@@ -1663,7 +1856,7 @@ bool GT::ismember(bignum_t order)
 
 ostream& operator<<(ostream& os, const GT& gt)
 {
-#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL)
+#if defined(BP_WITH_OPENSSL) || defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
     OpenABEByteString s;
     gt_convert_to_bytestring(GET_BP_GROUP(gt.bgroup), s, &gt.m_GT, NO_COMPRESS);
     os << "(" << s.toHex() << ")";
@@ -1746,7 +1939,7 @@ GT::isEqual(ZObject *z) const
 	return false;
 }
 
-#if !defined(BP_WITH_OPENSSL) && !defined(BP_WITH_MCL)
+#if !defined(BP_WITH_OPENSSL) && !defined(BP_WITH_MCL) && !defined(BP_WITH_RABE)
 void fp12_write_ostream(ostream& os, fp12_t a, int radix) {
     os << "[(";
     fp6_write_ostream(os, a[0], radix);

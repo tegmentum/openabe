@@ -13,7 +13,8 @@ OBJDIR := .
 OABE_INCLUDE_DIR := $(INCLUDE_ROOT)/openabe
 CXX11FLAGS += $(CXXFLAGS)
 
-# RELIC support removed - MCL is the only backend
+# Backend selection: MCL (default) or RABE
+# Set USE_RABE=1 to use RABE backend instead of MCL
 
 GTESTLIBS  = -lgtest -lpthread
 
@@ -22,26 +23,35 @@ OABE_KEYS = keys/zkdf.o keys/zkey.o keys/zkeystore.o keys/zsymkey.o
 OABE_LOW = ske/zcontextske.o \
           abe/zcontextabe.o abe/zcontextcca.o abe/zcontextcpwaters.o abe/zcontextkpgpsw.o
 OABE_TOOLS = tools/zlsss.o tools/zprng.o
-OABE_CBOR = cbor/zcbor_wrapper.o
+OABE_CBOR = cbor/zcbor_wrapper.o cbor/zcbor_group_elements.o cbor/zcbor_attributes.o cbor/zcbor_policy.o
 
 # EC implementation: Always use OpenSSL for ECDSA (MCL is for pairings only)
 # MCL pairing backend uses stubs for low-level EC ops (PKSIG/ECDSA works via abstraction)
 OABE_EC_IMPL = zecdsa_openssl.o zelement_ec_stubs.o
 
-# MCL is the only supported backend
-OABE_ZML = zml/zgroup.o zml/zpairing.o zml/zelliptic.o zml/zelement_ec.o zml/zelement_bp.o zml/zelement_mcl.o zml/zstandard_serialization.o $(OABE_EC_IMPL)
+# Backend-specific ZML files
+ifeq ($(USE_RABE), 1)
+  # RABE backend
+  OABE_BACKEND = zml/zelement_rabe.o
+  BACKEND_OBJ = zelement_rabe.o
+else
+  # MCL backend (default)
+  OABE_BACKEND = zml/zelement_mcl.o
+  BACKEND_OBJ = zelement_mcl.o
+endif
+
+OABE_ZML = zml/zgroup.o zml/zpairing.o zml/zelliptic.o zml/zelement_ec.o zml/zelement_bp.o $(OABE_BACKEND) zml/zstandard_serialization.o $(OABE_EC_IMPL)
 OABE_UTILS = utils/zkeymgr.o utils/zcryptoutils.o utils/zcontainer.o utils/zbenchmark.o utils/zerror.o utils/zcontainer.o \
             utils/zciphertext.o utils/zpolicy.o utils/zattributelist.o utils/zdriver.o utils/zfunctioninput.o utils/zcurveinfo.o
-            
+
 OABE_OBJ_TARGETS = zobject.o openabe.o zcontext.o zcrypto_box.o zsymcrypto.o zparser.o zscanner.o \
                   $(OABE_ZML) $(OABE_KEYS) $(OABE_LOW) $(OABE_TOOLS) $(OABE_CBOR) $(OABE_UTILS) openssl_init.o $(OS_OBJS)
 
-# MCL is the only supported backend
-OABE_OBJ_FILES = zobject.o openabe.o zgroup.o zlsss.o zerror.o zpairing.o zelliptic.o zelement_ec.o zelement_bp.o zelement_mcl.o $(OABE_EC_IMPL) zcontainer.o zciphertext.o \
+OABE_OBJ_FILES = zobject.o openabe.o zgroup.o zlsss.o zerror.o zpairing.o zelliptic.o zelement_ec.o zelement_bp.o $(BACKEND_OBJ) $(OABE_EC_IMPL) zcontainer.o zciphertext.o \
 	     zkey.o zkeystore.o zfunctioninput.o zcontext.o zpolicy.o zsymkey.o zprng.o zattributelist.o \
 	     zcontextske.o zcontextabe.o zcontextcpwaters.o zcontextkpgpsw.o \
 	     zcontextcca.o zkdf.o zkeymgr.o zcryptoutils.o zcrypto_box.o zbenchmark.o zparser.o zscanner.o zdriver.o zsymcrypto.o \
-	     zcbor_wrapper.o openssl_init.o zstandard_serialization.o zcurveinfo.o $(OS_OBJS)
+	     zcbor_wrapper.o zcbor_group_elements.o zcbor_attributes.o zcbor_policy.o openssl_init.o zstandard_serialization.o zcurveinfo.o $(OS_OBJS)
 	     
 ifeq ($(OS),Windows_NT)
     LDFLAGS += -L/mingw64/bin
@@ -59,12 +69,15 @@ LIBRARYH=header
 
 GENFILES = location.hh position.hh stack.hh *.tab.* zscanner.cpp
 
-PROGRAMS = test_libopenabe test_zml test_zml1 test_zml2 test_policy test_abe test_ske test_zsym test_keystore bench_libopenabe profile_libopenabe fuzz_policy fuzz_attrlist test_standard_serialization test_cbor_basic
+PROGRAMS = test_libopenabe test_zml test_zml1 test_zml2 test_policy test_abe test_ske test_zsym test_keystore bench_libopenabe profile_libopenabe fuzz_policy fuzz_attrlist test_standard_serialization test_cbor_basic test_cbor_group_elements test_cbor_attributes test_cbor_policy test_cbor_generate_vectors test_cbor_verify_vectors test_cbor_wasm
 
 all: $(OABELIB) $(ZSYMLIB) $(PROGRAMS)
 
 zml/zelement_mcl.o:
 	$(CXX) $(CXXFLAGS) -c zml/zelement_mcl.cpp -o zelement_mcl.o
+
+zml/zelement_rabe.o:
+	$(CXX) $(CXXFLAGS) -c zml/zelement_rabe.cpp -o zelement_rabe.o
 
 zecdsa_openssl.o: zml/zecdsa_openssl.cpp
 	$(CXX) $(CXXFLAGS) -c zml/zecdsa_openssl.cpp -o zecdsa_openssl.o
@@ -137,6 +150,24 @@ test_standard_serialization: $(OABELIB)
 
 test_cbor_basic: $(OABELIB)
 	$(CXX) -o test_cbor_basic $(CXX11FLAGS) $(LDFLAGS) -L. test_cbor_basic.cpp $(OABELIB) $(OABELDLIBS) $(GTESTLIBS)
+
+test_cbor_group_elements: $(OABELIB)
+	$(CXX) -o test_cbor_group_elements $(CXX11FLAGS) $(LDFLAGS) -L. test_cbor_group_elements.cpp $(OABELIB) $(OABELDLIBS) -lpthread
+
+test_cbor_attributes: $(OABELIB)
+	$(CXX) -o test_cbor_attributes $(CXX11FLAGS) $(LDFLAGS) -L. test_cbor_attributes.cpp $(OABELIB) $(OABELDLIBS) -lpthread
+
+test_cbor_policy: $(OABELIB)
+	$(CXX) -o test_cbor_policy $(CXX11FLAGS) $(LDFLAGS) -L. test_cbor_policy.cpp $(OABELIB) $(OABELDLIBS) -lpthread
+
+test_cbor_generate_vectors: $(OABELIB)
+	$(CXX) -o test_cbor_generate_vectors $(CXX11FLAGS) $(LDFLAGS) -L. test_cbor_generate_vectors.cpp $(OABELIB) $(OABELDLIBS) -lpthread
+
+test_cbor_verify_vectors: $(OABELIB)
+	$(CXX) -o test_cbor_verify_vectors $(CXX11FLAGS) $(LDFLAGS) -L. test_cbor_verify_vectors.cpp $(OABELIB) $(OABELDLIBS) -lpthread
+
+test_cbor_wasm: $(OABELIB)
+	$(CXX) -o test_cbor_wasm $(CXX11FLAGS) $(LDFLAGS) -L. test_cbor_wasm.cpp $(OABELIB) $(OABELDLIBS) -lpthread
 
 bench_libopenabe: $(OABELIB)
 	$(CXX) -o bench_libopenabe $(CXX11FLAGS) $(LDFLAGS) -L. bench_libopenabe.cpp $(OABELIB) $(OABELDLIBS) $(BOOST_SYSTEM) $(BOOST_THREAD)

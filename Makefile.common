@@ -120,12 +120,12 @@ else
        CXXFLAGS += -I$(LOCAL_INCLUDE) $(OS_CXXFLAGS) -arch $(ARCH_FLAG)
        CCFLAGS += -I$(LOCAL_INCLUDE)
        # include the clang C++ standard library (as a result, enable TR1_TUPLE flag)
-       CXXFLAGS += -stdlib=libc++ -DGTEST_USE_OWN_TR1_TUPLE=1 -Wno-deprecated
+       CXXFLAGS += -stdlib=libc++ -DGTEST_USE_OWN_TR1_TUPLE=1 -Wno-deprecated -Wno-shift-count-overflow
        # (Option to use GMP with OpenSSL?): -DOPENSSL_USE_GMP -lgmp
        # OpenSSL 1.1.1 doesn't have darwin64-arm64-cc target
        # Use darwin64-x86_64-cc with appropriate -arch flag
        OPENSSL_CONFIG := Configure darwin64-x86_64-cc no-asm shared
-       ADD_CFLAGS += -Wno-implicit-function-declaration -Wno-macro-redefined
+       ADD_CFLAGS += -Wno-implicit-function-declaration -Wno-macro-redefined -Wno-shift-count-overflow
     endif
 endif
 
@@ -163,18 +163,34 @@ ifeq ($(OS_NAME), Darwin)
   LDFLAGS += -arch $(ARCH_FLAG)
 endif
 
-# Zeutro Math library config: MCL is the default and only supported backend
+# Zeutro Math library config: MCL is the default, RABE is alternative
 # RELIC support has been removed
 # OpenABE is now focused exclusively on Attribute-Based Encryption (ABE)
 # PKE operations (ECDSA, ECDH, OPDH) are not supported - use OpenSSL directly
 OPENSSL_ZML = -DSSL_LIB_INIT
-# MCL build for math ops (no GMP needed)
-# MCL library is built for BLS12-381 (384-bit field prime, 256-bit scalar field)
-OPENSSL_ZML += -DBP_WITH_MCL -DMCL_FP_BIT=384 -DMCL_FR_BIT=256
+
+# Backend selection: MCL (default) or RABE
+# Set USE_RABE=1 to use RABE backend instead of MCL
+ifeq ($(USE_RABE), 1)
+  # RABE backend - Rust BLS12-381 library via FFI
+  OPENSSL_ZML += -DBP_WITH_RABE
+  CXXFLAGS += -I$(ZROOT)/rabe-bls12381/include
+  CCFLAGS += -I$(ZROOT)/rabe-bls12381/include
+  OABELDLIBS = $(ZROOT)/rabe-bls12381/target/release/librabe_bls12381.a $(ZROOT)/deps/tinycbor/lib/libtinycbor.a
+  OABELDSHLIBS = $(ZROOT)/rabe-bls12381/target/release/librabe_bls12381.a $(ZROOT)/deps/tinycbor/lib/libtinycbor.a
+  # Note: RABE needs these for Rust runtime (may need adjustment per platform)
+  OABELDLIBS += -ldl -lpthread -lm
+  OABELDSHLIBS += -ldl -lpthread -lm
+else
+  # MCL build for math ops (no GMP needed)
+  # MCL library is built for BLS12-381 (384-bit field prime, 256-bit scalar field)
+  OPENSSL_ZML += -DBP_WITH_MCL -DMCL_FP_BIT=384 -DMCL_FR_BIT=256
+  OABELDLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a $(ZROOT)/deps/tinycbor/lib/libtinycbor.a
+  OABELDSHLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a $(ZROOT)/deps/tinycbor/lib/libtinycbor.a
+endif
+
 CXXFLAGS += $(OPENSSL_ZML)
 CCFLAGS += -g -O2 $(OPENSSL_ZML) $(ADD_CFLAGS)
-OABELDLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a $(ZROOT)/deps/tinycbor/lib/libtinycbor.a
-OABELDSHLIBS = $(DEPS_INSTALL_ZROOT)/lib/libmcl.a $(DEPS_INSTALL_ZROOT)/lib/libmclecdsa.a $(ZROOT)/deps/tinycbor/lib/libtinycbor.a
 # Note: EC_WITH_OPENSSL has been removed. OpenABE is now ABE-only.
 # MCL provides all cryptographic operations (pairing, hashing, serialization)
 # OpenSSL is used only for symmetric crypto (AES, HMAC) via -DSSL_LIB_INIT
