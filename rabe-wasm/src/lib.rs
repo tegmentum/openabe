@@ -292,6 +292,237 @@ pub mod ac17_cp {
 }
 
 // ============================================================================
+// AC17 KP-ABE Implementation (Key-Policy ABE)
+// ============================================================================
+
+pub mod ac17_kp {
+    use super::*;
+    use rabe::schemes::ac17::{
+        setup as ac17_setup,
+        kp_keygen,
+        kp_encrypt,
+        kp_decrypt,
+        Ac17MasterKey,
+        Ac17PublicKey,
+        Ac17KpSecretKey,
+        Ac17KpCiphertext,
+    };
+    use rabe::utils::policy::pest::PolicyLanguage;
+    use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+
+    /// Generate master public and secret keys (same as CP-ABE)
+    pub fn setup() -> Result<(MasterPublicKey, MasterSecretKey), AbeError> {
+        let (pk, msk) = ac17_setup();
+
+        let pk_json = serde_json::to_string(&pk)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+        let msk_json = serde_json::to_string(&msk)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        Ok((
+            MasterPublicKey {
+                scheme: "AC17-KP-ABE".to_string(),
+                data: BASE64.encode(pk_json.as_bytes()),
+            },
+            MasterSecretKey {
+                scheme: "AC17-KP-ABE".to_string(),
+                data: BASE64.encode(msk_json.as_bytes()),
+            },
+        ))
+    }
+
+    /// Generate a user secret key for a given access policy
+    /// In KP-ABE, the key contains the policy (not attributes)
+    pub fn keygen(
+        msk: &MasterSecretKey,
+        policy: &str,
+    ) -> Result<UserSecretKey, AbeError> {
+        let msk_bytes = BASE64.decode(&msk.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        let msk_inner: Ac17MasterKey = serde_json::from_slice(&msk_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        let sk = kp_keygen(&msk_inner, &policy.to_string(), PolicyLanguage::HumanPolicy)
+            .map_err(|e| AbeError::KeygenError(format!("{:?}", e)))?;
+
+        let sk_json = serde_json::to_string(&sk)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        Ok(UserSecretKey {
+            scheme: "AC17-KP-ABE".to_string(),
+            attributes: vec![policy.to_string()], // Store policy as "attribute" for reference
+            data: BASE64.encode(sk_json.as_bytes()),
+        })
+    }
+
+    /// Encrypt plaintext with a set of attributes
+    /// In KP-ABE, the ciphertext contains attributes (not policy)
+    pub fn encrypt(
+        mpk: &MasterPublicKey,
+        attributes: &[String],
+        plaintext: &[u8],
+    ) -> Result<Ciphertext, AbeError> {
+        let pk_bytes = BASE64.decode(&mpk.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        let pk: Ac17PublicKey = serde_json::from_slice(&pk_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        // Convert &[String] to Vec<&str> for RABE API
+        let attr_refs: Vec<&str> = attributes.iter().map(|s| s.as_str()).collect();
+
+        let ct = kp_encrypt(&pk, &attr_refs, plaintext)
+            .map_err(|e| AbeError::EncryptError(format!("{:?}", e)))?;
+
+        let ct_json = serde_json::to_string(&ct)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        Ok(Ciphertext {
+            scheme: "AC17-KP-ABE".to_string(),
+            policy: attributes.join(","), // Store attributes for reference
+            data: BASE64.encode(ct_json.as_bytes()),
+        })
+    }
+
+    /// Decrypt ciphertext using a user secret key
+    pub fn decrypt(
+        sk: &UserSecretKey,
+        ct: &Ciphertext,
+    ) -> Result<Vec<u8>, AbeError> {
+        let sk_bytes = BASE64.decode(&sk.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+        let ct_bytes = BASE64.decode(&ct.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        let sk_inner: Ac17KpSecretKey = serde_json::from_slice(&sk_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+        let ct_inner: Ac17KpCiphertext = serde_json::from_slice(&ct_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        kp_decrypt(&sk_inner, &ct_inner)
+            .map_err(|e| AbeError::DecryptError(format!("{:?}", e)))
+    }
+}
+
+// ============================================================================
+// LSW KP-ABE Implementation (Lewko-Sahai-Waters Key-Policy ABE)
+// ============================================================================
+
+pub mod lsw {
+    use super::*;
+    use rabe::schemes::lsw::{
+        setup as lsw_setup,
+        keygen as lsw_keygen,
+        encrypt as lsw_encrypt,
+        decrypt as lsw_decrypt,
+        KpAbeMasterKey,
+        KpAbePublicKey,
+        KpAbeSecretKey,
+        KpAbeCiphertext,
+    };
+    use rabe::utils::policy::pest::PolicyLanguage;
+    use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+
+    /// Generate master public and secret keys
+    pub fn setup() -> Result<(MasterPublicKey, MasterSecretKey), AbeError> {
+        let (pk, msk) = lsw_setup();
+
+        let pk_json = serde_json::to_string(&pk)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+        let msk_json = serde_json::to_string(&msk)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        Ok((
+            MasterPublicKey {
+                scheme: "LSW-KP-ABE".to_string(),
+                data: BASE64.encode(pk_json.as_bytes()),
+            },
+            MasterSecretKey {
+                scheme: "LSW-KP-ABE".to_string(),
+                data: BASE64.encode(msk_json.as_bytes()),
+            },
+        ))
+    }
+
+    /// Generate a user secret key for a given access policy
+    pub fn keygen(
+        mpk: &MasterPublicKey,
+        msk: &MasterSecretKey,
+        policy: &str,
+    ) -> Result<UserSecretKey, AbeError> {
+        let pk_bytes = BASE64.decode(&mpk.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+        let msk_bytes = BASE64.decode(&msk.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        let pk: KpAbePublicKey = serde_json::from_slice(&pk_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+        let msk_inner: KpAbeMasterKey = serde_json::from_slice(&msk_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        let sk = lsw_keygen(&pk, &msk_inner, &policy.to_string(), PolicyLanguage::HumanPolicy)
+            .map_err(|e| AbeError::KeygenError(format!("{:?}", e)))?;
+
+        let sk_json = serde_json::to_string(&sk)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        Ok(UserSecretKey {
+            scheme: "LSW-KP-ABE".to_string(),
+            attributes: vec![policy.to_string()],
+            data: BASE64.encode(sk_json.as_bytes()),
+        })
+    }
+
+    /// Encrypt plaintext with a set of attributes
+    pub fn encrypt(
+        mpk: &MasterPublicKey,
+        attributes: &[String],
+        plaintext: &[u8],
+    ) -> Result<Ciphertext, AbeError> {
+        let pk_bytes = BASE64.decode(&mpk.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        let pk: KpAbePublicKey = serde_json::from_slice(&pk_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        // Convert &[String] to Vec<&str> for RABE API
+        let attr_refs: Vec<&str> = attributes.iter().map(|s| s.as_str()).collect();
+
+        let ct = lsw_encrypt(&pk, &attr_refs, plaintext)
+            .map_err(|e| AbeError::EncryptError(format!("{:?}", e)))?;
+
+        let ct_json = serde_json::to_string(&ct)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        Ok(Ciphertext {
+            scheme: "LSW-KP-ABE".to_string(),
+            policy: attributes.join(","),
+            data: BASE64.encode(ct_json.as_bytes()),
+        })
+    }
+
+    /// Decrypt ciphertext using a user secret key
+    pub fn decrypt(
+        sk: &UserSecretKey,
+        ct: &Ciphertext,
+    ) -> Result<Vec<u8>, AbeError> {
+        let sk_bytes = BASE64.decode(&sk.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+        let ct_bytes = BASE64.decode(&ct.data)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        let sk_inner: KpAbeSecretKey = serde_json::from_slice(&sk_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+        let ct_inner: KpAbeCiphertext = serde_json::from_slice(&ct_bytes)
+            .map_err(|e| AbeError::SerializationError(e.to_string()))?;
+
+        lsw_decrypt(&sk_inner, &ct_inner)
+            .map_err(|e| AbeError::DecryptError(format!("{:?}", e)))
+    }
+}
+
+// ============================================================================
 // WASM Bindings (only compiled when wasm feature is enabled)
 // ============================================================================
 
@@ -543,6 +774,190 @@ pub mod wasm {
         }
     }
 
+    // ========================================================================
+    // AC17 KP-ABE WASM bindings
+    // ========================================================================
+
+    /// Generate AC17 KP-ABE master keys
+    #[wasm_bindgen]
+    pub fn ac17_kp_setup() -> WasmResult {
+        match ac17_kp::setup() {
+            Ok((mpk, msk)) => {
+                let result = serde_json::json!({
+                    "mpk": mpk,
+                    "msk": msk
+                });
+                ok_result(result.to_string())
+            }
+            Err(e) => err_result(e.to_string()),
+        }
+    }
+
+    /// Generate AC17 KP-ABE user key with a policy
+    /// In KP-ABE, the key contains the policy
+    #[wasm_bindgen]
+    pub fn ac17_kp_keygen(msk_json: &str, policy: &str) -> WasmResult {
+        let msk: MasterSecretKey = match serde_json::from_str(msk_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid MSK: {}", e)),
+        };
+
+        match ac17_kp::keygen(&msk, policy) {
+            Ok(sk) => {
+                match serde_json::to_string(&sk) {
+                    Ok(json) => ok_result(json),
+                    Err(e) => err_result(format!("Serialization error: {}", e)),
+                }
+            }
+            Err(e) => err_result(e.to_string()),
+        }
+    }
+
+    /// Encrypt with AC17 KP-ABE
+    /// In KP-ABE, ciphertext contains attributes (not policy)
+    #[wasm_bindgen]
+    pub fn ac17_kp_encrypt(mpk_json: &str, attributes_json: &str, plaintext_b64: &str) -> WasmResult {
+        use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+
+        let mpk: MasterPublicKey = match serde_json::from_str(mpk_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid MPK: {}", e)),
+        };
+
+        let attributes: Vec<String> = match serde_json::from_str(attributes_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid attributes: {}", e)),
+        };
+
+        let plaintext = match BASE64.decode(plaintext_b64) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid base64: {}", e)),
+        };
+
+        match ac17_kp::encrypt(&mpk, &attributes, &plaintext) {
+            Ok(ct) => {
+                match serde_json::to_string(&ct) {
+                    Ok(json) => ok_result(json),
+                    Err(e) => err_result(format!("Serialization error: {}", e)),
+                }
+            }
+            Err(e) => err_result(e.to_string()),
+        }
+    }
+
+    /// Decrypt with AC17 KP-ABE
+    #[wasm_bindgen]
+    pub fn ac17_kp_decrypt(sk_json: &str, ct_json: &str) -> WasmResult {
+        use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+
+        let sk: UserSecretKey = match serde_json::from_str(sk_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid SK: {}", e)),
+        };
+        let ct: Ciphertext = match serde_json::from_str(ct_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid ciphertext: {}", e)),
+        };
+
+        match ac17_kp::decrypt(&sk, &ct) {
+            Ok(plaintext) => ok_result(BASE64.encode(&plaintext)),
+            Err(e) => err_result(e.to_string()),
+        }
+    }
+
+    // ========================================================================
+    // LSW KP-ABE WASM bindings
+    // ========================================================================
+
+    /// Generate LSW KP-ABE master keys
+    #[wasm_bindgen]
+    pub fn lsw_setup() -> WasmResult {
+        match lsw::setup() {
+            Ok((mpk, msk)) => {
+                let result = serde_json::json!({
+                    "mpk": mpk,
+                    "msk": msk
+                });
+                ok_result(result.to_string())
+            }
+            Err(e) => err_result(e.to_string()),
+        }
+    }
+
+    /// Generate LSW KP-ABE user key with a policy
+    #[wasm_bindgen]
+    pub fn lsw_keygen(mpk_json: &str, msk_json: &str, policy: &str) -> WasmResult {
+        let mpk: MasterPublicKey = match serde_json::from_str(mpk_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid MPK: {}", e)),
+        };
+        let msk: MasterSecretKey = match serde_json::from_str(msk_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid MSK: {}", e)),
+        };
+
+        match lsw::keygen(&mpk, &msk, policy) {
+            Ok(sk) => {
+                match serde_json::to_string(&sk) {
+                    Ok(json) => ok_result(json),
+                    Err(e) => err_result(format!("Serialization error: {}", e)),
+                }
+            }
+            Err(e) => err_result(e.to_string()),
+        }
+    }
+
+    /// Encrypt with LSW KP-ABE
+    #[wasm_bindgen]
+    pub fn lsw_encrypt(mpk_json: &str, attributes_json: &str, plaintext_b64: &str) -> WasmResult {
+        use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+
+        let mpk: MasterPublicKey = match serde_json::from_str(mpk_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid MPK: {}", e)),
+        };
+
+        let attributes: Vec<String> = match serde_json::from_str(attributes_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid attributes: {}", e)),
+        };
+
+        let plaintext = match BASE64.decode(plaintext_b64) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid base64: {}", e)),
+        };
+
+        match lsw::encrypt(&mpk, &attributes, &plaintext) {
+            Ok(ct) => {
+                match serde_json::to_string(&ct) {
+                    Ok(json) => ok_result(json),
+                    Err(e) => err_result(format!("Serialization error: {}", e)),
+                }
+            }
+            Err(e) => err_result(e.to_string()),
+        }
+    }
+
+    /// Decrypt with LSW KP-ABE
+    #[wasm_bindgen]
+    pub fn lsw_decrypt(sk_json: &str, ct_json: &str) -> WasmResult {
+        use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+
+        let sk: UserSecretKey = match serde_json::from_str(sk_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid SK: {}", e)),
+        };
+        let ct: Ciphertext = match serde_json::from_str(ct_json) {
+            Ok(v) => v,
+            Err(e) => return err_result(format!("Invalid ciphertext: {}", e)),
+        };
+
+        match lsw::decrypt(&sk, &ct) {
+            Ok(plaintext) => ok_result(BASE64.encode(&plaintext)),
+            Err(e) => err_result(e.to_string()),
+        }
+    }
+
     /// Simple test function to verify WASM is working
     #[wasm_bindgen]
     pub fn test_wasm() -> String {
@@ -590,6 +1005,44 @@ pub mod wasm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ac17_kp_roundtrip() {
+        // Setup
+        let (mpk, msk) = ac17_kp::setup().expect("Setup failed");
+
+        // Keygen - create key with policy (KP-ABE: key has policy)
+        let policy = r#""A" and "B""#;
+        let sk = ac17_kp::keygen(&msk, policy).expect("Keygen failed");
+
+        // Encrypt with attributes (KP-ABE: ciphertext has attributes)
+        let attributes = vec!["A".to_string(), "B".to_string()];
+        let plaintext = b"KP-ABE secret message";
+        let ct = ac17_kp::encrypt(&mpk, &attributes, plaintext).expect("Encrypt failed");
+
+        // Decrypt
+        let decrypted = ac17_kp::decrypt(&sk, &ct).expect("Decrypt failed");
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_lsw_kp_roundtrip() {
+        // Setup
+        let (mpk, msk) = lsw::setup().expect("Setup failed");
+
+        // Keygen - create key with policy
+        let policy = r#""X" or "Y""#;
+        let sk = lsw::keygen(&mpk, &msk, policy).expect("Keygen failed");
+
+        // Encrypt with attributes
+        let attributes = vec!["X".to_string()];
+        let plaintext = b"LSW KP-ABE secret";
+        let ct = lsw::encrypt(&mpk, &attributes, plaintext).expect("Encrypt failed");
+
+        // Decrypt
+        let decrypted = lsw::decrypt(&sk, &ct).expect("Decrypt failed");
+        assert_eq!(decrypted, plaintext);
+    }
 
     #[test]
     fn test_bsw_roundtrip() {

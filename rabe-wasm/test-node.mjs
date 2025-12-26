@@ -160,9 +160,126 @@ try {
     }
     console.log('  Status: PASSED\n');
 
+    // Test 5: AC17 KP-ABE (Key-Policy ABE)
+    console.log('Test 5: AC17 KP-ABE Roundtrip');
+
+    // Setup
+    console.log('  1. Setup...');
+    const ac17KpSetupResult = wasmModule.ac17_kp_setup();
+    if (!ac17KpSetupResult.success) {
+        throw new Error('AC17 KP-ABE Setup failed: ' + ac17KpSetupResult.error);
+    }
+    const ac17KpKeys = JSON.parse(ac17KpSetupResult.data);
+    console.log('     OK');
+
+    // Keygen (KP-ABE: key contains policy)
+    console.log('  2. Keygen (policy: "A" and "B")...');
+    const ac17KpKeygenResult = wasmModule.ac17_kp_keygen(
+        JSON.stringify(ac17KpKeys.msk),
+        '"A" and "B"'
+    );
+    if (!ac17KpKeygenResult.success) {
+        throw new Error('AC17 KP-ABE Keygen failed: ' + ac17KpKeygenResult.error);
+    }
+    console.log('     OK');
+
+    // Encrypt (KP-ABE: ciphertext contains attributes)
+    console.log('  3. Encrypt (attrs: A, B)...');
+    const kpPlaintext = 'KP-ABE secret message';
+    const kpPlaintextB64 = Buffer.from(kpPlaintext).toString('base64');
+    const ac17KpEncryptResult = wasmModule.ac17_kp_encrypt(
+        JSON.stringify(ac17KpKeys.mpk),
+        '["A", "B"]',
+        kpPlaintextB64
+    );
+    if (!ac17KpEncryptResult.success) {
+        throw new Error('AC17 KP-ABE Encrypt failed: ' + ac17KpEncryptResult.error);
+    }
+    console.log('     OK');
+
+    // Decrypt
+    console.log('  4. Decrypt...');
+    const ac17KpDecryptResult = wasmModule.ac17_kp_decrypt(
+        ac17KpKeygenResult.data,
+        ac17KpEncryptResult.data
+    );
+    if (!ac17KpDecryptResult.success) {
+        throw new Error('AC17 KP-ABE Decrypt failed: ' + ac17KpDecryptResult.error);
+    }
+    const kpDecrypted = Buffer.from(ac17KpDecryptResult.data, 'base64').toString('utf-8');
+    console.log('     OK');
+
+    // Verify
+    console.log('  5. Verify plaintext:', kpDecrypted);
+    if (kpDecrypted !== kpPlaintext) {
+        throw new Error('AC17 KP-ABE Decrypted text does not match!');
+    }
+    console.log('  Status: PASSED\n');
+
+    // Test 6: LSW KP-ABE
+    console.log('Test 6: LSW KP-ABE Roundtrip');
+
+    // Setup
+    console.log('  1. Setup...');
+    const lswSetupResult = wasmModule.lsw_setup();
+    if (!lswSetupResult.success) {
+        throw new Error('LSW KP-ABE Setup failed: ' + lswSetupResult.error);
+    }
+    const lswKeys = JSON.parse(lswSetupResult.data);
+    console.log('     OK');
+
+    // Keygen (KP-ABE: key contains policy)
+    console.log('  2. Keygen (policy: "X" or "Y")...');
+    const lswKeygenResult = wasmModule.lsw_keygen(
+        JSON.stringify(lswKeys.mpk),
+        JSON.stringify(lswKeys.msk),
+        '"X" or "Y"'
+    );
+    if (!lswKeygenResult.success) {
+        throw new Error('LSW KP-ABE Keygen failed: ' + lswKeygenResult.error);
+    }
+    console.log('     OK');
+
+    // Encrypt (KP-ABE: ciphertext contains attributes)
+    console.log('  3. Encrypt (attrs: X)...');
+    const lswPlaintext = 'LSW KP-ABE secret';
+    const lswPlaintextB64 = Buffer.from(lswPlaintext).toString('base64');
+    const lswEncryptResult = wasmModule.lsw_encrypt(
+        JSON.stringify(lswKeys.mpk),
+        '["X"]',
+        lswPlaintextB64
+    );
+    if (!lswEncryptResult.success) {
+        throw new Error('LSW KP-ABE Encrypt failed: ' + lswEncryptResult.error);
+    }
+    console.log('     OK');
+
+    // Decrypt
+    console.log('  4. Decrypt...');
+    const lswDecryptResult = wasmModule.lsw_decrypt(
+        lswKeygenResult.data,
+        lswEncryptResult.data
+    );
+    if (!lswDecryptResult.success) {
+        throw new Error('LSW KP-ABE Decrypt failed: ' + lswDecryptResult.error);
+    }
+    const lswDecrypted = Buffer.from(lswDecryptResult.data, 'base64').toString('utf-8');
+    console.log('     OK');
+
+    // Verify
+    console.log('  5. Verify plaintext:', lswDecrypted);
+    if (lswDecrypted !== lswPlaintext) {
+        throw new Error('LSW KP-ABE Decrypted text does not match!');
+    }
+    console.log('  Status: PASSED\n');
+
     // Summary
     console.log('================================');
     console.log('All tests PASSED!');
+    console.log('  - BSW CP-ABE');
+    console.log('  - AC17 CP-ABE');
+    console.log('  - AC17 KP-ABE');
+    console.log('  - LSW KP-ABE');
     console.log('================================');
 
 } catch (error) {
