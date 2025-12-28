@@ -26,12 +26,16 @@ pub mod kind {
     pub const MPK: u64 = 2;
     pub const SK: u64 = 3;
     pub const CT: u64 = 4;
+    pub const RK: u64 = 5;      // Re-encryption key
+    pub const RE_CT: u64 = 6;   // Re-encrypted ciphertext
 }
 
 /// Scheme identifiers
 pub mod scheme {
     pub const CPABE_WATERS: &str = "cpabe-waters";
     pub const CPABE_WATERS_CCA: &str = "cpabe-waters-cca";
+    pub const CPABE_WATERS_PRE: &str = "cpabe-waters-pre";
+    pub const DABE_PRE: &str = "dabe-pre";
 }
 
 /// Curve identifiers
@@ -1022,6 +1026,760 @@ pub fn decode_gpsw_full_ct(data: &[u8]) -> Result<gpsw::FullCiphertext, AbeError
 }
 
 // ============================================================================
+// Waters PRE (Proxy Re-Encryption) Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::waters_pre;
+
+/// Encode Waters PRE ReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_waters_rk(rk: &waters_pre::ReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters PRE ReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_waters_rk(data: &[u8]) -> Result<waters_pre::ReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Waters PRE ReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_waters_re_ct(ct: &waters_pre::ReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters PRE ReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_waters_re_ct(data: &[u8]) -> Result<waters_pre::ReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Waters PRE FullReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_waters_full_re_ct(ct: &waters_pre::FullReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters PRE FullReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_waters_full_re_ct(data: &[u8]) -> Result<waters_pre::FullReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// DABE PRE (Proxy Re-Encryption) Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::dabe_pre;
+
+/// Encode DABE PRE DabeReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_rk(rk: &dabe_pre::DabeReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE PRE DabeReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_rk(data: &[u8]) -> Result<dabe_pre::DabeReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE PRE DabeReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_re_ct(ct: &dabe_pre::DabeReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE PRE DabeReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_re_ct(data: &[u8]) -> Result<dabe_pre::DabeReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE PRE FullDabeReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_full_re_ct(ct: &dabe_pre::FullDabeReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE PRE FullDabeReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_full_re_ct(data: &[u8]) -> Result<dabe_pre::FullDabeReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// Waters U2U PRE (User-to-User Proxy Re-Encryption) Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::waters_u2u_pre;
+
+/// Encode Waters U2U PRE DelegationKeyPair to bytes
+#[cfg(feature = "serde")]
+pub fn encode_delegation_keypair(kp: &waters_u2u_pre::DelegationKeyPair) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(kp)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters U2U PRE DelegationKeyPair from bytes
+#[cfg(feature = "serde")]
+pub fn decode_delegation_keypair(data: &[u8]) -> Result<waters_u2u_pre::DelegationKeyPair, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Waters U2U PRE TargetPublicKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_target_pk(pk: &waters_u2u_pre::TargetPublicKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(pk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters U2U PRE TargetPublicKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_target_pk(data: &[u8]) -> Result<waters_u2u_pre::TargetPublicKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Waters U2U PRE TargetSecret to bytes
+#[cfg(feature = "serde")]
+pub fn encode_target_secret(secret: &waters_u2u_pre::TargetSecret) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(secret)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters U2U PRE TargetSecret from bytes
+#[cfg(feature = "serde")]
+pub fn decode_target_secret(data: &[u8]) -> Result<waters_u2u_pre::TargetSecret, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Waters U2U PRE U2UReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_waters_u2u_rk(rk: &waters_u2u_pre::U2UReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters U2U PRE U2UReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_waters_u2u_rk(data: &[u8]) -> Result<waters_u2u_pre::U2UReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Waters U2U PRE U2UReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_waters_u2u_re_ct(ct: &waters_u2u_pre::U2UReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters U2U PRE U2UReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_waters_u2u_re_ct(data: &[u8]) -> Result<waters_u2u_pre::U2UReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Waters U2U PRE FullU2UReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_waters_u2u_full_re_ct(ct: &waters_u2u_pre::FullU2UReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Waters U2U PRE FullU2UReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_waters_u2u_full_re_ct(data: &[u8]) -> Result<waters_u2u_pre::FullU2UReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// DABE U2U PRE (User-to-User Proxy Re-Encryption) Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::dabe_u2u_pre;
+
+/// Encode DABE U2U PRE DabeU2UReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_u2u_rk(rk: &dabe_u2u_pre::DabeU2UReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE U2U PRE DabeU2UReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_u2u_rk(data: &[u8]) -> Result<dabe_u2u_pre::DabeU2UReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE U2U PRE DabeU2UReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_u2u_re_ct(ct: &dabe_u2u_pre::DabeU2UReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE U2U PRE DabeU2UReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_u2u_re_ct(data: &[u8]) -> Result<dabe_u2u_pre::DabeU2UReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE U2U PRE FullDabeU2UReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_u2u_full_re_ct(ct: &dabe_u2u_pre::FullDabeU2UReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE U2U PRE FullDabeU2UReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_u2u_full_re_ct(data: &[u8]) -> Result<dabe_u2u_pre::FullDabeU2UReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// AC17 PRE (Proxy Re-Encryption) Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::ac17_pre;
+
+/// Encode AC17 PRE ReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_rk(rk: &ac17_pre::ReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 PRE ReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_rk(data: &[u8]) -> Result<ac17_pre::ReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 PRE ReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_re_ct(ct: &ac17_pre::ReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 PRE ReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_re_ct(data: &[u8]) -> Result<ac17_pre::ReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 PRE FullReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_full_re_ct(ct: &ac17_pre::FullReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 PRE FullReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_full_re_ct(data: &[u8]) -> Result<ac17_pre::FullReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// AC17 U2U PRE (User-to-User Proxy Re-Encryption) Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::ac17_u2u_pre;
+
+/// Encode AC17 U2U PRE U2UReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_u2u_rk(rk: &ac17_u2u_pre::U2UReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 U2U PRE U2UReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_u2u_rk(data: &[u8]) -> Result<ac17_u2u_pre::U2UReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 U2U PRE U2UReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_u2u_re_ct(ct: &ac17_u2u_pre::U2UReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 U2U PRE U2UReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_u2u_re_ct(data: &[u8]) -> Result<ac17_u2u_pre::U2UReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 U2U PRE FullU2UReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_u2u_full_re_ct(ct: &ac17_u2u_pre::FullU2UReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 U2U PRE FullU2UReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_u2u_full_re_ct(data: &[u8]) -> Result<ac17_u2u_pre::FullU2UReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// Conditional PRE Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::conditional_pre;
+
+/// Encode Conditional PRE ConditionalReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_conditional_rk(rk: &conditional_pre::ConditionalReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Conditional PRE ConditionalReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_conditional_rk(data: &[u8]) -> Result<conditional_pre::ConditionalReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Conditional PRE ConditionalReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_conditional_re_ct(ct: &conditional_pre::ConditionalReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Conditional PRE ConditionalReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_conditional_re_ct(data: &[u8]) -> Result<conditional_pre::ConditionalReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Conditional PRE FullConditionalReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_conditional_full_re_ct(ct: &conditional_pre::FullConditionalReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Conditional PRE FullConditionalReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_conditional_full_re_ct(data: &[u8]) -> Result<conditional_pre::FullConditionalReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Conditional PRE PolicyConditionalReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_policy_conditional_rk(rk: &conditional_pre::PolicyConditionalReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Conditional PRE PolicyConditionalReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_policy_conditional_rk(data: &[u8]) -> Result<conditional_pre::PolicyConditionalReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode TimeCondition to bytes
+#[cfg(feature = "serde")]
+pub fn encode_time_condition(cond: &conditional_pre::TimeCondition) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(cond)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode TimeCondition from bytes
+#[cfg(feature = "serde")]
+pub fn decode_time_condition(data: &[u8]) -> Result<conditional_pre::TimeCondition, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// Multi-hop PRE Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::multihop_pre;
+
+/// Encode Multi-hop PRE MultiHopReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_multihop_rk(rk: &multihop_pre::MultiHopReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Multi-hop PRE MultiHopReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_multihop_rk(data: &[u8]) -> Result<multihop_pre::MultiHopReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Multi-hop PRE MultiHopReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_multihop_re_ct(ct: &multihop_pre::MultiHopReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Multi-hop PRE MultiHopReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_multihop_re_ct(data: &[u8]) -> Result<multihop_pre::MultiHopReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode Multi-hop PRE FullMultiHopReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_multihop_full_re_ct(ct: &multihop_pre::FullMultiHopReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode Multi-hop PRE FullMultiHopReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_multihop_full_re_ct(data: &[u8]) -> Result<multihop_pre::FullMultiHopReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode HopInfo to bytes
+#[cfg(feature = "serde")]
+pub fn encode_hop_info(hop: &multihop_pre::HopInfo) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(hop)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode HopInfo from bytes
+#[cfg(feature = "serde")]
+pub fn decode_hop_info(data: &[u8]) -> Result<multihop_pre::HopInfo, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// AC17 Conditional PRE Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::ac17_conditional_pre;
+
+/// Encode AC17 Conditional PRE Ac17ConditionalReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_conditional_rk(rk: &ac17_conditional_pre::Ac17ConditionalReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 Conditional PRE Ac17ConditionalReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_conditional_rk(data: &[u8]) -> Result<ac17_conditional_pre::Ac17ConditionalReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 Conditional PRE Ac17ConditionalReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_conditional_re_ct(ct: &ac17_conditional_pre::Ac17ConditionalReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 Conditional PRE Ac17ConditionalReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_conditional_re_ct(data: &[u8]) -> Result<ac17_conditional_pre::Ac17ConditionalReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 Conditional PRE FullAc17ConditionalReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_conditional_full_re_ct(ct: &ac17_conditional_pre::FullAc17ConditionalReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 Conditional PRE FullAc17ConditionalReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_conditional_full_re_ct(data: &[u8]) -> Result<ac17_conditional_pre::FullAc17ConditionalReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 TimeCondition to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_time_condition(cond: &ac17_conditional_pre::TimeCondition) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(cond)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 TimeCondition from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_time_condition(data: &[u8]) -> Result<ac17_conditional_pre::TimeCondition, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// AC17 Multi-hop PRE Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::ac17_multihop_pre;
+
+/// Encode AC17 Multi-hop PRE Ac17MultiHopReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_multihop_rk(rk: &ac17_multihop_pre::Ac17MultiHopReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 Multi-hop PRE Ac17MultiHopReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_multihop_rk(data: &[u8]) -> Result<ac17_multihop_pre::Ac17MultiHopReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 Multi-hop PRE Ac17MultiHopReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_multihop_re_ct(ct: &ac17_multihop_pre::Ac17MultiHopReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 Multi-hop PRE Ac17MultiHopReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_multihop_re_ct(data: &[u8]) -> Result<ac17_multihop_pre::Ac17MultiHopReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 Multi-hop PRE FullAc17MultiHopReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_multihop_full_re_ct(ct: &ac17_multihop_pre::FullAc17MultiHopReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 Multi-hop PRE FullAc17MultiHopReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_multihop_full_re_ct(data: &[u8]) -> Result<ac17_multihop_pre::FullAc17MultiHopReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode AC17 HopInfo to bytes
+#[cfg(feature = "serde")]
+pub fn encode_ac17_hop_info(hop: &ac17_multihop_pre::Ac17HopInfo) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(hop)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode AC17 HopInfo from bytes
+#[cfg(feature = "serde")]
+pub fn decode_ac17_hop_info(data: &[u8]) -> Result<ac17_multihop_pre::Ac17HopInfo, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// DABE Conditional PRE Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::dabe_conditional_pre;
+
+/// Encode DABE Conditional PRE DabeConditionalReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_conditional_rk(rk: &dabe_conditional_pre::DabeConditionalReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE Conditional PRE DabeConditionalReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_conditional_rk(data: &[u8]) -> Result<dabe_conditional_pre::DabeConditionalReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE Conditional PRE DabeConditionalReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_conditional_re_ct(ct: &dabe_conditional_pre::DabeConditionalReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE Conditional PRE DabeConditionalReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_conditional_re_ct(data: &[u8]) -> Result<dabe_conditional_pre::DabeConditionalReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE Conditional PRE FullDabeConditionalReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_conditional_full_re_ct(ct: &dabe_conditional_pre::FullDabeConditionalReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE Conditional PRE FullDabeConditionalReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_conditional_full_re_ct(data: &[u8]) -> Result<dabe_conditional_pre::FullDabeConditionalReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE TimeCondition to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_time_condition(cond: &dabe_conditional_pre::TimeCondition) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(cond)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE TimeCondition from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_time_condition(data: &[u8]) -> Result<dabe_conditional_pre::TimeCondition, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode TrustedTimestamp to bytes
+#[cfg(feature = "serde")]
+pub fn encode_trusted_timestamp(ts: &dabe_conditional_pre::TrustedTimestamp) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ts)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode TrustedTimestamp from bytes
+#[cfg(feature = "serde")]
+pub fn decode_trusted_timestamp(data: &[u8]) -> Result<dabe_conditional_pre::TrustedTimestamp, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
+// DABE Multi-hop PRE Encoding/Decoding
+// Only available when serde feature is enabled
+// ============================================================================
+
+#[cfg(feature = "serde")]
+use crate::schemes::dabe_multihop_pre;
+
+/// Encode DABE Multi-hop PRE DabeMultiHopReEncryptionKey to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_multihop_rk(rk: &dabe_multihop_pre::DabeMultiHopReEncryptionKey) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(rk)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE Multi-hop PRE DabeMultiHopReEncryptionKey from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_multihop_rk(data: &[u8]) -> Result<dabe_multihop_pre::DabeMultiHopReEncryptionKey, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE Multi-hop PRE DabeMultiHopReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_multihop_re_ct(ct: &dabe_multihop_pre::DabeMultiHopReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE Multi-hop PRE DabeMultiHopReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_multihop_re_ct(data: &[u8]) -> Result<dabe_multihop_pre::DabeMultiHopReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE Multi-hop PRE FullDabeMultiHopReEncryptedCiphertext to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_multihop_full_re_ct(ct: &dabe_multihop_pre::FullDabeMultiHopReEncryptedCiphertext) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(ct)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE Multi-hop PRE FullDabeMultiHopReEncryptedCiphertext from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_multihop_full_re_ct(data: &[u8]) -> Result<dabe_multihop_pre::FullDabeMultiHopReEncryptedCiphertext, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+/// Encode DABE HopInfo to bytes
+#[cfg(feature = "serde")]
+pub fn encode_dabe_hop_info(hop: &dabe_multihop_pre::DabeHopInfo) -> Result<Vec<u8>, AbeError> {
+    serde_json::to_vec(hop)
+        .map_err(|e| AbeError::EncryptError(format!("JSON encode error: {}", e)))
+}
+
+/// Decode DABE HopInfo from bytes
+#[cfg(feature = "serde")]
+pub fn decode_dabe_hop_info(data: &[u8]) -> Result<dabe_multihop_pre::DabeHopInfo, AbeError> {
+    serde_json::from_slice(data)
+        .map_err(|e| AbeError::DecryptError(format!("JSON decode error: {}", e)))
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1164,5 +1922,236 @@ mod tests {
         let decoded = rpn_to_policy(&tokens, &attr_list).unwrap();
 
         assert_eq!(policy.to_canonical_string(), decoded.to_canonical_string());
+    }
+
+    #[test]
+    fn test_waters_pre_rk_roundtrip() {
+        use crate::schemes::waters_pre;
+
+        let mut rng = thread_rng();
+        let (mpk, msk) = waters::setup(&mut rng);
+        let attrs = vec!["admin".to_string()];
+        let sk = waters::keygen(&mut rng, &mpk, &msk, &attrs).unwrap();
+
+        let rk = waters_pre::generate_rekey(&mut rng, &mpk, &sk, &attrs).unwrap();
+
+        let encoded = encode_waters_rk(&rk).unwrap();
+        let decoded = decode_waters_rk(&encoded).unwrap();
+
+        assert_eq!(rk.rk_k.into_bytes(), decoded.rk_k.into_bytes());
+        assert_eq!(rk.rk_l.into_bytes(), decoded.rk_l.into_bytes());
+        assert_eq!(rk.g2_delta.into_bytes(), decoded.g2_delta.into_bytes());
+        assert_eq!(rk.source_attributes, decoded.source_attributes);
+    }
+
+    #[test]
+    fn test_waters_pre_full_roundtrip() {
+        use crate::schemes::waters_pre;
+
+        let mut rng = thread_rng();
+        let (mpk, msk) = waters::setup(&mut rng);
+        let attrs = vec!["admin".to_string()];
+        let sk = waters::keygen(&mut rng, &mpk, &msk, &attrs).unwrap();
+
+        let policy = PolicyNode::Attr("admin".to_string());
+        let ct = waters::encrypt(&mut rng, &mpk, &policy, b"secret").unwrap();
+
+        let rk = waters_pre::generate_rekey(&mut rng, &mpk, &sk, &attrs).unwrap();
+        let re_ct = waters_pre::re_encrypt_full(&mpk, &ct, &rk).unwrap();
+
+        // Test FullReEncryptedCiphertext roundtrip
+        let encoded = encode_waters_full_re_ct(&re_ct).unwrap();
+        let decoded = decode_waters_full_re_ct(&encoded).unwrap();
+
+        // Verify decryption works with decoded
+        let decrypted = waters_pre::decrypt_reencrypted(&mpk, &decoded).unwrap();
+        assert_eq!(decrypted, b"secret");
+    }
+
+    #[test]
+    fn test_dabe_pre_rk_roundtrip() {
+        use crate::schemes::dabe;
+        use crate::schemes::dabe_pre;
+
+        let mut rng = thread_rng();
+        let gp = dabe::global_setup(&mut rng);
+        let (apk, ask) = dabe::authority_setup(&mut rng, &gp, "auth");
+
+        let uk = dabe::authority_keygen(&mut rng, &gp, &ask, "user", &["attr".to_string()]).unwrap();
+        let usk = dabe::aggregate_user_keys(vec![uk]).unwrap();
+
+        let rk = dabe_pre::generate_rekey(&mut rng, &gp, &usk).unwrap();
+
+        let encoded = encode_dabe_rk(&rk).unwrap();
+        let decoded = decode_dabe_rk(&encoded).unwrap();
+
+        // Verify authority components
+        assert!(decoded.authority_components.contains_key("auth"));
+        let orig_comp = rk.authority_components.get("auth").unwrap();
+        let dec_comp = decoded.authority_components.get("auth").unwrap();
+        assert_eq!(orig_comp.rk_k.into_bytes(), dec_comp.rk_k.into_bytes());
+    }
+
+    #[test]
+    fn test_dabe_pre_full_roundtrip() {
+        use crate::schemes::dabe;
+        use crate::schemes::dabe_pre;
+        use std::collections::HashMap;
+
+        let mut rng = thread_rng();
+        let gp = dabe::global_setup(&mut rng);
+        let (apk, ask) = dabe::authority_setup(&mut rng, &gp, "auth");
+
+        let uk = dabe::authority_keygen(&mut rng, &gp, &ask, "user", &["attr".to_string()]).unwrap();
+        let usk = dabe::aggregate_user_keys(vec![uk]).unwrap();
+
+        let mut pks = HashMap::new();
+        pks.insert("auth".to_string(), apk);
+
+        let policy = PolicyNode::Attr("auth:attr".to_string());
+        let ct = dabe::encrypt(&mut rng, &gp, &pks, &policy, b"dabe secret").unwrap();
+
+        let rk = dabe_pre::generate_rekey(&mut rng, &gp, &usk).unwrap();
+        let re_ct = dabe_pre::re_encrypt_full(&gp, &ct, &rk).unwrap();
+
+        // Test serialization roundtrip
+        let encoded = encode_dabe_full_re_ct(&re_ct).unwrap();
+        let decoded = decode_dabe_full_re_ct(&encoded).unwrap();
+
+        // Verify decryption works with decoded
+        let decrypted = dabe_pre::decrypt_reencrypted(&gp, &decoded).unwrap();
+        assert_eq!(decrypted, b"dabe secret");
+    }
+
+    #[test]
+    fn test_waters_u2u_delegation_keypair_roundtrip() {
+        use crate::schemes::waters_u2u_pre;
+
+        let mut rng = thread_rng();
+        let (mpk, _msk) = waters::setup(&mut rng);
+        let kp = waters_u2u_pre::generate_delegation_keypair(&mut rng, &mpk);
+
+        let encoded = encode_delegation_keypair(&kp).unwrap();
+        let decoded = decode_delegation_keypair(&encoded).unwrap();
+
+        assert_eq!(kp.pk.into_bytes(), decoded.pk.into_bytes());
+        assert_eq!(kp.sk.into_bytes(), decoded.sk.into_bytes());
+    }
+
+    #[test]
+    fn test_waters_u2u_rk_roundtrip() {
+        use crate::schemes::waters_u2u_pre::{self, TargetPublicKey};
+
+        let mut rng = thread_rng();
+        let (mpk, msk) = waters::setup(&mut rng);
+        let attrs = vec!["admin".to_string()];
+        let sk = waters::keygen(&mut rng, &mpk, &msk, &attrs).unwrap();
+
+        let bob_keys = waters_u2u_pre::generate_delegation_keypair(&mut rng, &mpk);
+        let target_pk = TargetPublicKey::Simple(bob_keys.pk);
+        let rk = waters_u2u_pre::generate_u2u_rekey(&mut rng, &mpk, &sk, &target_pk, &attrs).unwrap();
+
+        let encoded = encode_waters_u2u_rk(&rk).unwrap();
+        let decoded = decode_waters_u2u_rk(&encoded).unwrap();
+
+        assert_eq!(rk.rk_k.into_bytes(), decoded.rk_k.into_bytes());
+        assert_eq!(rk.rk_l.into_bytes(), decoded.rk_l.into_bytes());
+        assert_eq!(rk.u.into_bytes(), decoded.u.into_bytes());
+        assert_eq!(rk.w.into_bytes(), decoded.w.into_bytes());
+        assert_eq!(rk.source_attributes, decoded.source_attributes);
+    }
+
+    #[test]
+    fn test_waters_u2u_full_roundtrip() {
+        use crate::schemes::waters_u2u_pre::{self, TargetPublicKey, TargetSecret};
+
+        let mut rng = thread_rng();
+        let (mpk, msk) = waters::setup(&mut rng);
+        let attrs = vec!["admin".to_string()];
+        let sk = waters::keygen(&mut rng, &mpk, &msk, &attrs).unwrap();
+
+        let bob_keys = waters_u2u_pre::generate_delegation_keypair(&mut rng, &mpk);
+        let target_pk = TargetPublicKey::Simple(bob_keys.pk);
+
+        let policy = PolicyNode::Attr("admin".to_string());
+        let ct = waters::encrypt(&mut rng, &mpk, &policy, b"u2u secret").unwrap();
+
+        let rk = waters_u2u_pre::generate_u2u_rekey(&mut rng, &mpk, &sk, &target_pk, &attrs).unwrap();
+        let re_ct = waters_u2u_pre::u2u_re_encrypt_full(&mpk, &ct, &rk).unwrap();
+
+        // Test serialization roundtrip
+        let encoded = encode_waters_u2u_full_re_ct(&re_ct).unwrap();
+        let decoded = decode_waters_u2u_full_re_ct(&encoded).unwrap();
+
+        // Verify decryption works with decoded
+        let target_secret = TargetSecret::Simple(bob_keys.sk);
+        let decrypted = waters_u2u_pre::u2u_decrypt_reencrypted(&decoded, &target_secret).unwrap();
+        assert_eq!(decrypted, b"u2u secret");
+    }
+
+    #[test]
+    fn test_dabe_u2u_rk_roundtrip() {
+        use crate::schemes::dabe;
+        use crate::schemes::dabe_u2u_pre;
+        use crate::schemes::waters_u2u_pre::TargetPublicKey;
+
+        let mut rng = thread_rng();
+        let gp = dabe::global_setup(&mut rng);
+        let (_apk, ask) = dabe::authority_setup(&mut rng, &gp, "auth");
+
+        let uk = dabe::authority_keygen(&mut rng, &gp, &ask, "user", &["attr".to_string()]).unwrap();
+        let usk = dabe::aggregate_user_keys(vec![uk]).unwrap();
+
+        let bob_keys = dabe_u2u_pre::generate_delegation_keypair(&mut rng, &gp);
+        let target_pk = TargetPublicKey::Simple(bob_keys.pk);
+
+        let rk = dabe_u2u_pre::generate_u2u_rekey(&mut rng, &gp, &usk, &target_pk).unwrap();
+
+        let encoded = encode_dabe_u2u_rk(&rk).unwrap();
+        let decoded = decode_dabe_u2u_rk(&encoded).unwrap();
+
+        // Verify authority components
+        assert!(decoded.authority_components.contains_key("auth"));
+        let orig_comp = rk.authority_components.get("auth").unwrap();
+        let dec_comp = decoded.authority_components.get("auth").unwrap();
+        assert_eq!(orig_comp.rk_k.into_bytes(), dec_comp.rk_k.into_bytes());
+        assert_eq!(rk.u.into_bytes(), decoded.u.into_bytes());
+        assert_eq!(rk.w.into_bytes(), decoded.w.into_bytes());
+    }
+
+    #[test]
+    fn test_dabe_u2u_full_roundtrip() {
+        use crate::schemes::dabe;
+        use crate::schemes::dabe_u2u_pre;
+        use crate::schemes::waters_u2u_pre::{TargetPublicKey, TargetSecret};
+        use std::collections::HashMap;
+
+        let mut rng = thread_rng();
+        let gp = dabe::global_setup(&mut rng);
+        let (apk, ask) = dabe::authority_setup(&mut rng, &gp, "auth");
+
+        let uk = dabe::authority_keygen(&mut rng, &gp, &ask, "user", &["attr".to_string()]).unwrap();
+        let usk = dabe::aggregate_user_keys(vec![uk]).unwrap();
+
+        let bob_keys = dabe_u2u_pre::generate_delegation_keypair(&mut rng, &gp);
+        let target_pk = TargetPublicKey::Simple(bob_keys.pk);
+
+        let mut pks = HashMap::new();
+        pks.insert("auth".to_string(), apk);
+
+        let policy = PolicyNode::Attr("auth:attr".to_string());
+        let ct = dabe::encrypt(&mut rng, &gp, &pks, &policy, b"dabe u2u secret").unwrap();
+
+        let rk = dabe_u2u_pre::generate_u2u_rekey(&mut rng, &gp, &usk, &target_pk).unwrap();
+        let re_ct = dabe_u2u_pre::u2u_re_encrypt_full(&gp, &ct, &rk).unwrap();
+
+        // Test serialization roundtrip
+        let encoded = encode_dabe_u2u_full_re_ct(&re_ct).unwrap();
+        let decoded = decode_dabe_u2u_full_re_ct(&encoded).unwrap();
+
+        // Verify decryption works with decoded
+        let target_secret = TargetSecret::Simple(bob_keys.sk);
+        let decrypted = dabe_u2u_pre::u2u_decrypt_reencrypted(&gp, &decoded, &target_secret).unwrap();
+        assert_eq!(decrypted, b"dabe u2u secret");
     }
 }
