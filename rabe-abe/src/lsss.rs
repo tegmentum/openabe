@@ -457,7 +457,7 @@ impl LsssMatrix {
 
         // General case: use Gaussian elimination
         // Build a matrix of just the satisfied rows
-        let mut matrix: Vec<Vec<Fr>> = satisfied_rows.iter()
+        let matrix: Vec<Vec<Fr>> = satisfied_rows.iter()
             .map(|r| r.vector.clone())
             .collect();
 

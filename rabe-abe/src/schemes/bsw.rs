@@ -6,7 +6,8 @@
 use crate::error::AbeError;
 use crate::utils::{hash_to_g1, aes};
 use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
+use zeroize::Zeroize;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,10 @@ pub struct CpAbePublicKey {
 }
 
 /// Master secret key for CP-ABE
+///
+/// # Security
+///
+/// This structure contains secret key material that is zeroized on drop.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CpAbeMasterKey {
@@ -33,6 +38,13 @@ pub struct CpAbeMasterKey {
     pub alpha: Fr,
     /// beta exponent
     pub beta: Fr,
+}
+
+impl Drop for CpAbeMasterKey {
+    fn drop(&mut self) {
+        self.alpha = Fr::zero();
+        self.beta = Fr::zero();
+    }
 }
 
 /// Attribute component in secret key
@@ -48,6 +60,10 @@ pub struct AttributeKey {
 }
 
 /// Secret key for a user with attributes
+///
+/// # Security
+///
+/// This structure contains secret key material that is zeroized on drop.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CpAbeSecretKey {
@@ -55,6 +71,15 @@ pub struct CpAbeSecretKey {
     pub d: G2,
     /// Attribute components
     pub attributes: Vec<AttributeKey>,
+}
+
+impl Drop for CpAbeSecretKey {
+    fn drop(&mut self) {
+        for attr_key in &mut self.attributes {
+            attr_key.attr.zeroize();
+        }
+        self.attributes.clear();
+    }
 }
 
 /// Ciphertext component for an attribute
@@ -84,7 +109,7 @@ pub struct CpAbeCiphertext {
 }
 
 /// Generate master public and secret keys
-pub fn setup<R: RngCore>(rng: &mut R) -> (CpAbePublicKey, CpAbeMasterKey) {
+pub fn setup<R: RngCore + CryptoRng>(rng: &mut R) -> (CpAbePublicKey, CpAbeMasterKey) {
     // Generate generators
     let g = G1::one();
     let h = G2::one();
@@ -109,7 +134,7 @@ pub fn setup<R: RngCore>(rng: &mut R) -> (CpAbePublicKey, CpAbeMasterKey) {
 }
 
 /// Generate a secret key for a user with given attributes
-pub fn keygen<R: RngCore>(
+pub fn keygen<R: RngCore + CryptoRng>(
     rng: &mut R,
     pk: &CpAbePublicKey,
     msk: &CpAbeMasterKey,
@@ -156,7 +181,7 @@ pub fn keygen<R: RngCore>(
 }
 
 /// Encrypt a message under an AND policy of attributes
-pub fn encrypt<R: RngCore>(
+pub fn encrypt<R: RngCore + CryptoRng>(
     rng: &mut R,
     pk: &CpAbePublicKey,
     policy: &str,

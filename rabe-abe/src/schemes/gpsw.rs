@@ -35,8 +35,7 @@
 //! - Combine with LSSS coefficients to get e(g1, g2)^(alpha * s)
 
 use crate::error::AbeError;
-use crate::security::validation::{validate_policy, validate_attributes};
-use crate::lsss::{LsssMatrix, PolicyNode, get_or_compute_lsss};
+use crate::lsss::{PolicyNode, get_or_compute_lsss};
 use crate::utils::{hash_to_g1_keyed_cached, aes};
 use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
 use rand::{RngCore, CryptoRng};

@@ -10,10 +10,12 @@ categories = ["cryptography"]
 [features]
 default = ["serde", "parallel"]
 serde = ["dep:serde", "rabe-bls12381/serde"]
-wasm = ["rabe-bls12381/wasm", "getrandom/js"]
+# WASI P2 target - uses wasi-threads for parallel processing
+# getrandom auto-detects WASI target and uses random_get syscall
+wasm = ["rabe-bls12381/wasm", "parallel"]
 # Enable optional libc for memory locking (mlock)
 memory-protection = ["libc"]
-# Enable parallel processing with Rayon
+# Enable parallel processing with Rayon (works on native and WASIP2 with wasi-threads)
 parallel = ["rayon"]
 
 [dependencies]

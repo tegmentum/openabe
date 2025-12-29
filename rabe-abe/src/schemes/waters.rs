@@ -14,7 +14,7 @@
 //! preventing accidental mixing with other ABE schemes at compile time.
 
 use crate::error::AbeError;
-use crate::lsss::{LsssMatrix, PolicyNode, get_or_compute_lsss};
+use crate::lsss::{PolicyNode, get_or_compute_lsss};
 use crate::scheme_types::{Waters, TypedMpk, TypedMsk, TypedSecretKey, TypedCiphertext, TypedFullCiphertext};
 use crate::security::validation::{validate_policy, validate_plaintext, validate_attributes};
 use crate::utils::{hash_to_g1_keyed_cached, aes};

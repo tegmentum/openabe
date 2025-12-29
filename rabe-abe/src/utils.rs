@@ -1,6 +1,6 @@
 //! Utility functions for ABE
 
-use rabe_bls12381::{Fr, G1, G2, Gt};
+use rabe_bls12381::{Fr, G1, G2};
 use sha3::{Sha3_256, Digest};
 use std::sync::RwLock;
 use lru::LruCache;
@@ -137,7 +137,7 @@ pub mod aes {
     use hkdf::Hkdf;
     use sha2::Sha256;
     use rabe_bls12381::Gt;
-    use zeroize::Zeroize;
+    
 
     /// Nonce size for AES-GCM (96 bits)
     pub const NONCE_SIZE: usize = 12;

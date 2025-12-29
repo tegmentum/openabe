@@ -12,8 +12,7 @@
 //! The construction is adapted for Type-3 pairings (BLS12-381).
 
 use crate::error::AbeError;
-use crate::security::validation::{validate_policy, validate_plaintext, validate_attributes};
-use crate::lsss::{LsssMatrix, PolicyNode, get_or_compute_lsss};
+use crate::lsss::{PolicyNode, get_or_compute_lsss};
 use crate::utils::{hash_to_g1_keyed_cached, aes};
 use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
 use rand::{RngCore, CryptoRng};

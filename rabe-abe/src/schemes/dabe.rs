@@ -31,11 +31,12 @@
 //! - Chase, M. (2007). Multi-Authority Attribute Based Encryption.
 
 use crate::error::AbeError;
-use crate::lsss::{LsssMatrix, PolicyNode};
+use crate::lsss::PolicyNode;
 use crate::utils::{hash_to_g1_keyed, aes};
 use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 use std::collections::{HashMap, HashSet, BTreeSet};
+use zeroize::Zeroize;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -68,6 +69,10 @@ pub struct AuthorityPk {
 }
 
 /// Authority Secret Key
+///
+/// # Security
+///
+/// This structure contains secret key material that is zeroized on drop.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AuthoritySk {
@@ -79,6 +84,14 @@ pub struct AuthoritySk {
     pub a: Fr,
     /// h^a in G2 - needed for key generation
     pub h_a: G2,
+}
+
+impl Drop for AuthoritySk {
+    fn drop(&mut self) {
+        self.aid.zeroize();
+        self.alpha = Fr::zero();
+        self.a = Fr::zero();
+    }
 }
 
 /// User Secret Key Component from a single authority
@@ -96,11 +109,25 @@ pub struct UserKeyComponent {
 }
 
 /// Complete User Secret Key (aggregated from multiple authorities)
+///
+/// # Security
+///
+/// This structure contains secret key material that is zeroized on drop.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserSecretKey {
     /// Key components from each authority (keyed by authority ID)
     pub components: HashMap<String, UserKeyComponent>,
+}
+
+impl Drop for UserSecretKey {
+    fn drop(&mut self) {
+        for (_aid, comp) in &mut self.components {
+            comp.aid.zeroize();
+            comp.kx.clear();
+        }
+        self.components.clear();
+    }
 }
 
 /// Ciphertext component for a row in the policy LSSS
@@ -160,7 +187,7 @@ struct AttributeShare {
 }
 
 /// Global Setup: Generate global parameters shared by all authorities
-pub fn global_setup<R: RngCore>(rng: &mut R) -> GlobalParams {
+pub fn global_setup<R: RngCore + CryptoRng>(rng: &mut R) -> GlobalParams {
     let g = G1::one();
     let h = G2::one();
     let mut k = vec![0u8; HASH_KEY_LEN];
@@ -169,7 +196,7 @@ pub fn global_setup<R: RngCore>(rng: &mut R) -> GlobalParams {
 }
 
 /// Authority Setup: Each authority generates its own key pair
-pub fn authority_setup<R: RngCore>(
+pub fn authority_setup<R: RngCore + CryptoRng>(
     rng: &mut R,
     gp: &GlobalParams,
     authority_id: &str,
@@ -199,7 +226,7 @@ pub fn authority_setup<R: RngCore>(
 }
 
 /// KeyGen: An authority issues key components for a user
-pub fn authority_keygen<R: RngCore>(
+pub fn authority_keygen<R: RngCore + CryptoRng>(
     rng: &mut R,
     gp: &GlobalParams,
     ask: &AuthoritySk,
@@ -303,7 +330,7 @@ fn is_cross_authority_and(children: &[PolicyNode]) -> bool {
 /// For cross-authority AND: each child gets the full secret s
 /// For same-authority AND: normal LSSS sharing (shares sum to s)
 /// For OR: each child gets the full secret s
-fn create_shares<R: RngCore>(
+fn create_shares<R: RngCore + CryptoRng>(
     rng: &mut R,
     policy: &PolicyNode,
     secret: Fr,
@@ -499,7 +526,7 @@ fn minimize_sets(sets: Vec<BTreeSet<String>>) -> Vec<BTreeSet<String>> {
 }
 
 /// Encrypt: Encrypt a message under an access policy
-pub fn encrypt<R: RngCore>(
+pub fn encrypt<R: RngCore + CryptoRng>(
     rng: &mut R,
     gp: &GlobalParams,
     authority_pks: &HashMap<String, AuthorityPk>,
@@ -578,7 +605,7 @@ pub fn encrypt<R: RngCore>(
 
 /// Reconstruct a satisfying assignment from user attributes and policy
 /// Returns the set of (attribute, coefficient) pairs for reconstruction
-fn find_satisfying_assignment(
+pub fn find_satisfying_assignment(
     policy: &PolicyNode,
     user_attrs: &HashSet<String>,
 ) -> Option<Vec<(String, Fr)>> {
@@ -710,10 +737,10 @@ pub fn decrypt(
         // Find the ciphertext component for this attribute
         let ct_comp = ct.abe_ct.components.iter()
             .find(|c| &c.attr == attr)
-            .ok_or_else(|| AbeError::DecryptError(format!("No ciphertext for attr {}", attr)))?;
+            .ok_or_else(|| AbeError::DecryptError("Missing ciphertext component".into()))?;
 
         let uk_comp = attr_to_component.get(attr)
-            .ok_or_else(|| AbeError::DecryptError(format!("No key for attr {}", attr)))?;
+            .ok_or_else(|| AbeError::DecryptError("Missing key component".into()))?;
 
         by_authority
             .entry(ct_comp.aid.clone())
