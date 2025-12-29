@@ -37,7 +37,7 @@
 use crate::error::AbeError;
 use crate::lsss::{PolicyNode, get_or_compute_lsss};
 use crate::utils::{hash_to_g1_keyed_cached, aes};
-use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
+use rabe_bls12381::{Fr, G1, G2, Gt, pairing, multi_pairing};
 use rand::{RngCore, CryptoRng};
 use std::collections::HashMap;
 use zeroize::Zeroize;
@@ -363,7 +363,7 @@ pub fn decrypt(
     let coeffs = lsss.recover_coefficients(&matched_attrs)
         .map_err(|_| AbeError::PolicyNotSatisfied)?;
 
-    // Collect items for parallel processing
+    // Collect items for processing
     let items: Vec<_> = matched_components
         .iter()
         .filter_map(|(sk_comp, ct_comp)| {
@@ -372,25 +372,45 @@ pub fn decrypt(
         })
         .collect();
 
-    // Compute the pairing product to recover e(g1, g2)^(alpha * s) (parallelized when enabled)
+    // Optimization: Use bilinearity to convert e(a,b)^omega to e(a*omega, b)
+    // This allows us to use MSM + multi-pairing for significant speedup
+    //
+    // Original: ∏ (e(d_i, c') / e(c_i, d'_i))^omega_i
+    // Using bilinearity: ∏ e(d_i * omega_i, c') * e(c_i * (-omega_i), d'_i)
+    // As multi-pairing: multi_pairing([d*omega, c*(-omega), ...], [c', d', ...])
+
+    // Extract and scale points using parallel iteration when available
     #[cfg(feature = "parallel")]
-    let result = items
-        .par_iter()
-        .map(|(d, d_prime, c, omega)| {
-            let num = pairing(*d, ct.abe_ct.c_prime);
-            let den = pairing(*c, *d_prime);
-            (num * den.inverse()).pow(omega)
-        })
-        .reduce(|| Gt::one(), |acc, term| acc * term);
+    let (g1_points, g2_points): (Vec<G1>, Vec<G2>) = {
+        let scaled: Vec<_> = items
+            .par_iter()
+            .flat_map(|(d, d_prime, c, omega)| {
+                let neg_omega = -(*omega);
+                vec![
+                    (*d * *omega, ct.abe_ct.c_prime),
+                    (*c * neg_omega, *d_prime),
+                ]
+            })
+            .collect();
+        scaled.into_iter().unzip()
+    };
 
     #[cfg(not(feature = "parallel"))]
-    let result = items
-        .iter()
-        .fold(Gt::one(), |acc, (d, d_prime, c, omega)| {
-            let num = pairing(*d, ct.abe_ct.c_prime);
-            let den = pairing(*c, *d_prime);
-            acc * (num * den.inverse()).pow(omega)
-        });
+    let (g1_points, g2_points): (Vec<G1>, Vec<G2>) = {
+        let mut g1s = Vec::with_capacity(items.len() * 2);
+        let mut g2s = Vec::with_capacity(items.len() * 2);
+        for (d, d_prime, c, omega) in &items {
+            let neg_omega = -(*omega);
+            g1s.push(*d * *omega);
+            g2s.push(ct.abe_ct.c_prime);
+            g1s.push(*c * neg_omega);
+            g2s.push(*d_prime);
+        }
+        (g1s, g2s)
+    };
+
+    // Use multi-pairing to compute the product efficiently
+    let result = multi_pairing(&g1_points, &g2_points);
 
     // result should now be e(g1, g2)^(alpha * s)
 

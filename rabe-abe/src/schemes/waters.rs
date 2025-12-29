@@ -18,7 +18,7 @@ use crate::lsss::{PolicyNode, get_or_compute_lsss};
 use crate::scheme_types::{Waters, TypedMpk, TypedMsk, TypedSecretKey, TypedCiphertext, TypedFullCiphertext};
 use crate::security::validation::{validate_policy, validate_plaintext, validate_attributes};
 use crate::utils::{hash_to_g1_keyed_cached, aes};
-use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
+use rabe_bls12381::{Fr, G1, G2, Gt, pairing, multi_pairing};
 use rand::{RngCore, CryptoRng};
 use std::collections::HashMap;
 use zeroize::Zeroize;
@@ -388,12 +388,12 @@ pub fn decrypt_kem(
     let coeffs = matrix.recover_coefficients(&sk.attributes)
         .map_err(|_| AbeError::PolicyNotSatisfied)?;
 
-    // Compute decryption
+    // Compute decryption using optimized multi-scalar multiplication and multi-pairing
     // For each attribute i in the satisfying set:
-    //   prod1 = prod(C_i^coeff_i)
-    //   prodT = prod(e(KX_i^coeff_i, D_i))
+    //   prod1 = sum(C_i * coeff_i) using MSM
+    //   prodT = multi_pairing(KX_i * coeff_i, D_i)
 
-    // Collect coefficient/component/key tuples for parallel processing
+    // Collect coefficient/component/key tuples
     let items: Vec<_> = coeffs
         .iter()
         .filter_map(|(attr, coeff)| {
@@ -407,45 +407,43 @@ pub fn decrypt_kem(
         return Err(AbeError::DecryptError("Missing ciphertext or key component".into()));
     }
 
-    // Parallel computation of products and pairing components
-    #[cfg(feature = "parallel")]
-    let (prod1, pairing_pairs): (G1, Vec<(G1, G2)>) = {
-        let results: Vec<(G1, G1, G2)> = items
-            .par_iter()
-            .map(|(coeff, c, d, kx)| {
-                let c_scaled = *c * *coeff;
-                let kx_scaled = *kx * *coeff;
-                (c_scaled, kx_scaled, *d)
-            })
-            .collect();
-
-        let prod1 = results.iter().fold(G1::zero(), |acc, (c, _, _)| acc + *c);
-        let pairs: Vec<(G1, G2)> = results.iter().map(|(_, kx, d)| (*kx, *d)).collect();
-        (prod1, pairs)
-    };
-
-    #[cfg(not(feature = "parallel"))]
-    let (prod1, pairing_pairs): (G1, Vec<(G1, G2)>) = {
-        let mut prod1 = G1::zero();
-        let mut pairs = Vec::with_capacity(items.len());
-        for (coeff, c, d, kx) in &items {
-            prod1 = prod1 + (*c * *coeff);
-            pairs.push((*kx * *coeff, *d));
-        }
-        (prod1, pairs)
-    };
-
-    // Compute prodT = prod(e(KX_i^coeff_i, D_i))
-    #[cfg(feature = "parallel")]
-    let prod_t = pairing_pairs
-        .par_iter()
-        .map(|(g1, g2)| pairing(*g1, *g2))
-        .reduce(|| Gt::one(), |acc, p| acc * p);
-
-    #[cfg(not(feature = "parallel"))]
-    let prod_t = pairing_pairs
+    // Extract points and scalars for MSM
+    let (c_points, kx_points, d_points, coefficients): (Vec<G1>, Vec<G1>, Vec<G2>, Vec<Fr>) = items
         .iter()
-        .fold(Gt::one(), |acc, (g1, g2)| acc * pairing(*g1, *g2));
+        .map(|(coeff, c, d, kx)| (*c, *kx, *d, *coeff))
+        .fold(
+            (Vec::with_capacity(items.len()), Vec::with_capacity(items.len()), Vec::with_capacity(items.len()), Vec::with_capacity(items.len())),
+            |(mut c_pts, mut kx_pts, mut d_pts, mut coeffs), (c, kx, d, coeff)| {
+                c_pts.push(c);
+                kx_pts.push(kx);
+                d_pts.push(d);
+                coeffs.push(coeff);
+                (c_pts, kx_pts, d_pts, coeffs)
+            }
+        );
+
+    // Use MSM for prod1 = sum(C_i * coeff_i) - much faster than individual scalar muls
+    let prod1 = G1::multi_scalar_mul(&c_points, &coefficients);
+
+    // For the multi-pairing: we need ∏ e(KX_i * coeff_i, D_i)
+    // Each pairing input must be scaled individually (can't use MSM here)
+    // Use parallel scalar multiplication when available
+    #[cfg(feature = "parallel")]
+    let kx_scaled_points: Vec<G1> = kx_points
+        .par_iter()
+        .zip(coefficients.par_iter())
+        .map(|(kx, coeff)| *kx * *coeff)
+        .collect();
+
+    #[cfg(not(feature = "parallel"))]
+    let kx_scaled_points: Vec<G1> = kx_points
+        .iter()
+        .zip(coefficients.iter())
+        .map(|(kx, coeff)| *kx * *coeff)
+        .collect();
+
+    // Use multi_pairing for prodT = ∏ e(KX_i^coeff_i, D_i) - shares final exponentiation
+    let prod_t = multi_pairing(&kx_scaled_points, &d_points);
 
     // Compute e(C', K)
     let pairing1 = pairing(ct.c_prime, sk.k);

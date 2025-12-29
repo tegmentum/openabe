@@ -14,7 +14,7 @@
 use crate::error::AbeError;
 use crate::lsss::{PolicyNode, get_or_compute_lsss};
 use crate::utils::{hash_to_g1_keyed_cached, aes};
-use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
+use rabe_bls12381::{Fr, G1, G2, Gt, pairing, multi_pairing};
 use rand::{RngCore, CryptoRng};
 use std::collections::HashMap;
 use zeroize::Zeroize;
@@ -339,7 +339,7 @@ pub fn decrypt(
     // Compute e(C, K) = e(g^s, h^(alpha + a*r))
     let e_c_k = pairing(ct.abe_ct.c, sk.k);
 
-    // Collect items for parallel processing
+    // Collect items for processing
     let items: Vec<_> = satisfied_ct_components
         .iter()
         .filter_map(|ct_comp| {
@@ -349,25 +349,40 @@ pub fn decrypt(
         })
         .collect();
 
-    // Compute the cancel term: product of e(C1_i, L) * e(K_attr_i, C2_i) weighted by omega_i
+    // Optimization: Use bilinearity to convert e(a,b)^omega to e(a*omega, b)
+    // Original: ∏ (e(C1_i, L) * e(K_attr_i, C2_i))^omega_i
+    // Using bilinearity: ∏ e(C1_i * omega_i, L) * e(K_attr_i * omega_i, C2_i)
+    // As multi-pairing: multi_pairing([c1*omega, k_attr*omega, ...], [L, c2, ...])
+
     #[cfg(feature = "parallel")]
-    let cancel_term = items
-        .par_iter()
-        .map(|(c1, c2, k_attr, omega)| {
-            let p1 = pairing(*c1, sk.l);
-            let p2 = pairing(*k_attr, *c2);
-            (p1 * p2).pow(omega)
-        })
-        .reduce(|| Gt::one(), |acc, term| acc * term);
+    let (g1_points, g2_points): (Vec<G1>, Vec<G2>) = {
+        let scaled: Vec<_> = items
+            .par_iter()
+            .flat_map(|(c1, c2, k_attr, omega)| {
+                vec![
+                    (*c1 * *omega, sk.l),
+                    (*k_attr * *omega, *c2),
+                ]
+            })
+            .collect();
+        scaled.into_iter().unzip()
+    };
 
     #[cfg(not(feature = "parallel"))]
-    let cancel_term = items
-        .iter()
-        .fold(Gt::one(), |acc, (c1, c2, k_attr, omega)| {
-            let p1 = pairing(*c1, sk.l);
-            let p2 = pairing(*k_attr, *c2);
-            acc * (p1 * p2).pow(omega)
-        });
+    let (g1_points, g2_points): (Vec<G1>, Vec<G2>) = {
+        let mut g1s = Vec::with_capacity(items.len() * 2);
+        let mut g2s = Vec::with_capacity(items.len() * 2);
+        for (c1, c2, k_attr, omega) in &items {
+            g1s.push(*c1 * *omega);
+            g2s.push(sk.l);
+            g1s.push(*k_attr * *omega);
+            g2s.push(*c2);
+        }
+        (g1s, g2s)
+    };
+
+    // Use multi-pairing to compute the cancel term efficiently
+    let cancel_term = multi_pairing(&g1_points, &g2_points);
 
     // Result = e(C, K) / cancel_term = e(g,h)^(s*alpha)
     let result = e_c_k * cancel_term.inverse();
