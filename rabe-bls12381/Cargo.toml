@@ -1,9 +1,11 @@
 [package]
 name = "rabe-bls12381"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 description = "BLS12-381 pairing library - drop-in replacement for rabe-bn"
-license = "MIT OR Apache-2.0"
+keywords = ["cryptography", "bls12-381", "pairing", "elliptic-curves"]
+categories = ["cryptography"]
 
 [lib]
 crate-type = ["rlib", "staticlib", "cdylib"]
@@ -17,23 +19,23 @@ ffi = []  # Enable C FFI bindings
 
 [dependencies]
 # Arkworks ecosystem for BLS12-381
-ark-ff = "0.4"
-ark-ec = "0.4"
-ark-bls12-381 = "0.4"
-ark-serialize = "0.4"
-ark-std = "0.4"
+ark-ff = { workspace = true }
+ark-ec = { workspace = true }
+ark-bls12-381 = { workspace = true }
+ark-serialize = { workspace = true }
+ark-std = { workspace = true }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { workspace = true, optional = true }
 borsh = { version = "1.0", optional = true }
 
 # Random number generation
-rand = "0.8"
-getrandom = { version = "0.2", optional = true }
+rand = { workspace = true }
+getrandom = { workspace = true, optional = true }
 
 # For hash-to-curve
-sha2 = "0.10"
-digest = "0.10"
+sha2 = { workspace = true }
+digest = { workspace = true }
 
 # For thread-safe global state in FFI
 once_cell = "1.18"
