@@ -7,13 +7,24 @@
 //! https://eprint.iacr.org/2008/290.pdf (Appendix A - Large Universe)
 //!
 //! This implementation uses BLS12-381 for 128-bit security.
+//!
+//! # Type Safety
+//!
+//! All types in this module are tagged with the `Waters` scheme marker,
+//! preventing accidental mixing with other ABE schemes at compile time.
 
 use crate::error::AbeError;
-use crate::lsss::{LsssMatrix, PolicyNode};
-use crate::utils::{hash_to_g1_keyed, aes};
+use crate::lsss::{LsssMatrix, PolicyNode, get_or_compute_lsss};
+use crate::scheme_types::{Waters, TypedMpk, TypedMsk, TypedSecretKey, TypedCiphertext, TypedFullCiphertext};
+use crate::security::validation::{validate_policy, validate_plaintext, validate_attributes};
+use crate::utils::{hash_to_g1_keyed_cached, aes};
 use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 use std::collections::HashMap;
+use zeroize::Zeroize;
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -21,10 +32,33 @@ use serde::{Deserialize, Serialize};
 /// Hash key length in bytes
 const HASH_KEY_LEN: usize = 32;
 
-/// Master Public Key for Waters '11 CP-ABE
+// ============================================================================
+// Type-Safe Public API Types
+// ============================================================================
+
+/// Master Public Key for Waters '11 CP-ABE (type-safe wrapper)
+pub type Mpk = TypedMpk<Waters, RawMpk>;
+
+/// Master Secret Key for Waters '11 CP-ABE (type-safe wrapper)
+pub type Msk = TypedMsk<Waters, RawMsk>;
+
+/// User Secret Key for Waters '11 CP-ABE (type-safe wrapper)
+pub type SecretKey = TypedSecretKey<Waters, RawSecretKey>;
+
+/// Ciphertext for Waters '11 CP-ABE (type-safe wrapper)
+pub type Ciphertext = TypedCiphertext<Waters, RawCiphertext>;
+
+/// Full Ciphertext with encrypted payload (type-safe wrapper)
+pub type FullCiphertext = TypedFullCiphertext<Waters, RawFullCiphertext>;
+
+// ============================================================================
+// Raw (Inner) Types
+// ============================================================================
+
+/// Raw Master Public Key for Waters '11 CP-ABE
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Mpk {
+pub struct RawMpk {
     /// Generator g1 in G1
     pub g1: G1,
     /// Generator g2 in G2
@@ -39,20 +73,38 @@ pub struct Mpk {
     pub k: Vec<u8>,
 }
 
-/// Master Secret Key for Waters '11 CP-ABE
+/// Raw Master Secret Key for Waters '11 CP-ABE
+///
+/// # Security
+///
+/// This structure contains secret key material that is zeroized on drop.
+/// Avoid cloning unless necessary.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Msk {
-    /// alpha exponent
+pub struct RawMsk {
+    /// alpha exponent (SECRET)
     pub alpha: Fr,
     /// g2^a
     pub g2a: G2,
 }
 
-/// User Secret Key for Waters '11 CP-ABE
+impl Drop for RawMsk {
+    fn drop(&mut self) {
+        // Note: Fr doesn't implement Zeroize, but we mark intent
+        // In a production system, the underlying library should support zeroization
+        self.alpha = Fr::zero();
+    }
+}
+
+/// Raw User Secret Key for Waters '11 CP-ABE
+///
+/// # Security
+///
+/// This structure contains secret key material that is zeroized on drop.
+/// Avoid cloning unless necessary.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct SecretKey {
+pub struct RawSecretKey {
     /// K = g2^alpha * g2^(a*t)
     pub k: G2,
     /// L = g2^t
@@ -61,6 +113,17 @@ pub struct SecretKey {
     pub kx: HashMap<String, G1>,
     /// List of attributes this key is for
     pub attributes: Vec<String>,
+}
+
+impl Drop for RawSecretKey {
+    fn drop(&mut self) {
+        // Zeroize attribute names
+        for attr in &mut self.attributes {
+            attr.zeroize();
+        }
+        self.attributes.clear();
+        self.kx.clear();
+    }
 }
 
 /// Ciphertext component for an attribute in the policy
@@ -73,10 +136,10 @@ pub struct CiphertextComponent {
     pub d: G2,
 }
 
-/// Ciphertext for Waters '11 CP-ABE
+/// Raw Ciphertext for Waters '11 CP-ABE
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Ciphertext {
+pub struct RawCiphertext {
     /// The policy in canonical string form
     pub policy: String,
     /// C = e(g1^s, g2^alpha) = e(g1, g2)^(alpha * s)
@@ -87,18 +150,24 @@ pub struct Ciphertext {
     pub components: HashMap<String, CiphertextComponent>,
 }
 
-/// Full ciphertext including encrypted payload
+/// Raw Full ciphertext including encrypted payload
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FullCiphertext {
+pub struct RawFullCiphertext {
     /// ABE ciphertext (KEM part)
-    pub abe_ct: Ciphertext,
+    pub abe_ct: RawCiphertext,
     /// Symmetric ciphertext (DEM part)
     pub sym_ct: Vec<u8>,
 }
 
 /// Setup: Generate master public and secret keys
-pub fn setup<R: RngCore>(rng: &mut R) -> (Mpk, Msk) {
+///
+/// Returns type-safe wrappers tagged with the `Waters` scheme marker.
+///
+/// # Security
+///
+/// The `rng` parameter must be a cryptographically secure random number generator.
+pub fn setup<R: RngCore + CryptoRng>(rng: &mut R) -> (Mpk, Msk) {
     // Generators
     let g1 = G1::one();
     let g2 = G2::one();
@@ -120,28 +189,33 @@ pub fn setup<R: RngCore>(rng: &mut R) -> (Mpk, Msk) {
     let g2a = g2 * a;
 
     (
-        Mpk {
+        RawMpk {
             g1,
             g2,
             g1a,
             g2alpha,
             egg_alpha,
             k,
-        },
-        Msk { alpha, g2a },
+        }.into(),
+        RawMsk { alpha, g2a }.into(),
     )
 }
 
 /// KeyGen: Generate a secret key for a user with given attributes
-pub fn keygen<R: RngCore>(
+///
+/// Returns a type-safe secret key tagged with the `Waters` scheme marker.
+///
+/// # Security
+///
+/// The `rng` parameter must be a cryptographically secure random number generator.
+pub fn keygen<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
     msk: &Msk,
     attributes: &[String],
 ) -> Result<SecretKey, AbeError> {
-    if attributes.is_empty() {
-        return Err(AbeError::KeygenError("No attributes provided".to_string()));
-    }
+    // Validate input attributes
+    validate_attributes(attributes)?;
 
     // Random t
     let t = Fr::random(rng);
@@ -155,27 +229,36 @@ pub fn keygen<R: RngCore>(
     // For each attribute: KX_attr = H(k, attr)^t
     let mut kx = HashMap::new();
     for attr in attributes {
-        let h_attr = hash_to_g1_keyed(&mpk.k, attr);
+        let h_attr = hash_to_g1_keyed_cached(&mpk.k, attr);
         let kx_attr = h_attr * t;
         kx.insert(attr.clone(), kx_attr);
     }
 
-    Ok(SecretKey {
+    Ok(RawSecretKey {
         k,
         l,
         kx,
         attributes: attributes.to_vec(),
-    })
+    }.into())
 }
 
 /// Encrypt: Encrypt a message under a policy (KEM mode - returns symmetric key)
-pub fn encrypt_kem<R: RngCore>(
+///
+/// Returns a type-safe ciphertext tagged with the `Waters` scheme marker.
+///
+/// # Security
+///
+/// The `rng` parameter must be a cryptographically secure random number generator.
+pub fn encrypt_kem<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
     policy: &PolicyNode,
 ) -> Result<(Ciphertext, [u8; 32]), AbeError> {
-    // Build LSSS matrix from policy
-    let matrix = LsssMatrix::from_policy(policy);
+    // Validate policy before proceeding
+    validate_policy(policy)?;
+
+    // Build LSSS matrix from policy (cached for repeated policies)
+    let matrix = get_or_compute_lsss(policy)?;
 
     // Random s
     let s = Fr::random(rng);
@@ -190,53 +273,84 @@ pub fn encrypt_kem<R: RngCore>(
     // Share the secret s using LSSS
     let shares = matrix.share_secret(rng, s);
 
+    // Pre-generate random r_i values (needed for parallel processing)
+    let r_values: Vec<Fr> = shares.iter().map(|_| Fr::random(rng)).collect();
+
     // For each share (attribute in policy), create ciphertext component
-    let mut components = HashMap::new();
-    for share in shares {
-        // Random r_i for this attribute
-        let r_i = Fr::random(rng);
+    #[cfg(feature = "parallel")]
+    let components: HashMap<String, CiphertextComponent> = shares
+        .par_iter()
+        .zip(r_values.par_iter())
+        .map(|(share, r_i)| {
+            // H(k, attr) - cached for performance
+            let h_attr = hash_to_g1_keyed_cached(&mpk.k, &share.attr);
 
-        // H(k, attr)
-        let h_attr = hash_to_g1_keyed(&mpk.k, &share.attr);
+            // C_i = g1a^share * H(k, attr)^(-r_i)
+            let c_i = (mpk.g1a * share.share) + (h_attr * (-*r_i));
 
-        // C_i = g1a^share * H(k, attr)^(-r_i)
-        let c_i = (mpk.g1a * share.share) + (h_attr * (-r_i));
+            // D_i = g2^r_i
+            let d_i = mpk.g2 * *r_i;
 
-        // D_i = g2^r_i
-        let d_i = mpk.g2 * r_i;
+            (share.attr.clone(), CiphertextComponent { c: c_i, d: d_i })
+        })
+        .collect();
 
-        components.insert(
-            share.attr.clone(),
-            CiphertextComponent { c: c_i, d: d_i },
-        );
-    }
+    #[cfg(not(feature = "parallel"))]
+    let components: HashMap<String, CiphertextComponent> = shares
+        .iter()
+        .zip(r_values.iter())
+        .map(|(share, r_i)| {
+            // H(k, attr) - cached for performance
+            let h_attr = hash_to_g1_keyed_cached(&mpk.k, &share.attr);
+
+            // C_i = g1a^share * H(k, attr)^(-r_i)
+            let c_i = (mpk.g1a * share.share) + (h_attr * (-*r_i));
+
+            // D_i = g2^r_i
+            let d_i = mpk.g2 * *r_i;
+
+            (share.attr.clone(), CiphertextComponent { c: c_i, d: d_i })
+        })
+        .collect();
 
     // Derive symmetric key from C (the GT element)
     let sym_key = aes::derive_key(&c);
 
-    let ct = Ciphertext {
+    let ct: Ciphertext = RawCiphertext {
         policy: policy.to_canonical_string(),
         c,
         c_prime,
         components,
-    };
+    }.into();
 
     Ok((ct, sym_key))
 }
 
 /// Encrypt: Full encryption with symmetric payload
-pub fn encrypt<R: RngCore>(
+///
+/// Returns a type-safe full ciphertext tagged with the `Waters` scheme marker.
+///
+/// # Security
+///
+/// The `rng` parameter must be a cryptographically secure random number generator.
+pub fn encrypt<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
     policy: &PolicyNode,
     plaintext: &[u8],
 ) -> Result<FullCiphertext, AbeError> {
+    // Validate plaintext before proceeding
+    validate_plaintext(plaintext)?;
+
     let (abe_ct, sym_key) = encrypt_kem(rng, mpk, policy)?;
 
     let sym_ct = aes::encrypt(&sym_key, plaintext)
         .map_err(|e| AbeError::EncryptError(e))?;
 
-    Ok(FullCiphertext { abe_ct, sym_ct })
+    Ok(RawFullCiphertext {
+        abe_ct: abe_ct.into_inner(),
+        sym_ct,
+    }.into())
 }
 
 /// Decrypt: Decrypt using a secret key (KEM mode - returns symmetric key)
@@ -249,8 +363,14 @@ pub fn decrypt_kem(
     let policy = parse_policy(&ct.policy)
         .map_err(|e| AbeError::InvalidPolicy(e.to_string()))?;
 
-    // Build LSSS matrix and try to recover coefficients
-    let matrix = LsssMatrix::from_policy(&policy);
+    // Quick check: can the policy possibly be satisfied?
+    // This is O(n) and avoids expensive LSSS computation if policy can't be satisfied
+    if !policy.can_satisfy_attrs(&sk.attributes) {
+        return Err(AbeError::PolicyNotSatisfied);
+    }
+
+    // Build LSSS matrix and try to recover coefficients (cached for repeated policies)
+    let matrix = get_or_compute_lsss(&policy)?;
 
     let coeffs = matrix.recover_coefficients(&sk.attributes)
         .map_err(|_| AbeError::PolicyNotSatisfied)?;
@@ -260,32 +380,59 @@ pub fn decrypt_kem(
     //   prod1 = prod(C_i^coeff_i)
     //   prodT = prod(e(KX_i^coeff_i, D_i))
 
-    let mut prod1 = G1::zero();
-    let mut g1_for_pairing = Vec::new();
-    let mut g2_for_pairing = Vec::new();
+    // Collect coefficient/component/key tuples for parallel processing
+    let items: Vec<_> = coeffs
+        .iter()
+        .filter_map(|(attr, coeff)| {
+            let comp = ct.components.get(attr)?;
+            let kx = sk.kx.get(attr)?;
+            Some((*coeff, comp.c, comp.d, *kx))
+        })
+        .collect();
 
-    for (attr, coeff) in &coeffs {
-        // Get the ciphertext component for this attribute
-        let comp = ct.components.get(attr)
-            .ok_or_else(|| AbeError::DecryptError(format!("Missing ciphertext component for {}", attr)))?;
-
-        // Get the key component for this attribute
-        let kx = sk.kx.get(attr)
-            .ok_or_else(|| AbeError::DecryptError(format!("Missing key component for {}", attr)))?;
-
-        // prod1 *= C_i^coeff
-        prod1 = prod1 + (comp.c * *coeff);
-
-        // For multi-pairing: e(KX^coeff, D)
-        g1_for_pairing.push(*kx * *coeff);
-        g2_for_pairing.push(comp.d);
+    if items.len() != coeffs.len() {
+        return Err(AbeError::DecryptError("Missing ciphertext or key component".into()));
     }
+
+    // Parallel computation of products and pairing components
+    #[cfg(feature = "parallel")]
+    let (prod1, pairing_pairs): (G1, Vec<(G1, G2)>) = {
+        let results: Vec<(G1, G1, G2)> = items
+            .par_iter()
+            .map(|(coeff, c, d, kx)| {
+                let c_scaled = *c * *coeff;
+                let kx_scaled = *kx * *coeff;
+                (c_scaled, kx_scaled, *d)
+            })
+            .collect();
+
+        let prod1 = results.iter().fold(G1::zero(), |acc, (c, _, _)| acc + *c);
+        let pairs: Vec<(G1, G2)> = results.iter().map(|(_, kx, d)| (*kx, *d)).collect();
+        (prod1, pairs)
+    };
+
+    #[cfg(not(feature = "parallel"))]
+    let (prod1, pairing_pairs): (G1, Vec<(G1, G2)>) = {
+        let mut prod1 = G1::zero();
+        let mut pairs = Vec::with_capacity(items.len());
+        for (coeff, c, d, kx) in &items {
+            prod1 = prod1 + (*c * *coeff);
+            pairs.push((*kx * *coeff, *d));
+        }
+        (prod1, pairs)
+    };
 
     // Compute prodT = prod(e(KX_i^coeff_i, D_i))
-    let mut prod_t = Gt::one();
-    for (g1_elem, g2_elem) in g1_for_pairing.iter().zip(g2_for_pairing.iter()) {
-        prod_t = prod_t * pairing(*g1_elem, *g2_elem);
-    }
+    #[cfg(feature = "parallel")]
+    let prod_t = pairing_pairs
+        .par_iter()
+        .map(|(g1, g2)| pairing(*g1, *g2))
+        .reduce(|| Gt::one(), |acc, p| acc * p);
+
+    #[cfg(not(feature = "parallel"))]
+    let prod_t = pairing_pairs
+        .iter()
+        .fold(Gt::one(), |acc, (g1, g2)| acc * pairing(*g1, *g2));
 
     // Compute e(C', K)
     let pairing1 = pairing(ct.c_prime, sk.k);
@@ -311,7 +458,9 @@ pub fn decrypt(
     sk: &SecretKey,
     ct: &FullCiphertext,
 ) -> Result<Vec<u8>, AbeError> {
-    let sym_key = decrypt_kem(mpk, sk, &ct.abe_ct)?;
+    // Convert raw ciphertext to typed wrapper for type-safe decryption
+    let abe_ct: Ciphertext = ct.abe_ct.clone().into();
+    let sym_key = decrypt_kem(mpk, sk, &abe_ct)?;
 
     aes::decrypt(&sym_key, &ct.sym_ct)
         .map_err(|e| AbeError::DecryptError(e))

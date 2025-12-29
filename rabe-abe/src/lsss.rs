@@ -3,9 +3,102 @@
 //! This module implements LSSS for threshold policies, converting a policy tree
 //! into a matrix form where each row corresponds to an attribute.
 
+use crate::error::AbeError;
 use rabe_bls12381::Fr;
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 use std::collections::HashMap;
+use std::sync::RwLock;
+use std::num::NonZeroUsize;
+use lru::LruCache;
+
+/// Compute inverses of multiple field elements using Montgomery's trick.
+///
+/// This reduces n field inversions to just 1 inversion + 3n multiplications,
+/// which is more efficient when n > 1 since field inversion is ~100x slower
+/// than multiplication.
+///
+/// Returns None if any element is zero.
+#[inline]
+pub fn batch_inverse(values: &[Fr]) -> Option<Vec<Fr>> {
+    let n = values.len();
+    if n == 0 {
+        return Some(vec![]);
+    }
+    if n == 1 {
+        return values[0].inverse().map(|inv| vec![inv]);
+    }
+
+    // Check for zeros first
+    for v in values {
+        if v.is_zero() {
+            return None;
+        }
+    }
+
+    // Compute prefix products: prefix[i] = values[0] * values[1] * ... * values[i]
+    let mut prefix = Vec::with_capacity(n);
+    prefix.push(values[0]);
+    for i in 1..n {
+        prefix.push(prefix[i - 1] * values[i]);
+    }
+
+    // Single inversion of the total product
+    let mut inv = prefix[n - 1].inverse()?;
+
+    // Compute all inverses by working backwards
+    // inv[i] = prefix[i-1] * current_inv, then update current_inv *= values[i]
+    let mut result = vec![Fr::zero(); n];
+    for i in (1..n).rev() {
+        result[i] = prefix[i - 1] * inv;
+        inv = inv * values[i];
+    }
+    result[0] = inv;
+
+    Some(result)
+}
+
+/// Default cache size for LSSS matrices
+const LSSS_CACHE_SIZE: usize = 256;
+
+/// Thread-safe LRU cache for LSSS matrices
+/// Key: canonical policy string
+static LSSS_CACHE: std::sync::LazyLock<RwLock<LruCache<String, LsssMatrix>>> =
+    std::sync::LazyLock::new(|| {
+        RwLock::new(LruCache::new(NonZeroUsize::new(LSSS_CACHE_SIZE).unwrap()))
+    });
+
+/// Get or compute an LSSS matrix for a policy, using cache for repeated policies
+///
+/// This is useful when the same policy is used for multiple encryptions,
+/// avoiding repeated LSSS matrix computation.
+pub fn get_or_compute_lsss(policy: &PolicyNode) -> Result<LsssMatrix, AbeError> {
+    let cache_key = policy.to_canonical_string();
+
+    // Try to get from cache (read lock)
+    if let Ok(cache) = LSSS_CACHE.read() {
+        if let Some(matrix) = cache.peek(&cache_key) {
+            return Ok(matrix.clone());
+        }
+    }
+
+    // Cache miss - compute the matrix
+    let matrix = LsssMatrix::from_policy(policy)
+        .map_err(|e| AbeError::InvalidPolicy(e.to_string()))?;
+
+    // Store in cache (write lock)
+    if let Ok(mut cache) = LSSS_CACHE.write() {
+        cache.put(cache_key, matrix.clone());
+    }
+
+    Ok(matrix)
+}
+
+/// Clear the LSSS cache (useful for testing or memory management)
+pub fn clear_lsss_cache() {
+    if let Ok(mut cache) = LSSS_CACHE.write() {
+        cache.clear();
+    }
+}
 
 /// A row in the LSSS matrix
 #[derive(Clone, Debug)]
@@ -126,6 +219,62 @@ impl PolicyNode {
             }
         }
     }
+
+    /// Quick check if policy can possibly be satisfied by given attributes.
+    ///
+    /// This is a fast O(n) check that should be called before expensive LSSS
+    /// computation to short-circuit on policies that cannot be satisfied.
+    ///
+    /// # Performance
+    ///
+    /// This method is much faster than building the full LSSS matrix and
+    /// attempting reconstruction. Use it to fail fast on unsatisfiable policies.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rabe_abe::lsss::PolicyNode;
+    /// use std::collections::HashSet;
+    ///
+    /// let policy = PolicyNode::And(vec![
+    ///     PolicyNode::Attr("admin".to_string()),
+    ///     PolicyNode::Attr("developer".to_string()),
+    /// ]);
+    ///
+    /// let mut attrs = HashSet::new();
+    /// attrs.insert("admin".to_string());
+    ///
+    /// // Quick check - returns false because "developer" is missing
+    /// assert!(!policy.can_satisfy(&attrs));
+    ///
+    /// attrs.insert("developer".to_string());
+    /// assert!(policy.can_satisfy(&attrs));
+    /// ```
+    #[inline]
+    pub fn can_satisfy(&self, attributes: &std::collections::HashSet<String>) -> bool {
+        match self {
+            PolicyNode::Attr(attr) => attributes.contains(attr),
+            PolicyNode::And(children) => {
+                children.iter().all(|c| c.can_satisfy(attributes))
+            }
+            PolicyNode::Or(children) => {
+                children.iter().any(|c| c.can_satisfy(attributes))
+            }
+            PolicyNode::Threshold(k, children) => {
+                children.iter().filter(|c| c.can_satisfy(attributes)).count() >= *k
+            }
+        }
+    }
+
+    /// Quick check using a slice of attribute strings.
+    ///
+    /// Convenience method that converts the slice to a HashSet internally.
+    /// For repeated checks, prefer `can_satisfy` with a pre-built HashSet.
+    #[inline]
+    pub fn can_satisfy_attrs(&self, attributes: &[String]) -> bool {
+        let attr_set: std::collections::HashSet<String> = attributes.iter().cloned().collect();
+        self.can_satisfy(&attr_set)
+    }
 }
 
 impl LsssMatrix {
@@ -133,7 +282,11 @@ impl LsssMatrix {
     ///
     /// The policy is canonicalized first to ensure that the same logical policy
     /// always produces the same LSSS matrix structure (important for serialization).
-    pub fn from_policy(policy: &PolicyNode) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the policy contains invalid threshold gates (e.g., 0-of-n or k-of-n where k > n).
+    pub fn from_policy(policy: &PolicyNode) -> Result<Self, crate::error::AbeError> {
         // Canonicalize the policy to ensure consistent LSSS structure
         let canonical_policy = policy.canonicalize();
 
@@ -141,7 +294,7 @@ impl LsssMatrix {
         let mut counter = 1usize;
 
         // Start with the root receiving the unit vector [1]
-        Self::expand_node(&canonical_policy, vec![Fr::one()], &mut rows, &mut counter);
+        Self::expand_node(&canonical_policy, vec![Fr::one()], &mut rows, &mut counter)?;
 
         let num_cols = rows.iter().map(|r| r.vector.len()).max().unwrap_or(1);
 
@@ -152,7 +305,7 @@ impl LsssMatrix {
             }
         }
 
-        LsssMatrix { rows, num_cols }
+        Ok(LsssMatrix { rows, num_cols })
     }
 
     /// Recursively expand a policy node into LSSS rows
@@ -161,7 +314,7 @@ impl LsssMatrix {
         parent_vector: Vec<Fr>,
         rows: &mut Vec<LsssRow>,
         counter: &mut usize,
-    ) {
+    ) -> Result<(), crate::error::AbeError> {
         match node {
             PolicyNode::Attr(attr) => {
                 // Leaf node: add a row with the parent's vector
@@ -169,18 +322,19 @@ impl LsssMatrix {
                     attr: attr.clone(),
                     vector: parent_vector,
                 });
+                Ok(())
             }
             PolicyNode::And(children) => {
                 // AND gate: threshold = n (all children)
                 let threshold = children.len();
-                Self::expand_threshold(threshold, children, parent_vector, rows, counter);
+                Self::expand_threshold(threshold, children, parent_vector, rows, counter)
             }
             PolicyNode::Or(children) => {
                 // OR gate: threshold = 1
-                Self::expand_threshold(1, children, parent_vector, rows, counter);
+                Self::expand_threshold(1, children, parent_vector, rows, counter)
             }
             PolicyNode::Threshold(k, children) => {
-                Self::expand_threshold(*k, children, parent_vector, rows, counter);
+                Self::expand_threshold(*k, children, parent_vector, rows, counter)
             }
         }
     }
@@ -192,24 +346,26 @@ impl LsssMatrix {
         parent_vector: Vec<Fr>,
         rows: &mut Vec<LsssRow>,
         counter: &mut usize,
-    ) {
+    ) -> Result<(), crate::error::AbeError> {
         let n = children.len();
 
         if threshold == 0 || threshold > n {
-            panic!("Invalid threshold: {} of {}", threshold, n);
+            return Err(crate::error::AbeError::InvalidPolicy(
+                format!("Invalid threshold: {} of {} (threshold must be 1 to {})", threshold, n, n)
+            ));
         }
 
         if threshold == 1 {
             // OR gate (1-of-n): all children get the same vector
             for child in children {
-                Self::expand_node(child, parent_vector.clone(), rows, counter);
+                Self::expand_node(child, parent_vector.clone(), rows, counter)?;
             }
         } else {
             // General k-of-n threshold (including AND which is n-of-n):
             // Use Shamir-style polynomial evaluation
             // Each child gets row [parent, x, x^2, ..., x^(t-1)] evaluated at point x_i
             // where x_i = i+1 (using 1, 2, 3, ... as evaluation points)
-            let col_start = parent_vector.len();
+            let _col_start = parent_vector.len();
             *counter += threshold - 1;
 
             for (i, child) in children.iter().enumerate() {
@@ -225,13 +381,14 @@ impl LsssMatrix {
                     x_power = x_power * x;
                 }
 
-                Self::expand_node(child, child_vector, rows, counter);
+                Self::expand_node(child, child_vector, rows, counter)?;
             }
         }
+        Ok(())
     }
 
     /// Share a secret using this LSSS matrix
-    pub fn share_secret<R: RngCore>(&self, rng: &mut R, secret: Fr) -> Vec<LsssShare> {
+    pub fn share_secret<R: RngCore + CryptoRng>(&self, rng: &mut R, secret: Fr) -> Vec<LsssShare> {
         // Generate random coefficients for the secret vector
         // v = (s, r_2, r_3, ..., r_c) where s is the secret
         let mut v = vec![secret];
@@ -414,7 +571,7 @@ mod tests {
     #[test]
     fn test_single_attr() {
         let policy = PolicyNode::Attr("admin".to_string());
-        let matrix = LsssMatrix::from_policy(&policy);
+        let matrix = LsssMatrix::from_policy(&policy).unwrap();
 
         assert_eq!(matrix.rows.len(), 1);
         assert_eq!(matrix.rows[0].attr, "admin");
@@ -427,7 +584,7 @@ mod tests {
             PolicyNode::Attr("a".to_string()),
             PolicyNode::Attr("b".to_string()),
         ]);
-        let matrix = LsssMatrix::from_policy(&policy);
+        let matrix = LsssMatrix::from_policy(&policy).unwrap();
 
         assert_eq!(matrix.rows.len(), 2);
 
@@ -450,7 +607,7 @@ mod tests {
             PolicyNode::Attr("a".to_string()),
             PolicyNode::Attr("b".to_string()),
         ]);
-        let matrix = LsssMatrix::from_policy(&policy);
+        let matrix = LsssMatrix::from_policy(&policy).unwrap();
 
         assert_eq!(matrix.rows.len(), 2);
 
@@ -480,7 +637,7 @@ mod tests {
             PolicyNode::Attr("a".to_string()),
             PolicyNode::Attr("b".to_string()),
         ]);
-        let matrix = LsssMatrix::from_policy(&policy);
+        let matrix = LsssMatrix::from_policy(&policy).unwrap();
 
         let mut rng = thread_rng();
         let secret = Fr::random(&mut rng);
@@ -505,5 +662,72 @@ mod tests {
         ]);
         let canonical = policy.to_canonical_string();
         assert_eq!(canonical, "(a and b)"); // Should be sorted
+    }
+
+    #[test]
+    fn test_batch_inverse() {
+        let mut rng = thread_rng();
+
+        // Test empty input
+        assert_eq!(batch_inverse(&[]), Some(vec![]));
+
+        // Test single element
+        let a = Fr::random(&mut rng);
+        let result = batch_inverse(&[a]).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(a * result[0], Fr::one());
+
+        // Test multiple elements
+        let values: Vec<Fr> = (0..5).map(|_| Fr::random(&mut rng)).collect();
+        let inverses = batch_inverse(&values).unwrap();
+        assert_eq!(inverses.len(), 5);
+        for (v, inv) in values.iter().zip(inverses.iter()) {
+            assert_eq!(*v * *inv, Fr::one());
+        }
+
+        // Test with zero should return None
+        let with_zero = vec![Fr::random(&mut rng), Fr::zero(), Fr::random(&mut rng)];
+        assert!(batch_inverse(&with_zero).is_none());
+    }
+
+    #[test]
+    fn test_can_satisfy() {
+        use std::collections::HashSet;
+
+        // Single attribute
+        let policy = PolicyNode::Attr("admin".to_string());
+        let attrs: HashSet<String> = ["admin".to_string()].into_iter().collect();
+        assert!(policy.can_satisfy(&attrs));
+
+        let empty: HashSet<String> = HashSet::new();
+        assert!(!policy.can_satisfy(&empty));
+
+        // AND policy
+        let and_policy = PolicyNode::And(vec![
+            PolicyNode::Attr("a".to_string()),
+            PolicyNode::Attr("b".to_string()),
+        ]);
+        let only_a: HashSet<String> = ["a".to_string()].into_iter().collect();
+        let both: HashSet<String> = ["a".to_string(), "b".to_string()].into_iter().collect();
+        assert!(!and_policy.can_satisfy(&only_a));
+        assert!(and_policy.can_satisfy(&both));
+
+        // OR policy
+        let or_policy = PolicyNode::Or(vec![
+            PolicyNode::Attr("a".to_string()),
+            PolicyNode::Attr("b".to_string()),
+        ]);
+        assert!(or_policy.can_satisfy(&only_a));
+        assert!(or_policy.can_satisfy(&both));
+
+        // Threshold policy (2 of 3)
+        let threshold = PolicyNode::Threshold(2, vec![
+            PolicyNode::Attr("a".to_string()),
+            PolicyNode::Attr("b".to_string()),
+            PolicyNode::Attr("c".to_string()),
+        ]);
+        let ab: HashSet<String> = ["a".to_string(), "b".to_string()].into_iter().collect();
+        assert!(threshold.can_satisfy(&ab));
+        assert!(!threshold.can_satisfy(&only_a));
     }
 }

@@ -1,42 +1,71 @@
 [package]
 name = "rabe-abe"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 description = "Attribute-Based Encryption schemes using BLS12-381"
-license = "MIT OR Apache-2.0"
+keywords = ["cryptography", "abe", "attribute-based-encryption", "bls12-381", "pairing"]
+categories = ["cryptography"]
 
 [features]
-default = ["serde"]
+default = ["serde", "parallel"]
 serde = ["dep:serde", "rabe-bls12381/serde"]
 wasm = ["rabe-bls12381/wasm", "getrandom/js"]
-
-[[bin]]
-name = "rabe-cli"
-path = "src/bin/cli.rs"
+# Enable optional libc for memory locking (mlock)
+memory-protection = ["libc"]
+# Enable parallel processing with Rayon
+parallel = ["rayon"]
 
 [dependencies]
 rabe-bls12381 = { path = "../rabe-bls12381" }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"], optional = true }
-serde_json = "1.0"
-ciborium = "0.2"
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true }
+ciborium = { workspace = true }
 
 # Random number generation
-rand = "0.8"
-rand_chacha = "0.3"
-getrandom = { version = "0.2", optional = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+getrandom = { workspace = true }
 
 # Symmetric encryption for hybrid scheme
-aes-gcm = "0.10"
+aes-gcm = { workspace = true }
+
+# Security hardening
+zeroize = { version = "1.7", features = ["derive"] }
+subtle = "2.5"
+hkdf = "0.12"
+
+# Optional: memory protection (mlock)
+libc = { version = "0.2", optional = true }
+
+# Logging for audit
+log = "0.4"
+
+# Performance: LRU cache for hash-to-curve
+lru = "0.12"
+
+# Performance: Parallel processing (optional)
+rayon = { version = "1.10", optional = true }
 
 # Hashing
-sha2 = "0.10"
-sha3 = "0.10"
+sha2 = { workspace = true }
+sha3 = { workspace = true }
 
 # Error handling
-thiserror = "1.0"
+thiserror = { workspace = true }
 
-# CLI dependencies
-clap = { version = "4.4", features = ["derive"] }
-hex = "0.4"
+# Needed for hex encoding in policy attributes
+hex = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "abe_benchmarks"
+harness = false
+
+[[bench]]
+name = "pairing_benchmarks"
+harness = false
