@@ -33,17 +33,25 @@ WASM_TARGET="wasm32-wasi-threads"
 # Add setjmp/longjmp support for error handling
 # Add pthread support for thread-local storage (__thread) to fix CCA verification
 # Add atomics and bulk-memory for pthread shared memory support
+# Allow overriding optimization level via OPT_LEVEL environment variable
+OPT_LEVEL="${OPT_LEVEL:--O1}"  # Default to -O1 if not set
 CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT"
-CFLAGS="$CFLAGS -O2 -g"
+CFLAGS="$CFLAGS $OPT_LEVEL -g"  # Use configurable optimization level
 CFLAGS="$CFLAGS -D__wasm__"
 CFLAGS="$CFLAGS -DBP_WITH_MCL"
 CFLAGS="$CFLAGS -DSSL_LIB_INIT"
 CFLAGS="$CFLAGS -DEC_WITH_MCL"  # WASM: Use EC stubs since OpenSSL EC isn't available
 CFLAGS="$CFLAGS -DMCL_FP_BIT=384"
 CFLAGS="$CFLAGS -DMCL_FR_BIT=256"
+# MCL BN requires these to be defined at compile time for BLS12-381 (FP=384 bits, FR=256 bits)
+# WASM32 uses 4-byte units, so FP=384 bits requires 12 units (384/32=12)
+# However, MCL uses 64-bit unit counting, so FP=384 bits = 6 units (384/64=6)
+CFLAGS="$CFLAGS -DMCLBN_FP_UNIT_SIZE=6"  # 384 bits / 64 bits per unit = 6 units
+CFLAGS="$CFLAGS -DMCLBN_FR_UNIT_SIZE=4"  # 256 bits / 64 bits per unit = 4 units
 CFLAGS="$CFLAGS -I$ZROOT/src/include"
 CFLAGS="$CFLAGS -I$WASM_PREFIX/include"
 CFLAGS="$CFLAGS -I$WASM_SYSROOT/include"
+CFLAGS="$CFLAGS -I$ZROOT/deps/tinycbor/src"
 CFLAGS="$CFLAGS -I/Library/Developer/CommandLineTools/usr/include"
 CFLAGS="$CFLAGS -fPIC"
 CFLAGS="$CFLAGS -mllvm -wasm-enable-sjlj"
@@ -97,6 +105,13 @@ OABE_LOW_SRC=(
 OABE_TOOLS_SRC=(
     "tools/zlsss.cpp"
     "tools/zprng.cpp"
+)
+
+OABE_CBOR_SRC=(
+    "cbor/zcbor_wrapper.cpp"
+    "cbor/zcbor_group_elements.cpp"
+    "cbor/zcbor_attributes.cpp"
+    "cbor/zcbor_policy.cpp"
 )
 
 OABE_UTILS_SRC=(
@@ -225,7 +240,7 @@ compile_sources() {
 
     # Compile all C++ and C sources
     for src in "${OABE_ZML_SRC[@]}" "${OABE_KEYS_SRC[@]}" "${OABE_LOW_SRC[@]}" \
-               "${OABE_TOOLS_SRC[@]}" "${OABE_UTILS_SRC[@]}" "${OABE_CORE_SRC[@]}"; do
+               "${OABE_TOOLS_SRC[@]}" "${OABE_CBOR_SRC[@]}" "${OABE_UTILS_SRC[@]}" "${OABE_CORE_SRC[@]}"; do
         if [[ "$src" == *.c ]]; then
             compile_c_file "$src" || true
         else
@@ -275,6 +290,16 @@ create_wasm_module() {
 # Main execution
 main() {
     info "Building OpenABE for WebAssembly with MCL backend..."
+
+    # Install MCL headers and libraries to correct location for repeatability
+    info "Installing MCL WASM dependencies..."
+    if [ -f "$ZROOT/install-wasm-headers.sh" ]; then
+        "$ZROOT/install-wasm-headers.sh" || {
+            error "Failed to install WASM dependencies"
+        }
+    else
+        warn "install-wasm-headers.sh not found, assuming dependencies are in place"
+    fi
 
     compile_sources
     create_library

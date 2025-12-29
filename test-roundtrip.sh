@@ -37,10 +37,18 @@ fi
 
 # Test 2: WASM encrypt → Native decrypt
 info "Test 2: WASM → Native"
-rm -f ct.cpabe decrypted.txt
 
-# Create WASM ciphertext using Node.js
-node <<'EOF'
+# Check if WASM build exists
+if [ ! -f "./build-wasm/openabe.js" ]; then
+    warn "WASM bindings not found. Skipping WASM tests."
+    warn "To build WASM: ./build-openabe-wasm.sh && build WASM bindings"
+    info "Skipping Test 2: WASM→Native (WASM not built)"
+    info "Skipping Test 3: Native→WASM (WASM not built)"
+else
+    rm -f ct.cpabe decrypted.txt
+
+    # Create WASM ciphertext using Node.js
+    node <<'EOF'
 const fs = require('fs');
 const {OpenABE} = require('./build-wasm/openabe.js');
 
@@ -60,23 +68,23 @@ test().catch(err => {
 });
 EOF
 
-./cli/oabe_dec -s CP -p test -k sk_alice.key -i ct.cpabe -o decrypted.txt
+    ./cli/oabe_dec -s CP -p test -k sk_alice.key -i ct.cpabe -o decrypted.txt
 
-if diff -q plain.txt decrypted.txt > /dev/null; then
-    info "✓ WASM→Native: PASSED"
-else
-    error "✗ WASM→Native: FAILED"
-    exit 1
-fi
+    if diff -q plain.txt decrypted.txt > /dev/null; then
+        info "✓ WASM→Native: PASSED"
+    else
+        error "✗ WASM→Native: FAILED"
+        exit 1
+    fi
 
-# Test 3: Native encrypt → WASM decrypt
-info "Test 3: Native → WASM"
-rm -f ct.cpabe decrypted.txt
+    # Test 3: Native encrypt → WASM decrypt
+    info "Test 3: Native → WASM"
+    rm -f ct.cpabe decrypted.txt
 
-./cli/oabe_enc -s CP -p test -e "role:developer" -i plain.txt -o ct.cpabe
+    ./cli/oabe_enc -s CP -p test -e "role:developer" -i plain.txt -o ct.cpabe
 
-# Decrypt with WASM using Node.js
-node <<'EOF'
+    # Decrypt with WASM using Node.js
+    node <<'EOF'
 const fs = require('fs');
 const {OpenABE} = require('./build-wasm/openabe.js');
 
@@ -96,11 +104,12 @@ test().catch(err => {
 });
 EOF
 
-if diff -q plain.txt decrypted.txt > /dev/null; then
-    info "✓ Native→WASM: PASSED"
-else
-    error "✗ Native→WASM: FAILED"
-    exit 1
+    if diff -q plain.txt decrypted.txt > /dev/null; then
+        info "✓ Native→WASM: PASSED"
+    else
+        error "✗ Native→WASM: FAILED"
+        exit 1
+    fi
 fi
 
 # Clean up

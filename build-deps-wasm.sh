@@ -4,7 +4,7 @@
 set -e
 
 # Configuration
-WASI_SDK_VERSION="${WASI_SDK_VERSION:-24}"
+WASI_SDK_VERSION="${WASI_SDK_VERSION:-27}"
 WASI_SDK_PATH="${WASI_SDK_PATH:-$HOME/wasi-sdk}"
 ZROOT="$(pwd)"
 WASM_BUILD_DIR="$ZROOT/build-wasm"
@@ -28,7 +28,7 @@ WASM_TARGET="wasm32-wasi-threads"
 # Add signal emulation for GMP compatibility
 # Add atomics and bulk-memory for pthread support (required for --shared-memory)
 # -pthread is added automatically by wasi-sdk-pthread.cmake toolchain
-export CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT -O2 -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_GETPID -matomics -mbulk-memory"
+export CFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT -O3 -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_GETPID -matomics -mbulk-memory"
 export CXXFLAGS="$CFLAGS -std=c++11 -fno-exceptions -fno-rtti"
 export LDFLAGS="--target=$WASM_TARGET --sysroot=$WASM_SYSROOT -lwasi-emulated-signal -lwasi-emulated-getpid"
 
@@ -255,6 +255,7 @@ build_mcl() {
     cd "$WASM_DEPS_DIR"
 
     # Download MCL if not present
+    # Use 3.04 to match native build for cross-platform compatibility
     local MCL_VERSION="3.04"
     local MCL_ARCHIVE="mcl-${MCL_VERSION}.tar.gz"
     local MCL_DIR="mcl-${MCL_VERSION}"
@@ -271,25 +272,17 @@ build_mcl() {
 
     cd "$MCL_DIR"
 
-    # Generate MCL config header for WASM
-    mkdir -p include/mcl
-    cat > include/mcl/config.hpp << 'EOF'
-#pragma once
-#define MCL_FP_BIT 384
-#define MCL_FR_BIT 256
-#define MCL_USE_LLVM 0
-#define MCL_USE_GMP 0
-#define MCL_USE_OPENSSL 0
-#define MCL_MAX_FP_BIT_SIZE 384
-#define MCL_MAX_FR_BIT_SIZE 256
-#define MCL_SIZEOF_UNIT 8
-#define MCL_USE_XBYAK 0
-#define MCL_DONT_USE_XBYAK
-#define CYBOZU_DONT_USE_EXCEPTION
-#define CYBOZU_DONT_USE_STRING
-#define MCL_NO_AUTOLINK
-#define MCL_DLL_API
-EOF
+    # Apply WASM-specific patches for MCL 3.04
+    info "Applying MCL 3.04 WASM patches..."
+    if [ -f "$ZROOT/deps/mcl/mcl_304_bint_wasm_fix.patch" ]; then
+        patch -p1 < "$ZROOT/deps/mcl/mcl_304_bint_wasm_fix.patch" || {
+            warn "Failed to apply patch, continuing anyway..."
+        }
+    fi
+
+    # Note: MCL 3.04 includes/mcl/config.hpp already exists and handles WASM32 configuration
+    # We don't need to overwrite it - it will set MCL_SIZEOF_UNIT=4 when MCL_WASM32=1 is defined
+    info "Using MCL 3.04's built-in config.hpp (no override needed)"
 
     # Install MCL headers
     info "Installing MCL headers to $WASM_PREFIX..."
@@ -323,23 +316,30 @@ EOF
     MCL_CXXFLAGS="$MCL_CXXFLAGS -DCYBOZU_DONT_USE_STRING"
     MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_NO_AUTOLINK"
 
-    # Compile our custom bn_c384_256_wasm.cpp which includes C++ API
-    if [ -f "src/bn_c384_256_wasm.cpp" ]; then
-        info "Compiling bn_c384_256_wasm.cpp with C++ templates..."
-        $CXX $MCL_CXXFLAGS -c src/bn_c384_256_wasm.cpp -o lib/wasm/bn_c384_256_wasm.o 2>&1 | tee /tmp/mcl_build.log || {
-            error "Failed to compile MCL C API implementation"
-            warn "Error log:"
-            tail -50 /tmp/mcl_build.log | grep -E "error:|warning:" | head -20
-            exit 1
-        }
+    # MCL 3.04: Use portable mode (fp.cpp only, no assembly, no LLVM)
+    # This matches the "emu" target in MCL Makefile for WASM compatibility
+    info "Compiling fp.cpp in portable mode (no assembly, no LLVM)..."
 
-        # Create library from object file
-        $AR rcs lib/libmcl.a lib/wasm/bn_c384_256_wasm.o
-        info "Created libmcl.a from bn_c384_256_wasm.o"
-    else
-        error "bn_c384_256_wasm.cpp not found!"
+    # Add portable mode flags
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_BINT_ASM=0"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_MSM=0"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_USE_VINT"
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_VINT_FIXED_BUFFER"
+
+    # WASM32 mode - config.hpp will set MCL_SIZEOF_UNIT=4 based on this
+    MCL_CXXFLAGS="$MCL_CXXFLAGS -DMCL_WASM32=1"
+
+    $CXX $MCL_CXXFLAGS -c src/fp.cpp -o lib/wasm/fp.o 2>&1 | tee /tmp/mcl_fp_build.log || {
+        error "Failed to compile fp.cpp"
+        warn "Error log:"
+        tail -50 /tmp/mcl_fp_build.log | grep -E "error:|warning:" | head -20
         exit 1
-    fi
+    }
+
+    # MCL 3.04 fp.cpp contains all necessary code including C API
+    # No need for separate bn_c384_256_wasm.cpp
+    $AR rcs lib/libmcl.a lib/wasm/fp.o
+    info "Created libmcl.a from fp.o (portable mode)"
 
     # Create stub libmclecdsa.a (not needed for pairing operations)
     touch lib/wasm/stub.c
@@ -380,6 +380,11 @@ build_tinycbor() {
 
     if [ -f "lib/libtinycbor.a" ]; then
         info "tinycbor WASM build complete (size: $(du -h lib/libtinycbor.a | cut -f1))"
+
+        # Copy to WASM install directory so CLI builds can find it
+        mkdir -p "$WASM_PREFIX/lib"
+        cp lib/libtinycbor.a "$WASM_PREFIX/lib/"
+        info "Copied tinycbor to $WASM_PREFIX/lib/"
     else
         error "tinycbor library not created"
         exit 1
