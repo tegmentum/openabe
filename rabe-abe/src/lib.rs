@@ -42,9 +42,21 @@ pub mod utils;
 pub mod error;
 pub mod lsss;
 pub mod cbor;
+pub mod tracing;
+pub mod security;
+pub mod scheme_types;
 
 pub use error::AbeError;
 pub use lsss::{LsssMatrix, LsssShare, PolicyNode};
+pub use tracing::{UserId, TraceResult, RevocationList};
+pub use security::{secure_compare, validate_policy, validate_plaintext};
 
 // Re-export the pairing primitives
 pub use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
+
+// Re-export scheme type markers and wrappers
+pub use scheme_types::{
+    Scheme, Waters, WatersCca, Ac17, Gpsw, Bsw, Dabe,
+    TypedMpk, TypedMsk, TypedSecretKey, TypedCiphertext,
+    TypedFullCiphertext, TypedReKey, TypedReEncryptedCiphertext,
+};

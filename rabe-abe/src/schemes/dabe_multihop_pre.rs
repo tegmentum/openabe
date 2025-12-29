@@ -37,7 +37,7 @@ use crate::schemes::waters::parse_policy;
 use crate::schemes::waters_u2u_pre::{DelegationKeyPair, TargetPublicKey, TargetSecret};
 use crate::utils::aes;
 use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 use sha2::{Sha256, Digest};
 use std::collections::{HashMap, HashSet};
 
@@ -120,7 +120,7 @@ pub struct FullDabeMultiHopReEncryptedCiphertext {
 }
 
 /// Generate a delegation key pair for receiving re-encrypted ciphertexts
-pub fn generate_delegation_keypair<R: RngCore>(rng: &mut R, gp: &GlobalParams) -> DelegationKeyPair {
+pub fn generate_delegation_keypair<R: RngCore + CryptoRng>(rng: &mut R, gp: &GlobalParams) -> DelegationKeyPair {
     let sk = Fr::random(rng);
     let pk = gp.h * sk;
     DelegationKeyPair { pk, sk }
@@ -137,7 +137,7 @@ pub fn generate_delegation_keypair<R: RngCore>(rng: &mut R, gp: &GlobalParams) -
 /// * `usk` - User's aggregated secret key
 /// * `target_pk` - Next recipient's public key
 /// * `max_hops` - Maximum number of hops allowed
-pub fn generate_first_hop_rekey<R: RngCore>(
+pub fn generate_first_hop_rekey<R: RngCore + CryptoRng>(
     rng: &mut R,
     gp: &GlobalParams,
     usk: &UserSecretKey,
@@ -298,7 +298,7 @@ pub fn first_hop_re_encrypt_full(
 /// Apply next hop re-encryption
 ///
 /// The current recipient adds another layer of re-encryption for the next recipient.
-pub fn next_hop_re_encrypt<R: RngCore>(
+pub fn next_hop_re_encrypt<R: RngCore + CryptoRng>(
     rng: &mut R,
     gp: &GlobalParams,
     re_ct: &DabeMultiHopReEncryptedCiphertext,
@@ -359,7 +359,7 @@ pub fn next_hop_re_encrypt<R: RngCore>(
 }
 
 /// Next hop re-encryption for full ciphertext
-pub fn next_hop_re_encrypt_full<R: RngCore>(
+pub fn next_hop_re_encrypt_full<R: RngCore + CryptoRng>(
     rng: &mut R,
     gp: &GlobalParams,
     re_ct: &FullDabeMultiHopReEncryptedCiphertext,

@@ -36,7 +36,7 @@ use crate::schemes::dabe::{
 use crate::schemes::waters::parse_policy;
 use crate::utils::aes;
 use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 use sha2::{Sha256, Digest};
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -260,7 +260,7 @@ pub struct FullDabeConditionalReEncryptedCiphertext {
 ///
 /// # Returns
 /// Conditional re-encryption key with per-authority components
-pub fn generate_conditional_rekey<R: RngCore>(
+pub fn generate_conditional_rekey<R: RngCore + CryptoRng>(
     rng: &mut R,
     gp: &GlobalParams,
     usk_old: &UserSecretKey,
@@ -307,7 +307,7 @@ pub fn generate_conditional_rekey<R: RngCore>(
 ///
 /// This version requires the proxy to provide a valid signed timestamp from
 /// the specified authority when re-encrypting.
-pub fn generate_conditional_rekey_with_trusted_time<R: RngCore>(
+pub fn generate_conditional_rekey_with_trusted_time<R: RngCore + CryptoRng>(
     rng: &mut R,
     gp: &GlobalParams,
     usk_old: &UserSecretKey,

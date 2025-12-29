@@ -20,10 +20,10 @@
 
 use crate::error::AbeError;
 use crate::lsss::{LsssMatrix, PolicyNode};
-use crate::schemes::waters::{self, Ciphertext, Mpk, SecretKey, CiphertextComponent};
+use crate::schemes::waters::{self, Ciphertext, RawCiphertext, Mpk, SecretKey, CiphertextComponent};
 use crate::utils::{aes, hash_to_g1_keyed};
 use rabe_bls12381::{Fr, G1, Gt, pairing};
-use rand::{RngCore, SeedableRng};
+use rand::{RngCore, CryptoRng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::{Sha256, Digest};
 use std::collections::HashMap;
@@ -94,7 +94,7 @@ fn derive_m_encryption_key(gt: &Gt) -> [u8; 32] {
 /// CCA-secure encryption (KEM mode)
 ///
 /// Returns the CCA ciphertext and the encapsulated symmetric key.
-pub fn encrypt_kem<R: RngCore>(
+pub fn encrypt_kem<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
     policy: &PolicyNode,
@@ -159,13 +159,13 @@ fn xor_decrypt(ciphertext: &[u8], key: &[u8; 32]) -> Vec<u8> {
 }
 
 /// Internal CPA encryption with deterministic randomness
-fn encrypt_cpa_deterministic<R: RngCore>(
+fn encrypt_cpa_deterministic<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
     policy: &PolicyNode,
 ) -> Result<Ciphertext, AbeError> {
     // Build LSSS matrix from policy
-    let matrix = LsssMatrix::from_policy(policy);
+    let matrix = LsssMatrix::from_policy(policy)?;
 
     // Random s (deterministic from our seeded RNG)
     let s = Fr::random(rng);
@@ -194,16 +194,16 @@ fn encrypt_cpa_deterministic<R: RngCore>(
         );
     }
 
-    Ok(Ciphertext {
+    Ok(RawCiphertext {
         policy: policy.to_canonical_string(),
         c,
         c_prime,
         components,
-    })
+    }.into())
 }
 
 /// CCA-secure encryption with payload
-pub fn encrypt<R: RngCore>(
+pub fn encrypt<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
     policy: &PolicyNode,
@@ -293,7 +293,7 @@ fn decrypt_cpa_to_gt(
     let policy = waters::parse_policy(&ct.policy)
         .map_err(|e| AbeError::InvalidPolicy(e.to_string()))?;
 
-    let matrix = LsssMatrix::from_policy(&policy);
+    let matrix = LsssMatrix::from_policy(&policy)?;
 
     let coeffs = matrix.recover_coefficients(&sk.attributes)
         .map_err(|_| AbeError::PolicyNotSatisfied)?;
@@ -304,9 +304,9 @@ fn decrypt_cpa_to_gt(
 
     for (attr, coeff) in &coeffs {
         let comp = ct.components.get(attr)
-            .ok_or_else(|| AbeError::DecryptError(format!("Missing component for {}", attr)))?;
+            .ok_or_else(|| AbeError::DecryptError("Missing ciphertext component".into()))?;
         let kx = sk.kx.get(attr)
-            .ok_or_else(|| AbeError::DecryptError(format!("Missing key for {}", attr)))?;
+            .ok_or_else(|| AbeError::DecryptError("Missing key component".into()))?;
 
         prod1 = prod1 + (comp.c * *coeff);
         g1_for_pairing.push(*kx * *coeff);

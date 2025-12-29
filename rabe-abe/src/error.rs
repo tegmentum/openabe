@@ -27,4 +27,19 @@ pub enum AbeError {
 
     #[error("Invalid attribute: {0}")]
     InvalidAttribute(String),
+
+    #[error("Tracing error: {0}")]
+    TracingError(String),
+
+    #[error("User revoked: {0}")]
+    RevocationError(String),
+
+    #[error("Internal error: {0}")]
+    InternalError(String),
+
+    #[error("Invalid ciphertext: {0}")]
+    InvalidCiphertext(String),
+
+    #[error("Cryptographic error: {0}")]
+    CryptoError(String),
 }

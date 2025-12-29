@@ -5,7 +5,10 @@
 
 use crate::error::AbeError;
 use crate::lsss::PolicyNode;
-use crate::schemes::waters::{Ciphertext, CiphertextComponent, Mpk, Msk, SecretKey};
+use crate::schemes::waters::{
+    Ciphertext, CiphertextComponent, Mpk, Msk, SecretKey,
+    RawCiphertext, RawMpk, RawMsk, RawSecretKey,
+};
 use crate::schemes::waters_cca::{CcaCiphertext, CcaFullCiphertext};
 use ciborium::value::Value;
 use rabe_bls12381::{Fr, G1, G2, Gt};
@@ -448,19 +451,19 @@ pub fn decode_mpk(data: &[u8]) -> Result<Mpk, AbeError> {
         return Err(AbeError::DecryptError("MPK requires 6 group elements".to_string()));
     }
 
-    let g1 = G1::from_slice(&elems[0])
+    let g1 = G1::from_slice_checked(&elems[0], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid G1".to_string()))?;
-    let g2 = G2::from_slice(&elems[1])
+    let g2 = G2::from_slice_checked(&elems[1], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid G2".to_string()))?;
-    let g1a = G1::from_slice(&elems[2])
+    let g1a = G1::from_slice_checked(&elems[2], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid G1a".to_string()))?;
-    let g2alpha = G2::from_slice(&elems[3])
+    let g2alpha = G2::from_slice_checked(&elems[3], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid G2alpha".to_string()))?;
-    let egg_alpha = Gt::from_slice(&elems[4])
+    let egg_alpha = Gt::from_slice_checked(&elems[4], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid egg_alpha".to_string()))?;
     let k = elems[5].clone();
 
-    Ok(Mpk { g1, g2, g1a, g2alpha, egg_alpha, k })
+    Ok(RawMpk { g1, g2, g1a, g2alpha, egg_alpha, k }.into())
 }
 
 // ============================================================================
@@ -531,10 +534,10 @@ pub fn decode_msk(data: &[u8]) -> Result<Msk, AbeError> {
 
     let alpha = Fr::from_slice(&elems[0])
         .ok_or_else(|| AbeError::DecryptError("Invalid alpha".to_string()))?;
-    let g2a = G2::from_slice(&elems[1])
+    let g2a = G2::from_slice_checked(&elems[1], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid g2a".to_string()))?;
 
-    Ok(Msk { alpha, g2a })
+    Ok(RawMsk { alpha, g2a }.into())
 }
 
 // ============================================================================
@@ -617,19 +620,19 @@ pub fn decode_sk(data: &[u8]) -> Result<SecretKey, AbeError> {
         return Err(AbeError::DecryptError("SK: not enough group elements".to_string()));
     }
 
-    let k = G2::from_slice(&elems[0])
+    let k = G2::from_slice_checked(&elems[0], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid K".to_string()))?;
-    let l = G2::from_slice(&elems[1])
+    let l = G2::from_slice_checked(&elems[1], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid L".to_string()))?;
 
     let mut kx = std::collections::HashMap::new();
     for (i, attr) in attributes.iter().enumerate() {
-        let kx_elem = G1::from_slice(&elems[2 + i])
-            .ok_or_else(|| AbeError::DecryptError(format!("Invalid Kx for {}", attr)))?;
+        let kx_elem = G1::from_slice_checked(&elems[2 + i], false)
+            .ok_or_else(|| AbeError::DecryptError("Invalid key component".into()))?;
         kx.insert(attr.clone(), kx_elem);
     }
 
-    Ok(SecretKey { k, l, kx, attributes })
+    Ok(RawSecretKey { k, l, kx, attributes }.into())
 }
 
 // ============================================================================
@@ -737,26 +740,26 @@ pub fn decode_ct(data: &[u8]) -> Result<Ciphertext, AbeError> {
         return Err(AbeError::DecryptError("CT: not enough elements".to_string()));
     }
 
-    let c = Gt::from_slice(&elems[0])
+    let c = Gt::from_slice_checked(&elems[0], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid C".to_string()))?;
-    let c_prime = G1::from_slice(&elems[1])
+    let c_prime = G1::from_slice_checked(&elems[1], false)
         .ok_or_else(|| AbeError::DecryptError("Invalid C'".to_string()))?;
 
     let mut components = std::collections::HashMap::new();
     for (i, attr) in attr_list.iter().enumerate() {
-        let c_i = G1::from_slice(&elems[2 + i * 2])
-            .ok_or_else(|| AbeError::DecryptError(format!("Invalid C_i for {}", attr)))?;
-        let d_i = G2::from_slice(&elems[2 + i * 2 + 1])
-            .ok_or_else(|| AbeError::DecryptError(format!("Invalid D_i for {}", attr)))?;
+        let c_i = G1::from_slice_checked(&elems[2 + i * 2], false)
+            .ok_or_else(|| AbeError::DecryptError("Invalid ciphertext component".into()))?;
+        let d_i = G2::from_slice_checked(&elems[2 + i * 2 + 1], false)
+            .ok_or_else(|| AbeError::DecryptError("Invalid ciphertext component".into()))?;
         components.insert(attr.clone(), CiphertextComponent { c: c_i, d: d_i });
     }
 
-    Ok(Ciphertext {
+    Ok(RawCiphertext {
         policy: policy_str,
         c,
         c_prime,
         components,
-    })
+    }.into())
 }
 
 // ============================================================================
@@ -909,7 +912,9 @@ use crate::schemes::waters::FullCiphertext;
 pub fn encode_full_ct(ct: &FullCiphertext) -> Result<Vec<u8>, AbeError> {
     let suite = Suite::default();
 
-    let ct_cbor = encode_ct(&ct.abe_ct)?;
+    // Convert raw ciphertext to typed wrapper for encoding
+    let abe_ct: Ciphertext = ct.abe_ct.clone().into();
+    let ct_cbor = encode_ct(&abe_ct)?;
 
     let mut body: CborMap = Vec::new();
     map_insert(&mut body, 0, Value::Bytes(ct_cbor));
@@ -958,7 +963,8 @@ pub fn decode_full_ct(data: &[u8]) -> Result<FullCiphertext, AbeError> {
         .map(|b| b.to_vec())
         .ok_or_else(|| AbeError::DecryptError("Missing sym_ct".to_string()))?;
 
-    Ok(FullCiphertext { abe_ct, sym_ct })
+    use crate::schemes::waters::RawFullCiphertext;
+    Ok(RawFullCiphertext { abe_ct: abe_ct.into_inner(), sym_ct }.into())
 }
 
 // ============================================================================
@@ -1849,7 +1855,8 @@ mod tests {
         let plaintext = b"Hello, CBOR!";
         let ct = waters::encrypt(&mut rng, &mpk, &policy, plaintext).unwrap();
 
-        let encoded = encode_ct(&ct.abe_ct).unwrap();
+        let abe_ct: Ciphertext = ct.abe_ct.clone().into();
+        let encoded = encode_ct(&abe_ct).unwrap();
         let decoded = decode_ct(&encoded).unwrap();
 
         assert_eq!(ct.abe_ct.c.into_bytes(), decoded.c.into_bytes());
