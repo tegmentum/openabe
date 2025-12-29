@@ -12,11 +12,16 @@
 //! The construction is adapted for Type-3 pairings (BLS12-381).
 
 use crate::error::AbeError;
-use crate::lsss::{LsssMatrix, PolicyNode};
-use crate::utils::{hash_to_g1_keyed, aes};
+use crate::security::validation::{validate_policy, validate_plaintext, validate_attributes};
+use crate::lsss::{LsssMatrix, PolicyNode, get_or_compute_lsss};
+use crate::utils::{hash_to_g1_keyed_cached, aes};
 use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
-use rand::RngCore;
+use rand::{RngCore, CryptoRng};
 use std::collections::HashMap;
+use zeroize::Zeroize;
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -41,6 +46,10 @@ pub struct Mpk {
 }
 
 /// Master Secret Key for AC17 CP-ABE
+///
+/// # Security
+///
+/// This structure contains secret key material that is zeroized on drop.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Msk {
@@ -50,10 +59,21 @@ pub struct Msk {
     pub a: Fr,
 }
 
+impl Drop for Msk {
+    fn drop(&mut self) {
+        self.alpha = Fr::zero();
+        self.a = Fr::zero();
+    }
+}
+
 /// User Secret Key for AC17 CP-ABE
 ///
 /// In AC17, all attributes share a single random r value.
 /// K and L are computed once, while K_attr is computed per attribute.
+///
+/// # Security
+///
+/// This structure contains secret key material that is zeroized on drop.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecretKey {
@@ -65,6 +85,16 @@ pub struct SecretKey {
     pub l: G2,
     /// K_attr = H(attr)^r for each attribute (in G1)
     pub k_attrs: HashMap<String, G1>,
+}
+
+impl Drop for SecretKey {
+    fn drop(&mut self) {
+        for attr in &mut self.attributes {
+            attr.zeroize();
+        }
+        self.attributes.clear();
+        self.k_attrs.clear();
+    }
 }
 
 /// Ciphertext component for a row in the policy LSSS
@@ -102,7 +132,7 @@ pub struct FullCiphertext {
 }
 
 /// Setup: Generate master public and secret keys
-pub fn setup<R: RngCore>(rng: &mut R) -> (Mpk, Msk) {
+pub fn setup<R: RngCore + CryptoRng>(rng: &mut R) -> (Mpk, Msk) {
     // Generate random exponents
     let alpha = Fr::random(rng);
     let a = Fr::random(rng);
@@ -137,7 +167,7 @@ pub fn setup<R: RngCore>(rng: &mut R) -> (Mpk, Msk) {
 ///
 /// All attributes share a single random r value. K and L are computed once,
 /// while K_attr is computed for each attribute.
-pub fn keygen<R: RngCore>(
+pub fn keygen<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
     msk: &Msk,
@@ -152,15 +182,24 @@ pub fn keygen<R: RngCore>(
     // L = h^r
     let l = mpk.h * r;
 
-    // Compute K_attr for each attribute
-    let mut k_attrs = HashMap::new();
-    for attr in attributes {
-        // Hash attribute to G1
-        let h_attr = hash_to_g1_keyed(&mpk.k, attr);
-        // K_attr = H(attr)^r
-        let k_attr = h_attr * r;
-        k_attrs.insert(attr.clone(), k_attr);
-    }
+    // Compute K_attr for each attribute (parallelized when enabled)
+    #[cfg(feature = "parallel")]
+    let k_attrs: HashMap<String, G1> = attributes
+        .par_iter()
+        .map(|attr| {
+            let h_attr = hash_to_g1_keyed_cached(&mpk.k, attr);
+            (attr.clone(), h_attr * r)
+        })
+        .collect();
+
+    #[cfg(not(feature = "parallel"))]
+    let k_attrs: HashMap<String, G1> = attributes
+        .iter()
+        .map(|attr| {
+            let h_attr = hash_to_g1_keyed_cached(&mpk.k, attr);
+            (attr.clone(), h_attr * r)
+        })
+        .collect();
 
     Ok(SecretKey {
         attributes: attributes.to_vec(),
@@ -171,14 +210,14 @@ pub fn keygen<R: RngCore>(
 }
 
 /// Encrypt: Encrypt a message under an access policy
-pub fn encrypt<R: RngCore>(
+pub fn encrypt<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
     policy: &PolicyNode,
     plaintext: &[u8],
 ) -> Result<FullCiphertext, AbeError> {
-    // Convert policy to LSSS matrix
-    let lsss = LsssMatrix::from_policy(policy);
+    // Convert policy to LSSS matrix (cached for repeated policies)
+    let lsss = get_or_compute_lsss(policy)?;
 
     // Generate random s
     let s = Fr::random(rng);
@@ -192,30 +231,41 @@ pub fn encrypt<R: RngCore>(
     // Share s using LSSS
     let shares = lsss.share_secret(rng, s);
 
-    // Compute per-row components
-    let mut components = Vec::new();
-    for share in &shares {
-        let attr = &share.attr;
-        let lambda = share.share; // Share of s for this row
+    // Pre-generate random t values for parallel processing
+    let t_values: Vec<Fr> = shares.iter().map(|_| Fr::random(rng)).collect();
 
-        // Generate random t for this row
-        let t = Fr::random(rng);
+    // Compute per-row components (parallelized when enabled)
+    #[cfg(feature = "parallel")]
+    let components: Vec<CiphertextComponent> = shares
+        .par_iter()
+        .zip(t_values.par_iter())
+        .map(|(share, t)| {
+            let h_attr = hash_to_g1_keyed_cached(&mpk.k, &share.attr);
+            let c1 = mpk.g_a * share.share - h_attr * *t;
+            let c2 = mpk.h * *t;
+            CiphertextComponent {
+                attr: share.attr.clone(),
+                c1,
+                c2,
+            }
+        })
+        .collect();
 
-        // Hash attribute to G1
-        let h_attr = hash_to_g1_keyed(&mpk.k, attr);
-
-        // C1 = g_a^lambda * H(attr)^(-t)
-        let c1 = mpk.g_a * lambda - h_attr * t;
-
-        // C2 = h^t
-        let c2 = mpk.h * t;
-
-        components.push(CiphertextComponent {
-            attr: attr.clone(),
-            c1,
-            c2,
-        });
-    }
+    #[cfg(not(feature = "parallel"))]
+    let components: Vec<CiphertextComponent> = shares
+        .iter()
+        .zip(t_values.iter())
+        .map(|(share, t)| {
+            let h_attr = hash_to_g1_keyed_cached(&mpk.k, &share.attr);
+            let c1 = mpk.g_a * share.share - h_attr * *t;
+            let c2 = mpk.h * *t;
+            CiphertextComponent {
+                attr: share.attr.clone(),
+                c1,
+                c2,
+            }
+        })
+        .collect();
 
     let abe_ct = Ciphertext {
         policy: policy.to_canonical_string(),
@@ -259,7 +309,14 @@ pub fn decrypt(
     // Parse policy from ciphertext
     let policy = crate::schemes::waters::parse_policy(&ct.abe_ct.policy)
         .map_err(|_| AbeError::PolicyNotSatisfied)?;
-    let lsss = LsssMatrix::from_policy(&policy);
+
+    // Quick check: can the policy possibly be satisfied?
+    if !policy.can_satisfy_attrs(&sk.attributes) {
+        return Err(AbeError::PolicyNotSatisfied);
+    }
+
+    // Get LSSS matrix (cached for repeated policies)
+    let lsss = get_or_compute_lsss(&policy)?;
 
     // Find which rows are satisfied by the user's attributes
     let mut satisfied_attrs = Vec::new();
@@ -283,20 +340,35 @@ pub fn decrypt(
     // Compute e(C, K) = e(g^s, h^(alpha + a*r))
     let e_c_k = pairing(ct.abe_ct.c, sk.k);
 
-    // Compute the cancel term: product of e(C1_i, L) * e(K_attr_i, C2_i) weighted by omega_i
-    let mut cancel_term = Gt::one();
-    for ct_comp in &satisfied_ct_components {
-        if let Some(&omega) = coeffs.get(&ct_comp.attr) {
-            // Get the K_attr for this attribute
-            let k_attr = sk.k_attrs.get(&ct_comp.attr).unwrap();
+    // Collect items for parallel processing
+    let items: Vec<_> = satisfied_ct_components
+        .iter()
+        .filter_map(|ct_comp| {
+            let omega = coeffs.get(&ct_comp.attr)?;
+            let k_attr = sk.k_attrs.get(&ct_comp.attr)?;
+            Some((ct_comp.c1, ct_comp.c2, *k_attr, *omega))
+        })
+        .collect();
 
-            // e(C1_i, L) * e(K_attr_i, C2_i) = e(g,h)^(a*lambda_i*r)
-            let p1 = pairing(ct_comp.c1, sk.l);
-            let p2 = pairing(*k_attr, ct_comp.c2);
-            let term = (p1 * p2).pow(&omega);
-            cancel_term = cancel_term * term;
-        }
-    }
+    // Compute the cancel term: product of e(C1_i, L) * e(K_attr_i, C2_i) weighted by omega_i
+    #[cfg(feature = "parallel")]
+    let cancel_term = items
+        .par_iter()
+        .map(|(c1, c2, k_attr, omega)| {
+            let p1 = pairing(*c1, sk.l);
+            let p2 = pairing(*k_attr, *c2);
+            (p1 * p2).pow(omega)
+        })
+        .reduce(|| Gt::one(), |acc, term| acc * term);
+
+    #[cfg(not(feature = "parallel"))]
+    let cancel_term = items
+        .iter()
+        .fold(Gt::one(), |acc, (c1, c2, k_attr, omega)| {
+            let p1 = pairing(*c1, sk.l);
+            let p2 = pairing(*k_attr, *c2);
+            acc * (p1 * p2).pow(omega)
+        });
 
     // Result = e(C, K) / cancel_term = e(g,h)^(s*alpha)
     let result = e_c_k * cancel_term.inverse();

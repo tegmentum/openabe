@@ -227,12 +227,25 @@ pub fn keygen<R: RngCore + CryptoRng>(
     let l = mpk.g2 * t;
 
     // For each attribute: KX_attr = H(k, attr)^t
-    let mut kx = HashMap::new();
-    for attr in attributes {
-        let h_attr = hash_to_g1_keyed_cached(&mpk.k, attr);
-        let kx_attr = h_attr * t;
-        kx.insert(attr.clone(), kx_attr);
-    }
+    #[cfg(feature = "parallel")]
+    let kx: HashMap<String, G1> = attributes
+        .par_iter()
+        .map(|attr| {
+            let h_attr = hash_to_g1_keyed_cached(&mpk.k, attr);
+            let kx_attr = h_attr * t;
+            (attr.clone(), kx_attr)
+        })
+        .collect();
+
+    #[cfg(not(feature = "parallel"))]
+    let kx: HashMap<String, G1> = attributes
+        .iter()
+        .map(|attr| {
+            let h_attr = hash_to_g1_keyed_cached(&mpk.k, attr);
+            let kx_attr = h_attr * t;
+            (attr.clone(), kx_attr)
+        })
+        .collect();
 
     Ok(RawSecretKey {
         k,
