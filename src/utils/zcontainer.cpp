@@ -266,8 +266,12 @@ bool operator==(const OpenABEContainer &c1, const OpenABEContainer &c2) {
   std::vector<std::string> keyList1 = const_cast<OpenABEContainer &>(c1).getKeys();
   std::vector<std::string> keyList2 = const_cast<OpenABEContainer &>(c2).getKeys();
 
+  std::cout << "[CONTAINER CMP DEBUG] Container 1 has " << keyList1.size() << " keys" << std::endl;
+  std::cout << "[CONTAINER CMP DEBUG] Container 2 has " << keyList2.size() << " keys" << std::endl;
+
   // First check: containers must have the same number of keys
   if (keyList1.size() != keyList2.size()) {
+    std::cerr << "[CONTAINER CMP DEBUG] Key count mismatch! Returning false" << std::endl;
     return false;
   }
 
@@ -278,23 +282,32 @@ bool operator==(const OpenABEContainer &c1, const OpenABEContainer &c2) {
   // Fix: Calculate the number of different keys using distance, not iter->size()
   size_t keydiff = std::distance(keyList3.begin(), iter);
   if (keydiff > 0) {
+    std::cerr << "[CONTAINER CMP DEBUG] Key set difference detected (" << keydiff << " keys differ)! Returning false" << std::endl;
     return false;
   }
+
+  std::cerr << "[CONTAINER CMP DEBUG] Key sets match, comparing " << keyList1.size() << " components..." << std::endl;
 
   // check that 'values' of container are equal
   for (std::vector<std::string>::iterator it = keyList1.begin();
        it != keyList1.end(); ++it) {
     ZObject *lhs = const_cast<OpenABEContainer &>(c1).getComponent(*it);
     ZObject *rhs = const_cast<OpenABEContainer &>(c2).getComponent(*it);
+    std::cerr << "[CONTAINER CMP DEBUG] Comparing component '" << *it << "'..." << std::endl;
     if (lhs->isEqual(rhs)) {
+      std::cerr << "[CONTAINER CMP DEBUG]   ✓ Component '" << *it << "' matches" << std::endl;
       continue;
     } else {
+      std::cerr << "[CONTAINER CMP DEBUG]   ✗ Component '" << *it << "' DOES NOT MATCH!" << std::endl;
       keydiff++;
     }
   }
 
-  if (keydiff > 0)
+  if (keydiff > 0) {
+    std::cerr << "[CONTAINER CMP DEBUG] Total " << keydiff << " component(s) did not match. Returning false" << std::endl;
     return false;
+  }
+  std::cerr << "[CONTAINER CMP DEBUG] All components match! Returning true" << std::endl;
   return true;
 }
 }

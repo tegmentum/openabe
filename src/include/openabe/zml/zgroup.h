@@ -36,7 +36,7 @@
 
 #if defined(__wasm__)
 #include <gmp.h>
-#elif !defined(BP_WITH_MCL)
+#elif !defined(BP_WITH_MCL) && !defined(BP_WITH_RABE)
 #include <gmpxx.h>
 #endif
 

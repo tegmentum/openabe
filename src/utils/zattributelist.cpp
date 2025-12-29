@@ -122,8 +122,16 @@ void OpenABEAttributeList::syncOrigAttributes(const string &prefix,
  */
 
 bool OpenABEAttributeList::matchAttribute(const string &attribute) {
-  return (std::find(m_Attributes.begin(), m_Attributes.end(), attribute) !=
+  fprintf(stderr, "[ATTR_MATCH] Searching for: '%s'\n", attribute.c_str());
+  fprintf(stderr, "[ATTR_MATCH] Attribute list has %zu attributes:\n", m_Attributes.size());
+  for (size_t i = 0; i < m_Attributes.size(); i++) {
+    fprintf(stderr, "[ATTR_MATCH]   [%zu] = '%s'\n", i, m_Attributes[i].c_str());
+  }
+  bool found = (std::find(m_Attributes.begin(), m_Attributes.end(), attribute) !=
           m_Attributes.end());
+  fprintf(stderr, "[ATTR_MATCH] Result: %s\n", found ? "FOUND" : "NOT FOUND");
+  fflush(stderr);
+  return found;
 }
 
 bool OpenABEAttributeList::addAttribute(string attribute) {

@@ -268,8 +268,8 @@ OpenABEPairing::hashToG1(OpenABEByteString& keyPrefix, string msg)
   oabe::sha256(digest, str);
   uint8_t *xstr = (uint8_t *)digest.c_str();
   size_t xstr_len = digest.size();
-#if defined(BP_WITH_MCL)
-  // FIX Bug #9: Pass pointers for MCL - CRITICAL for hash-to-G1
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+  // FIX Bug #9: Pass pointers for MCL/RABE - CRITICAL for hash-to-G1
   g1_map_op(GET_BP_GROUP(this->bpgroup), &g1.m_G1, xstr, xstr_len);
 #else
   g1_map_op(GET_BP_GROUP(this->bpgroup), g1.m_G1, xstr, xstr_len);
@@ -281,8 +281,8 @@ GT
 OpenABEPairing::pairing(G1& g1, G2& g2)
 {
   GT result(this->bpgroup);
-#if defined(BP_WITH_MCL)
-  // FIX Bug #9: Pass pointers for MCL
+#if defined(BP_WITH_MCL) || defined(BP_WITH_RABE)
+  // FIX Bug #9: Pass pointers for MCL/RABE
   bp_map_op(GET_BP_GROUP(this->bpgroup), &result.m_GT, &g1.m_G1, &g2.m_G2);
 #else
   bp_map_op(GET_BP_GROUP(this->bpgroup), result.m_GT, g1.m_G1, g2.m_G2);

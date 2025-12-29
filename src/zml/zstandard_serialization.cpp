@@ -34,6 +34,10 @@
 #include <openabe/openabe.h>
 #include <openabe/zml/zstandard_serialization.h>
 
+#if defined(BP_WITH_RABE)
+#include <rabe_bls12381.h>
+#endif
+
 namespace oabe {
 
 // ===== SerializationHeader Implementation =====
@@ -1103,6 +1107,10 @@ bool StandardPairingSerializer::decompressG1Point(const G1& point, const bignum_
     // MCL implementation
     // TODO: Implement for MCL backend
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_RABE)
+    // RABE implementation
+    // TODO: Implement for RABE backend
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation
     // For BN curves: y^2 = x^3 + b (where b=3 for BN254/BN256, varies for others)
@@ -1181,6 +1189,10 @@ bool StandardPairingSerializer::decompressG2Point(const G2& point, const bignum_
 #elif defined(BP_WITH_MCL)
     // MCL implementation
     // TODO: Implement for MCL backend
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_RABE)
+    // RABE implementation
+    // TODO: Implement for RABE backend
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation for Fp2
@@ -1301,6 +1313,9 @@ void StandardPairingSerializer::extractG1Coordinates(const G1& point, bignum_t x
 
     size_t y_size = mclBnFp_serialize(buffer, fp_size, &temp.y);
     zml_bignum_fromBin(y, buffer, y_size);
+#elif defined(BP_WITH_RABE)
+    // RABE implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation
     ep_t temp;
@@ -1319,6 +1334,9 @@ void StandardPairingSerializer::setG1FromCoordinates(G1& point, const bignum_t x
 #elif defined(BP_WITH_MCL)
     // MCL implementation - TODO
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_RABE)
+    // RABE implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation
     fp_prime_conv(point.m_G1->x, x);
@@ -1333,6 +1351,8 @@ bool StandardPairingSerializer::isG1AtInfinity(const G1& point) {
     return G1_ELEM_is_at_infinity(GET_BP_GROUP(point.bgroup), point.m_G1);
 #elif defined(BP_WITH_MCL)
     return mclBnG1_isZero(&point.m_G1);
+#elif defined(BP_WITH_RABE)
+    return rabe_g1_is_zero(point.m_G1.ptr);
 #else
     return ep_is_infty(point.m_G1);
 #endif
@@ -1343,6 +1363,8 @@ void StandardPairingSerializer::setG1ToInfinity(G1& point) {
     G1_ELEM_set_to_infinity(GET_BP_GROUP(point.bgroup), point.m_G1);
 #elif defined(BP_WITH_MCL)
     mclBnG1_clear(&point.m_G1);
+#elif defined(BP_WITH_RABE)
+    rabe_g1_clear(point.m_G1.ptr);
 #else
     ep_set_infty(point.m_G1);
 #endif
@@ -1353,6 +1375,9 @@ void StandardPairingSerializer::extractG2Coordinates(const G2& point, bignum_t x
     G2_ELEM_get_affine_coordinates(GET_BP_GROUP(point.bgroup), point.m_G2, x, y, NULL);
 #elif defined(BP_WITH_MCL)
     // MCL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_RABE)
+    // RABE implementation - TODO
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation for ep2
@@ -1374,6 +1399,9 @@ void StandardPairingSerializer::setG2FromCoordinates(G2& point, const bignum_t x
 #elif defined(BP_WITH_MCL)
     // MCL implementation - TODO
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_RABE)
+    // RABE implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC implementation
     fp_prime_conv(point.m_G2->x[0], x[0]);
@@ -1390,6 +1418,8 @@ bool StandardPairingSerializer::isG2AtInfinity(const G2& point) {
     return G2_ELEM_is_at_infinity(GET_BP_GROUP(point.bgroup), point.m_G2);
 #elif defined(BP_WITH_MCL)
     return mclBnG2_isZero(&point.m_G2);
+#elif defined(BP_WITH_RABE)
+    return rabe_g2_is_zero(point.m_G2.ptr);
 #else
     return ep2_is_infty(const_cast<G2&>(point).m_G2);
 #endif
@@ -1400,6 +1430,8 @@ void StandardPairingSerializer::setG2ToInfinity(G2& point) {
     G2_ELEM_set_to_infinity(GET_BP_GROUP(point.bgroup), point.m_G2);
 #elif defined(BP_WITH_MCL)
     mclBnG2_clear(&point.m_G2);
+#elif defined(BP_WITH_RABE)
+    rabe_g2_clear(point.m_G2.ptr);
 #else
     ep2_set_infty(point.m_G2);
 #endif
@@ -1410,6 +1442,8 @@ bool StandardPairingSerializer::isGTIdentity(const GT& gt) {
     return GT_is_unity(GET_BP_GROUP(gt.bgroup), gt.m_GT);
 #elif defined(BP_WITH_MCL)
     return gt_is_unity(const_cast<GT&>(gt).m_GT);
+#elif defined(BP_WITH_RABE)
+    return rabe_gt_is_one(gt.m_GT.ptr);
 #else
     return gt_is_unity(const_cast<GT&>(gt).m_GT);
 #endif
@@ -1427,6 +1461,9 @@ void StandardPairingSerializer::extractFp12Tower(const GT& gt, bignum_t tower[12
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #elif defined(BP_WITH_OPENSSL)
     // OpenSSL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_RABE)
+    // RABE implementation - TODO
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     // RELIC: Fp12 as 2 x Fp6, Fp6 as 3 x Fp2, Fp2 as 2 x Fp
@@ -1447,6 +1484,9 @@ void StandardPairingSerializer::setGTFromFp12Tower(GT& gt, const bignum_t tower[
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #elif defined(BP_WITH_OPENSSL)
     // OpenSSL implementation - TODO
+    throw OpenABE_ERROR_NOT_IMPLEMENTED;
+#elif defined(BP_WITH_RABE)
+    // RABE implementation - TODO
     throw OpenABE_ERROR_NOT_IMPLEMENTED;
 #else
     for (int i = 0; i < 2; i++) {

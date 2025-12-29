@@ -1,0 +1,12 @@
+{
+	"attributes": "10",
+	"decrypt": "9.013060",
+	"encrypt": "1.769870",
+	"iterations": "100",
+	"keygen": "3.006280",
+	"measurement": "fixed",
+	"scheme": "KP-ABE",
+	"security": "CPA_KEM",
+	"time": "ms",
+	"timestamp": "1761653198"
+}

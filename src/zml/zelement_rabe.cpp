@@ -115,7 +115,9 @@ void zml_bignum_fromHex(RabeFr *a, const char *hex, size_t hex_len) {
 
 void zml_bignum_fromBin(RabeFr *a, const uint8_t *bin, size_t bin_len) {
     if (a == nullptr || bin == nullptr) return;
-    rabe_fr_deserialize(a, bin, bin_len);
+    // Use from_bytes_mod_order for arbitrary bytes (like random data)
+    // This interprets bytes as little-endian and reduces mod the field order
+    rabe_fr_from_bytes_mod_order(a, bin, bin_len);
 }
 
 void zml_bignum_toBin(const RabeFr *a, uint8_t *bin, size_t bin_len) {

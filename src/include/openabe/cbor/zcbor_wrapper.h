@@ -175,6 +175,7 @@ private:
     CborParser parser_;
     CborValue value_;
     bool initialized_;
+    std::vector<CborValue> container_stack_;  // Stack for nested containers
 
     /// Validate canonical encoding
     void validateCanonical(const CborValue* val);

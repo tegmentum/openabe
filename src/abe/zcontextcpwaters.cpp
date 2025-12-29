@@ -113,13 +113,17 @@ OpenABEContextCPWaters::generateParams(const string pairingParams,
     G1 g1a = g1.exp(a);
     G2 g2a = g2.exp(a);
 
+    // Compute g2^alpha (for WASM-compatible encryption)
+    G2 g2alpha = g2.exp(alpha);
+
     // Compute A = e(g1, g2)^\alpha
     GT A = this->getPairing()->pairing(g1, g2).exp(alpha);
 
-    // Add (g1, g2, g1a) to the public params
+    // Add (g1, g2, g1a, g2alpha) to the public params
     MPK->setComponent("g1", &g1);
     MPK->setComponent("g2", &g2);
     MPK->setComponent("g1a", &g1a);
+    MPK->setComponent("g2alpha", &g2alpha);  // Added for WASM-compatible encryption
     MPK->setComponent("A", &A);
     MPK->setComponent("k", &k);
 
@@ -265,9 +269,48 @@ OpenABEContextCPWaters::encryptKEM(OpenABERNG *rng, const string &mpkID,
     // retrieve the hash function key prefix
     k = MPK->getByteString("k");
 
-    // Select s and compute C = e(g1, g2)^\(alpha*s)
+    // Select s and compute C = e(g1, g2)^(alpha*s)
+    // WASM FIX: Use pairing instead of GT exponentiation to avoid MCL WASM bug
+    // Mathematical equivalence: e(g1^s, g2^alpha) = e(g1, g2)^(alpha*s) by bilinearity
     ZP s = this->getPairing()->randomZP(myRNG);
-    GT C = MPK->getGT("A")->exp(s);
+
+    // Compute g1^s
+    G1 g1s = MPK->getG1("g1")->exp(s);
+
+    // Get g2^alpha from MPK (added during setup for WASM compatibility)
+    // Note: If using old parameter files without g2alpha, regenerate them with oabe_setup
+    G2 *g2alpha = MPK->getG2("g2alpha");
+
+    // Compute C = e(g1^s, g2^alpha) instead of C = A^s
+    // This avoids buggy GT exponentiation in MCL WASM build
+    GT C(std::dynamic_pointer_cast<BPGroup>(this->getPairing()->getGroup()));
+    if (g2alpha != nullptr) {
+      // Use WASM-compatible pairing approach
+      C = this->getPairing()->pairing(g1s, *g2alpha);
+    } else {
+      // Fallback to old approach (will fail in WASM but works in native)
+      // This is for backward compatibility with old parameter files
+      GT A = *(MPK->getGT("A"));
+      C = A.exp(s);
+    }
+
+#if defined(BP_WITH_MCL)
+    if (g2alpha != nullptr) {
+      fprintf(stderr, "[ENC_DEBUG] Using WASM-compatible pairing approach: C = e(g1^s, g2^alpha)\n");
+    } else {
+      fprintf(stderr, "[ENC_DEBUG] Using legacy GT exponentiation: C = A^s (not WASM-compatible)\n");
+    }
+    fprintf(stderr, "[ENC_DEBUG] C (result): isZero=%d, isOne=%d\n",
+            mclBnGT_isZero(&C.m_GT), mclBnGT_isOne(&C.m_GT));
+    uint8_t C_bytes[576];
+    size_t C_len = mclBnGT_serialize(C_bytes, sizeof(C_bytes), &C.m_GT);
+    fprintf(stderr, "[ENC_DEBUG] C serialized (%zu bytes, first 32): ", C_len);
+    for (size_t i = 0; i < (C_len < 32 ? C_len : 32); i++) {
+        fprintf(stderr, "%02x", C_bytes[i]);
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+#endif
 
     // Use the Linear Secret Sharing Scheme (LSSS) to compute an enumerated list
     // of all
@@ -401,15 +444,90 @@ OpenABEContextCPWaters::decryptKEM(const string &mpkID, const string &keyID,
     }
 
     this->getPairing()->multi_pairing(prodT, g1s, g2s);
+
+    // DEBUG: Log prodT (multi-pairing result)
+#if defined(BP_WITH_MCL)
+    fprintf(stderr, "[GT_DEBUG] prodT after multi_pairing: isZero=%d, isOne=%d\n",
+            mclBnGT_isZero(&prodT.m_GT), mclBnGT_isOne(&prodT.m_GT));
+    // Serialize prodT to bytes
+    uint8_t prodT_bytes[576];  // GT elements are 576 bytes for BLS12-381
+    size_t prodT_len = mclBnGT_serialize(prodT_bytes, sizeof(prodT_bytes), &prodT.m_GT);
+    fprintf(stderr, "[GT_DEBUG] prodT serialized (%zu bytes, first 32): ", prodT_len);
+    for (size_t i = 0; i < (prodT_len < 32 ? prodT_len : 32); i++) {
+        fprintf(stderr, "%02x", prodT_bytes[i]);
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+#endif
+
     G1 *Cprime = ciphertext->getG1("Cprime");
     G2 *K = decKey->getG2("K");
     G2 *L = decKey->getG2("L");
     ASSERT_NOTNULL(Cprime);
     ASSERT_NOTNULL(K);
     ASSERT_NOTNULL(L);
+
+    // DEBUG: Log pairing computations
+    GT pairing1 = this->getPairing()->pairing(*Cprime, *K);
+#if defined(BP_WITH_MCL)
+    fprintf(stderr, "[GT_DEBUG] e(Cprime, K): isZero=%d, isOne=%d\n",
+            mclBnGT_isZero(&pairing1.m_GT), mclBnGT_isOne(&pairing1.m_GT));
+    uint8_t pairing1_bytes[576];
+    size_t pairing1_len = mclBnGT_serialize(pairing1_bytes, sizeof(pairing1_bytes), &pairing1.m_GT);
+    fprintf(stderr, "[GT_DEBUG] e(Cprime, K) serialized (%zu bytes, first 32): ", pairing1_len);
+    for (size_t i = 0; i < (pairing1_len < 32 ? pairing1_len : 32); i++) {
+        fprintf(stderr, "%02x", pairing1_bytes[i]);
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+#endif
+
+    GT pairing2 = this->getPairing()->pairing(prod1, *L);
+#if defined(BP_WITH_MCL)
+    fprintf(stderr, "[GT_DEBUG] e(prod1, L): isZero=%d, isOne=%d\n",
+            mclBnGT_isZero(&pairing2.m_GT), mclBnGT_isOne(&pairing2.m_GT));
+    uint8_t pairing2_bytes[576];
+    size_t pairing2_len = mclBnGT_serialize(pairing2_bytes, sizeof(pairing2_bytes), &pairing2.m_GT);
+    fprintf(stderr, "[GT_DEBUG] e(prod1, L) serialized (%zu bytes, first 32): ", pairing2_len);
+    for (size_t i = 0; i < (pairing2_len < 32 ? pairing2_len : 32); i++) {
+        fprintf(stderr, "%02x", pairing2_bytes[i]);
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+#endif
+
+    GT denominator = prodT * pairing2;
+#if defined(BP_WITH_MCL)
+    fprintf(stderr, "[GT_DEBUG] denominator (prodT * e(prod1, L)): isZero=%d, isOne=%d\n",
+            mclBnGT_isZero(&denominator.m_GT), mclBnGT_isOne(&denominator.m_GT));
+    uint8_t denom_bytes[576];
+    size_t denom_len = mclBnGT_serialize(denom_bytes, sizeof(denom_bytes), &denominator.m_GT);
+    fprintf(stderr, "[GT_DEBUG] denominator serialized (%zu bytes, first 32): ", denom_len);
+    for (size_t i = 0; i < (denom_len < 32 ? denom_len : 32); i++) {
+        fprintf(stderr, "%02x", denom_bytes[i]);
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+#endif
+
     // Now compute final = e(Cprime, K) / (prodT * e(prod1, L))
-    GT final = this->getPairing()->pairing(*Cprime, *K) /
-               (prodT * this->getPairing()->pairing(prod1, *L));
+    GT final = pairing1 / denominator;
+
+    // DEBUG: Log final GT element
+#if defined(BP_WITH_MCL)
+    fprintf(stderr, "[GT_DEBUG] final GT element: isZero=%d, isOne=%d\n",
+            mclBnGT_isZero(&final.m_GT), mclBnGT_isOne(&final.m_GT));
+    uint8_t final_bytes[576];
+    size_t final_len = mclBnGT_serialize(final_bytes, sizeof(final_bytes), &final.m_GT);
+    fprintf(stderr, "[GT_DEBUG] final serialized (%zu bytes, first 64): ", final_len);
+    for (size_t i = 0; i < (final_len < 64 ? final_len : 64); i++) {
+        fprintf(stderr, "%02x", final_bytes[i]);
+    }
+    if (final_len > 64) fprintf(stderr, "...");
+    fprintf(stderr, "\n");
+    fflush(stderr);
+#endif
+
     // Compute key = hash_to_bitstring( prodT );
     key->hashToSymmetricKey(final, keyByteLen, HASH_FUNCTION_TYPE_SHA256);
   } catch (OpenABE_ERROR &err) {

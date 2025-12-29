@@ -125,7 +125,7 @@ typedef uint32_t OpenABESecurityLevel;
 #ifdef __wasm__
 #include <openabe/wasm_mutex.h>
 #endif
-#if !defined(BP_WITH_MCL)
+#if !defined(BP_WITH_MCL) && !defined(BP_WITH_RABE)
 #include <gmpxx.h>
 #endif
 #include <openabe/zml/zelement.h>

@@ -426,9 +426,13 @@ size_t ZCBORDecoder::enterMap() {
                            std::string(cbor_error_string(err)));
     }
 
+    // Save parent value on stack before entering
+    container_stack_.push_back(value_);
+
     CborValue contents;
     err = cbor_value_enter_container(&value_, &contents);
     if (err != CborNoError) {
+        container_stack_.pop_back();  // Restore stack on error
         throw ZCBORException("Failed to enter map: " +
                            std::string(cbor_error_string(err)));
     }
@@ -438,13 +442,23 @@ size_t ZCBORDecoder::enterMap() {
 }
 
 void ZCBORDecoder::exitMap() {
-    // Note: tinycbor requires parent value to exit container
-    // This is a simplified implementation
-    CborError err = cbor_value_advance(&value_);
+    if (container_stack_.empty()) {
+        throw ZCBORException("Container stack underflow - no matching enterMap()");
+    }
+
+    // Get parent value from stack
+    CborValue parent = container_stack_.back();
+    container_stack_.pop_back();
+
+    // Leave container - this advances parent to point after the container
+    CborError err = cbor_value_leave_container(&parent, &value_);
     if (err != CborNoError) {
         throw ZCBORException("Failed to exit map: " +
                            std::string(cbor_error_string(err)));
     }
+
+    // Update value_ to the advanced parent position
+    value_ = parent;
 }
 
 size_t ZCBORDecoder::enterArray() {
@@ -458,9 +472,13 @@ size_t ZCBORDecoder::enterArray() {
                            std::string(cbor_error_string(err)));
     }
 
+    // Save parent value on stack before entering
+    container_stack_.push_back(value_);
+
     CborValue contents;
     err = cbor_value_enter_container(&value_, &contents);
     if (err != CborNoError) {
+        container_stack_.pop_back();  // Restore stack on error
         throw ZCBORException("Failed to enter array: " +
                            std::string(cbor_error_string(err)));
     }
@@ -470,13 +488,23 @@ size_t ZCBORDecoder::enterArray() {
 }
 
 void ZCBORDecoder::exitArray() {
-    // Note: tinycbor requires parent value to exit container
-    // This is a simplified implementation
-    CborError err = cbor_value_advance(&value_);
+    if (container_stack_.empty()) {
+        throw ZCBORException("Container stack underflow - no matching enterArray()");
+    }
+
+    // Get parent value from stack
+    CborValue parent = container_stack_.back();
+    container_stack_.pop_back();
+
+    // Leave container - this advances parent to point after the container
+    CborError err = cbor_value_leave_container(&parent, &value_);
     if (err != CborNoError) {
         throw ZCBORException("Failed to exit array: " +
                            std::string(cbor_error_string(err)));
     }
+
+    // Update value_ to the advanced parent position
+    value_ = parent;
 }
 
 uint64_t ZCBORDecoder::decodeTag() {

@@ -82,7 +82,35 @@ static void AesEvpBlockEncrypt(const EVP_CIPHER *cipher, const uint8_t* key,
 static void AES_ECB(const uint8_t *key, const uint8_t *plaintext, uint8_t *ciphertext, size_t len) {
     // make sure key and plaintext are of sufficient length
     const EVP_CIPHER *cipher = EVP_aes_256_ecb();
+
+    // DEBUG: Log AES_ECB inputs and outputs
+    static int aes_call_count = 0;
+    if (aes_call_count < 10) {
+        fprintf(stderr, "[AES_ECB #%d] Key (first 16 bytes): ", aes_call_count);
+        for (size_t i = 0; i < 16 && i < 32; i++) {
+            fprintf(stderr, "%02x", key[i]);
+        }
+        fprintf(stderr, "\n");
+        fprintf(stderr, "[AES_ECB #%d] Plaintext (counter): ", aes_call_count);
+        for (size_t i = 0; i < len && i < 16; i++) {
+            fprintf(stderr, "%02x", plaintext[i]);
+        }
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
+
     AesEvpBlockEncrypt(cipher, key, plaintext, ciphertext, len);
+
+    // DEBUG: Log AES_ECB output
+    if (aes_call_count < 10) {
+        fprintf(stderr, "[AES_ECB #%d] Ciphertext: ", aes_call_count);
+        for (size_t i = 0; i < len && i < 16; i++) {
+            fprintf(stderr, "%02x", ciphertext[i]);
+        }
+        fprintf(stderr, "\n");
+        fflush(stderr);
+        aes_call_count++;
+    }
 }
 
 //static void AES_CTR(const uint8_t *key, const uint8_t *plaintext, size_t len) {
@@ -138,8 +166,10 @@ int ctr_drbg_seed_entropy_len(OpenABECtrDrbg& ctx,
 //}
 
 static int block_cipher_df(uint8_t *output, const uint8_t *data, size_t data_len) {
-    int max_buf_len = OpenABE_CTR_DRBG_MAX_SEED_INPUT + OpenABE_CTR_DRBG_BLOCKSIZE + 16;
-    uint8_t buf[max_buf_len];
+    // Use fixed-size buffer instead of VLA for WASM compatibility
+    // max_buf_len = 256 + 16 + 16 = 288
+    const int max_buf_len = OpenABE_CTR_DRBG_MAX_SEED_INPUT + OpenABE_CTR_DRBG_BLOCKSIZE + 16;
+    uint8_t buf[288];  // Fixed size instead of VLA
     uint8_t tmp[OpenABE_CTR_DRBG_SEEDLEN];
     uint8_t key[OpenABE_CTR_DRBG_KEYSIZE_BYTES];
     uint8_t chain[OpenABE_CTR_DRBG_BLOCKSIZE];
@@ -150,7 +180,22 @@ static int block_cipher_df(uint8_t *output, const uint8_t *data, size_t data_len
     if (data_len > OpenABE_CTR_DRBG_MAX_SEED_INPUT)
         return OpenABE_ERR_CTR_DRBG_INPUT_TOO_BIG;
 
-    memset(buf, 0, max_buf_len);
+    // DEBUG: Log buffer details
+    static int df_call_count = 0;
+    if (df_call_count < 2) {
+        fprintf(stderr, "[block_cipher_df #%d] data_len=%zu, max_buf_len=%d\n",
+                df_call_count, data_len, max_buf_len);
+        fprintf(stderr, "[block_cipher_df #%d] Input data (first 32 bytes): ", df_call_count);
+        for (size_t k = 0; k < (data_len < 32 ? data_len : 32); k++) {
+            fprintf(stderr, "%02x", data[k]);
+        }
+        if (data_len > 32) fprintf(stderr, "...");
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
+
+    // Explicitly zero the buffer - critical for WASM
+    memset(buf, 0, sizeof(buf));
     /*
      * Construct IV (16 bytes) and S in buffer
      * IV = Counter (in 32-bits) padded to 16 with zeroes
@@ -169,6 +214,17 @@ static int block_cipher_df(uint8_t *output, const uint8_t *data, size_t data_len
     p[data_len] = 0x80;
 
     buf_len = OpenABE_CTR_DRBG_BLOCKSIZE + 8 + data_len + 1;
+
+    // DEBUG: Log buffer contents after construction
+    if (df_call_count < 2) {
+        fprintf(stderr, "[block_cipher_df #%d] buf_len=%zu\n", df_call_count, buf_len);
+        fprintf(stderr, "[block_cipher_df #%d] buf[0..63]: ", df_call_count);
+        for (size_t k = 0; k < 64 && k < buf_len; k++) {
+            fprintf(stderr, "%02x", buf[k]);
+        }
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
 
     for (i = 0; i < OpenABE_CTR_DRBG_KEYSIZE_BYTES; i++) {
         key[i] = i;
@@ -219,9 +275,15 @@ static int update_internal(OpenABECtrDrbg& ctx, const uint8_t data[OpenABE_CTR_D
 
     for (j = 0; j < OpenABE_CTR_DRBG_SEEDLEN; j += OpenABE_CTR_DRBG_BLOCKSIZE) {
         // Increase counter
+        #ifdef __wasm__
+        asm volatile("" ::: "memory");
+        #endif
         for (i = OpenABE_CTR_DRBG_BLOCKSIZE; i > 0; i--)
             if (++ctx->counter[i - 1] != 0)
                 break;
+        #ifdef __wasm__
+        asm volatile("" ::: "memory");
+        #endif
 
         // Encrypt counter block
         AES_ECB(ctx->key, ctx->counter, p, OpenABE_CTR_DRBG_BLOCKSIZE);
@@ -232,9 +294,46 @@ static int update_internal(OpenABECtrDrbg& ctx, const uint8_t data[OpenABE_CTR_D
         tmp[i] ^= data[i];
     }
 
+    // DEBUG: Log tmp buffer BEFORE memcpy
+    static int update_call_count = 0;
+    if (update_call_count < 10) {
+        fprintf(stderr, "[CTR-DRBG update_internal #%d] tmp buffer (48 bytes): ", update_call_count);
+        for (int i = 0; i < OpenABE_CTR_DRBG_SEEDLEN; i++) {
+            fprintf(stderr, "%02x", tmp[i]);
+        }
+        fprintf(stderr, "\n");
+        fprintf(stderr, "[CTR-DRBG update_internal #%d] tmp[0..31] (new key): ", update_call_count);
+        for (int i = 0; i < 32; i++) {
+            fprintf(stderr, "%02x", tmp[i]);
+        }
+        fprintf(stderr, "\n");
+        fprintf(stderr, "[CTR-DRBG update_internal #%d] tmp[32..47] (new counter): ", update_call_count);
+        for (int i = 32; i < 48; i++) {
+            fprintf(stderr, "%02x", tmp[i]);
+        }
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
+
      // Update key and counter
     memcpy(ctx->key, tmp, OpenABE_CTR_DRBG_KEYSIZE_BYTES);
     memcpy(ctx->counter, tmp + OpenABE_CTR_DRBG_KEYSIZE_BYTES, OpenABE_CTR_DRBG_BLOCKSIZE );
+
+    // DEBUG: Log CTR-DRBG state after update
+    if (update_call_count < 10) {
+        fprintf(stderr, "[CTR-DRBG update_internal #%d] Key (first 16 bytes): ", update_call_count);
+        for (int i = 0; i < 16; i++) {
+            fprintf(stderr, "%02x", ctx->key[i]);
+        }
+        fprintf(stderr, "\n");
+        fprintf(stderr, "[CTR-DRBG update_internal #%d] Counter: ", update_call_count);
+        for (int i = 0; i < AES_BLOCK_SIZE; i++) {
+            fprintf(stderr, "%02x", ctx->counter[i]);
+        }
+        fprintf(stderr, " (reseed_counter=%d)\n", ctx->reseed_counter);
+        fflush(stderr);
+        update_call_count++;
+    }
 
     return 0;
 }
@@ -260,23 +359,81 @@ int ctr_drbg_reseed(OpenABECtrDrbg& ctx, const uint8_t *additional, size_t len) 
         return OpenABE_ERR_CTR_DRBG_INPUT_TOO_BIG;
     }
     memset(seed, 0, OpenABE_CTR_DRBG_MAX_SEED_INPUT);
+
+    // DEBUG: Log reseed call
+    static int reseed_count = 0;
+    fprintf(stderr, "[CTR-DRBG reseed #%d] Starting reseed\n", reseed_count);
+    fflush(stderr);
+
     // Copy entropy_len bytes of entropy to seed
     if (ctx->entropy_callback(ctx->entropy_src, seed, ctx->entropy_len) != 0) {
         return OpenABE_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED;
     }
     seedlen += ctx->entropy_len;
+
+    // DEBUG: Log entropy bytes from callback
+    if (reseed_count < 5) {
+        fprintf(stderr, "[CTR-DRBG reseed #%d] Entropy from callback (first 32 bytes): ", reseed_count);
+        for (size_t i = 0; i < (ctx->entropy_len < 32 ? ctx->entropy_len : 32); i++) {
+            fprintf(stderr, "%02x", seed[i]);
+        }
+        if (ctx->entropy_len > 32) fprintf(stderr, "...");
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
+
     // Add additional data (only if additional is not null)
     if (additional && len) {
         memcpy(seed + seedlen, additional, len);
         seedlen += len;
+
+        // DEBUG: Log additional data
+        if (reseed_count < 5) {
+            fprintf(stderr, "[CTR-DRBG reseed #%d] Additional data (%zu bytes): ", reseed_count, len);
+            for (size_t i = 0; i < (len < 32 ? len : 32); i++) {
+                fprintf(stderr, "%02x", additional[i]);
+            }
+            if (len > 32) fprintf(stderr, "...");
+            fprintf(stderr, "\n");
+            fflush(stderr);
+        }
+    }
+
+    // DEBUG: Log seed BEFORE block_cipher_df
+    if (reseed_count < 5) {
+        fprintf(stderr, "[CTR-DRBG reseed #%d] Seed BEFORE block_cipher_df (first 48 bytes): ", reseed_count);
+        for (size_t i = 0; i < (seedlen < 48 ? seedlen : 48); i++) {
+            fprintf(stderr, "%02x", seed[i]);
+        }
+        if (seedlen > 48) fprintf(stderr, "...");
+        fprintf(stderr, "\n");
+        fflush(stderr);
     }
 
     // Reduce or stretch to 384 bits
     block_cipher_df(seed, seed, seedlen);
+
+    // DEBUG: Log seed AFTER block_cipher_df
+    if (reseed_count < 5) {
+        fprintf(stderr, "[CTR-DRBG reseed #%d] Seed AFTER block_cipher_df (48 bytes): ", reseed_count);
+        for (int i = 0; i < 48; i++) {
+            fprintf(stderr, "%02x", seed[i]);
+        }
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
+
     // Update internal state of K and V
     update_internal(ctx, seed);
     // Reset the reseed counter
     ctx->reseed_counter = 1;
+
+    if (reseed_count < 5) {
+        fprintf(stderr, "[CTR-DRBG reseed #%d] Reseed complete\n", reseed_count);
+        fflush(stderr);
+        reseed_count++;
+    }
+
     return 0;
 }
 
@@ -326,16 +483,59 @@ int ctr_drbg_generate_random_with_add(OpenABECtrDrbg& ctx, uint8_t *output, size
         update_internal(ctx, add_input);
     }
 
+    static int block_count = 0;
     while (output_len > 0) {
+        // DEBUG: Log counter BEFORE increment
+        if (block_count < 20) {
+            fprintf(stderr, "[CTR-DRBG generate block #%d] Counter BEFORE increment: ", block_count);
+            for (int j = 0; j < AES_BLOCK_SIZE; j++) {
+                fprintf(stderr, "%02x", ctx->counter[j]);
+            }
+            fprintf(stderr, "\n");
+            fflush(stderr);
+        }
+
         // Increase counter
+        // CRITICAL: This counter increment must be atomic to ensure deterministic PRNG
+        #ifdef __wasm__
+        // Add memory barrier for WASM to prevent optimizer reordering
+        asm volatile("" ::: "memory");
+        #endif
         for (i = OpenABE_CTR_DRBG_BLOCKSIZE; i > 0; i--) {
             if(++ctx->counter[i - 1] != 0)
                 break;
         }
+        #ifdef __wasm__
+        asm volatile("" ::: "memory");
+        #endif
+
+        // DEBUG: Log counter after increment
+        if (block_count < 20) {
+            fprintf(stderr, "[CTR-DRBG generate block #%d] Counter AFTER increment: ", block_count);
+            for (int j = 0; j < AES_BLOCK_SIZE; j++) {
+                fprintf(stderr, "%02x", ctx->counter[j]);
+            }
+            fprintf(stderr, "\n");
+            fflush(stderr);
+        }
+
         // Block_encrypt
         AES_ECB(ctx->key, ctx->counter, tmp, OpenABE_CTR_DRBG_BLOCKSIZE);
         use_len = (output_len > OpenABE_CTR_DRBG_BLOCKSIZE) ? OpenABE_CTR_DRBG_BLOCKSIZE :
                                                        output_len;
+
+        // DEBUG: Log generated random bytes
+        if (block_count < 20) {
+            fprintf(stderr, "[CTR-DRBG generate block #%d] Generated %zu bytes: ", block_count, use_len);
+            for (size_t j = 0; j < (use_len < 16 ? use_len : 16); j++) {
+                fprintf(stderr, "%02x", tmp[j]);
+            }
+            if (use_len > 16) fprintf(stderr, "...");
+            fprintf(stderr, "\n");
+            fflush(stderr);
+            block_count++;
+        }
+
         // Copy random block to destination
         memcpy(p, tmp, use_len);
         p += use_len;
@@ -351,7 +551,9 @@ int ctr_drbg_generate_random_with_add(OpenABECtrDrbg& ctx, uint8_t *output, size
 OpenABECtrDrbgContext::OpenABECtrDrbgContext(OpenABEByteString &entropy) {
     ctx_.reset(new OpenABECtrDrbg_);
     ABORT_ASSERT(entropy.size() >= OpenABE_CTR_DRBG_ENTROPYLEN, OpenABE_ERROR_INVALID_LENGTH);
-    short_entropy_ = entropy;
+    // CRITICAL FIX: Explicitly deep-copy entropy data to avoid potential issues with reference lifetime
+    short_entropy_.clear();
+    short_entropy_.appendArray(entropy.getInternalPtr(), entropy.size());
 }
 
 OpenABECtrDrbgContext::OpenABECtrDrbgContext(const uint8_t *entropy, uint32_t entropy_len) {
@@ -379,7 +581,35 @@ static int entropy_callback(void *data, uint8_t *target_buf, size_t target_len) 
 
 void
 OpenABECtrDrbgContext::initSeed(const uint8_t *nonce, size_t nonce_len) {
+    // Debug logging for PRNG initialization
+    fprintf(stderr, "[PRNG INIT] Entropy (first 16 bytes): ");
+    for (size_t i = 0; i < std::min((size_t)16, short_entropy_.size()); i++) {
+        fprintf(stderr, "%02x", short_entropy_[i]);
+    }
+    fprintf(stderr, "\n");
+
+    fprintf(stderr, "[PRNG INIT] Nonce (%zu bytes): ", nonce_len);
+    for (size_t i = 0; i < std::min(nonce_len, (size_t)16); i++) {
+        fprintf(stderr, "%02x", nonce[i]);
+    }
+    if (nonce_len > 16) fprintf(stderr, "...");
+    fprintf(stderr, "\n");
+    fflush(stderr);
+
     ctr_drbg_init_seed(ctx_, entropy_callback, short_entropy_, nonce, nonce_len);
+
+    // DEBUG: Log initial CTR-DRBG state after initialization
+    fprintf(stderr, "[PRNG INIT] Initial Key (first 16 bytes): ");
+    for (int i = 0; i < 16; i++) {
+        fprintf(stderr, "%02x", ctx_->key[i]);
+    }
+    fprintf(stderr, "\n");
+    fprintf(stderr, "[PRNG INIT] Initial Counter: ");
+    for (int i = 0; i < AES_BLOCK_SIZE; i++) {
+        fprintf(stderr, "%02x", ctx_->counter[i]);
+    }
+    fprintf(stderr, " (reseed_counter=%d)\n", ctx_->reseed_counter);
+    fflush(stderr);
 }
 
 
@@ -388,7 +618,30 @@ int OpenABECtrDrbgContext::getRandomBytes(uint8_t *output, size_t output_len) {
 #ifndef __wasm__
     std::lock_guard<std::mutex> write_lock(lock_);
 #endif
-    return ctr_drbg_generate_random_with_add(ctx_, output, output_len, NULL, 0);
+
+    // CRITICAL FIX: Add compiler barrier to prevent reordering in WASM
+    #ifdef __wasm__
+    asm volatile("" ::: "memory");
+    #endif
+
+    int result = ctr_drbg_generate_random_with_add(ctx_, output, output_len, NULL, 0);
+
+    #ifdef __wasm__
+    asm volatile("" ::: "memory");
+    #endif
+
+    // Debug logging for PRNG output
+    if (output_len <= 64) {
+        fprintf(stderr, "[PRNG DEBUG] Generated %zu random bytes: ", output_len);
+        for (size_t i = 0; i < (output_len < 16 ? output_len : 16); i++) {
+            fprintf(stderr, "%02x", output[i]);
+        }
+        if (output_len > 16) fprintf(stderr, "...");
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
+
+    return result;
 }
 
 int OpenABECtrDrbgContext::getRandomBytes(OpenABEByteString *output, size_t output_len) {

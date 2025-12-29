@@ -11,14 +11,17 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <openabe/zml/zelement.h>
 
 // Compile stubs when:
 // 1. Using MCL-only without OpenSSL EC (BP_WITH_MCL without EC_WITH_OPENSSL)
 // 2. Using MCL for EC/ECDSA (EC_WITH_MCL) - MCL ECDSA is high-level only, doesn't provide low-level EC ops
+// 3. Using RABE without OpenSSL EC (BP_WITH_RABE without EC_WITH_OPENSSL)
 // These stubs satisfy linker requirements but will error at runtime if called.
 // ABE operations don't use these functions, so ABE works fine.
-#if (defined(BP_WITH_MCL) && !defined(EC_WITH_OPENSSL)) || defined(EC_WITH_MCL)
+#if (defined(BP_WITH_MCL) && !defined(EC_WITH_OPENSSL)) || defined(EC_WITH_MCL) || (defined(BP_WITH_RABE) && !defined(EC_WITH_OPENSSL))
+
+// Include zelement.h OUTSIDE extern "C" to avoid C++/C linkage conflicts with MCL templates
+#include <openabe/zml/zelement.h>
 
 extern "C" {
 
