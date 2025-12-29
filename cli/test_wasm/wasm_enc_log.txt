@@ -1,0 +1,155 @@
+input file: plain.txt
+MCL: Initialized BLS12-381 (curve ID 5) via C API
+encryption functional input: ((one or two) and three)
+[CREATE_POLICY] Call #1, input='((one or two) and three)'
+[LEAF_NODE] Processing 'one', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'two', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'three', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[DRIVER] Setting duplicate info: attr_count.size()=3, attr_dup.size()=0
+[DRIVER]   attr_count['one'] = 1
+[DRIVER]   attr_count['three'] = 1
+[DRIVER]   attr_count['two'] = 1
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+[ZPOLICY] Before canonicalize: ((one or two) and three)
+[ZPOLICY] Root node type:  and , children count: 2
+[ZPOLICY]   Child[0]: 
+[ZPOLICY]   Child[1]: three
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+[ZPOLICY] After canonicalize: ((one or two) and three)
+[ZPOLICY] After canonicalization - children count: 2
+[ZPOLICY]   Child[0]: 
+[ZPOLICY]   Child[1]: three
+[ReadFile] begin_header='-----BEGIN MASTER PUBLIC KEY BLOCK-----'
+[ReadFile] end_header='-----END MASTER PUBLIC KEY BLOCK-----'
+[ReadFile] result size=883 bytes
+DEBUG OpenABEPairing constructor: pairingParams='BLS12_P381', curveID=162
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+DEBUG setHeader(uid): uid_set_extern = true, uid first 8 bytes: c9 0e 21 eb 45 8e d7 4c
+[PRNG INIT] Entropy (first 16 bytes): c90e21eb458ed74c4d76cc91b40ca2fd
+[PRNG INIT] Nonce (16 bytes): 34eadbd62383eaa9d6903103e653d03d
+[CTR-DRBG update_internal #0] Key (first 16 bytes): 101cefc97e8177d9b8701c67431d9f24
+[CTR-DRBG update_internal #0] Counter: 6e948a2902f61544a93b7c3d2aad011a (reseed_counter=0)
+[PRNG INIT] Initial Key (first 16 bytes): 101cefc97e8177d9b8701c67431d9f24
+[PRNG INIT] Initial Counter: 6e948a2902f61544a93b7c3d2aad011a (reseed_counter=1)
+[COMPILE-TIME] BP_WITH_MCL is DEFINED
+[CTR-DRBG generate block #0] Counter after increment: 6e948a2902f61544a93b7c3d2aad011b
+[CTR-DRBG generate block #0] Generated 16 bytes: da05109d4fc848bdb5c8d699566c6f4b
+[CTR-DRBG generate block #1] Counter after increment: 6e948a2902f61544a93b7c3d2aad011c
+[CTR-DRBG generate block #1] Generated 16 bytes: 1d2cc55f7aad9dd30596c3a6c04e1f56
+[CTR-DRBG update_internal #1] Key (first 16 bytes): b6a844cc71926b1bc940ce1bd3fe3984
+[CTR-DRBG update_internal #1] Counter: 6bb3a439136b6f8b5f39c8a8a6d10eb0 (reseed_counter=1)
+[PRNG DEBUG] Generated 32 random bytes: da05109d4fc848bdb5c8d699566c6f4b...
+[ZP::setRandom #0] Got 32 bytes: da05109d...
+[ZP::setRandom #0] ZP value (before mod): 38954220767256148912652077262079913689415112728954046539615442959679374755290
+[ZP::setRandom #0] ZP value (after mod): 38954220767256148912652077262079913689415112728954046539615442959679374755290
+[LSSS_DUPL_ENC] Policy reports NO duplicate nodes
+[CTR-DRBG generate block #2] Counter after increment: 6bb3a439136b6f8b5f39c8a8a6d10eb1
+[CTR-DRBG generate block #2] Generated 16 bytes: a8acb71315b9fc97627252cdf6be1c4c
+[CTR-DRBG generate block #3] Counter after increment: 6bb3a439136b6f8b5f39c8a8a6d10eb2
+[CTR-DRBG generate block #3] Generated 16 bytes: 32c234400b8988da77b754bab0e61bec
+[CTR-DRBG update_internal #2] Key (first 16 bytes): 5314cdae9052aed9194d73b69e306c37
+[CTR-DRBG update_internal #2] Counter: 2b75b501e0a2d38ba058b05ca100bd91 (reseed_counter=2)
+[PRNG DEBUG] Generated 32 random bytes: a8acb71315b9fc97627252cdf6be1c4c...
+[ZP::setRandom #1] Got 32 bytes: a8acb713...
+[ZP::setRandom #1] ZP value (before mod): 19755413177571227200109901892659520925154597410016190581074600264007886879113
+[ZP::setRandom #1] ZP value (after mod): 19755413177571227200109901892659520925154597410016190581074600264007886879113
+[CTR-DRBG generate block #4] Counter after increment: 2b75b501e0a2d38ba058b05ca100bd92
+[CTR-DRBG generate block #4] Generated 16 bytes: 7e6487c09e45c94bd9345082a65e5203
+[CTR-DRBG generate block #5] Counter after increment: 2b75b501e0a2d38ba058b05ca100bd93
+[CTR-DRBG generate block #5] Generated 16 bytes: c0744649efbfc2effe2ff0b0da6266e3
+[CTR-DRBG update_internal #3] Key (first 16 bytes): 9674cc39ba7a9a8e3dac6aa521b619cc
+[CTR-DRBG update_internal #3] Counter: 1bfd47d22e5d74d206741f7f7122a342 (reseed_counter=3)
+[PRNG DEBUG] Generated 32 random bytes: 7e6487c09e45c94bd9345082a65e5203...
+[ZP::setRandom #2] Got 32 bytes: 7e6487c0...
+[ZP::setRandom #2] ZP value (before mod): 37491842685202327308407170667094581889281137517979589456456186841395083663406
+[ZP::setRandom #2] ZP value (after mod): 37491842685202327308407170667094581889281137517979589456456186841395083663406
+[LSSS_LABEL] Label 'three' is unique (no suffix)
+[CTR-DRBG generate block #6] Counter after increment: 1bfd47d22e5d74d206741f7f7122a343
+[CTR-DRBG generate block #6] Generated 16 bytes: 2aa4e2b933caa5f40a42abfa8ea056ef
+[CTR-DRBG generate block #7] Counter after increment: 1bfd47d22e5d74d206741f7f7122a344
+[CTR-DRBG generate block #7] Generated 16 bytes: 4142bee077b97a5731ef7a0fcb4e2ea3
+[CTR-DRBG update_internal #4] Key (first 16 bytes): 8b2c5be4b85e693c633af9231b5756fb
+[CTR-DRBG update_internal #4] Counter: bdc8f3af8b16a7a04aa2b9b35fd7e462 (reseed_counter=4)
+[PRNG DEBUG] Generated 32 random bytes: 2aa4e2b933caa5f40a42abfa8ea056ef...
+[ZP::setRandom #3] Got 32 bytes: 2aa4e2b9...
+[ZP::setRandom #3] ZP value (before mod): 27836135177073111310183559964716745278008752882804150622370705498828365872851
+[ZP::setRandom #3] ZP value (after mod): 27836135177073111310183559964716745278008752882804150622370705498828365872851
+[LSSS_LABEL] Label 'two' is unique (no suffix)
+[LSSS_LABEL] Label 'one' is unique (no suffix)
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+[CTR-DRBG generate block #8] Counter after increment: bdc8f3af8b16a7a04aa2b9b35fd7e463
+[CTR-DRBG generate block #8] Generated 16 bytes: 4667ae65dd8ae96d70d401d2ca1309a8
+[CTR-DRBG generate block #9] Counter after increment: bdc8f3af8b16a7a04aa2b9b35fd7e464
+[CTR-DRBG generate block #9] Generated 16 bytes: 7b6e9c5ff1cad52657ec0c22d0115af3
+[CTR-DRBG update_internal #5] Key (first 16 bytes): 69d02db22a3b4e8f97b842817c1cddf5
+[CTR-DRBG update_internal #5] Counter: 7f2695a1b8f5934087046ab2e040c0ef (reseed_counter=5)
+[PRNG DEBUG] Generated 32 random bytes: 4667ae65dd8ae96d70d401d2ca1309a8...
+[ZP::setRandom #4] Got 32 bytes: 4667ae65...
+[ZP::setRandom #4] ZP value (before mod): 11806563956229359087569237386130750733259843676214759639993981054254218471742
+[ZP::setRandom #4] ZP value (after mod): 11806563956229359087569237386130750733259843676214759639993981054254218471742
+[CTR-DRBG generate block #10] Counter after increment: 7f2695a1b8f5934087046ab2e040c0f0
+[CTR-DRBG generate block #10] Generated 16 bytes: 0738cdf5d4014b46bbb9aad7214534cc
+[CTR-DRBG generate block #11] Counter after increment: 7f2695a1b8f5934087046ab2e040c0f1
+[CTR-DRBG generate block #11] Generated 16 bytes: 88cefff15de7e916edccf0c465a13637
+[CTR-DRBG update_internal #6] Key (first 16 bytes): 811652e8708c877abbf1b824cd23f75b
+[CTR-DRBG update_internal #6] Counter: 67112ab010669ab97eb621f9be6023ea (reseed_counter=6)
+[PRNG DEBUG] Generated 32 random bytes: 0738cdf5d4014b46bbb9aad7214534cc...
+[ZP::setRandom #5] Got 32 bytes: 0738cdf5...
+[ZP::setRandom #5] ZP value (before mod): 24973730338434399521387186169904245173253808985559128475775266381782141712391
+[ZP::setRandom #5] ZP value (after mod): 24973730338434399521387186169904245173253808985559128475775266381782141712391
+[CTR-DRBG generate block #12] Counter after increment: 67112ab010669ab97eb621f9be6023eb
+[CTR-DRBG generate block #12] Generated 16 bytes: c1648c5b43adb68ec8ab47ece6937fad
+[CTR-DRBG generate block #13] Counter after increment: 67112ab010669ab97eb621f9be6023ec
+[CTR-DRBG generate block #13] Generated 16 bytes: a1f54a2d2aaff82888fbbe535cacf27f
+[CTR-DRBG update_internal #7] Key (first 16 bytes): 13f67306fbf9d07a5744e2976b53d041
+[CTR-DRBG update_internal #7] Counter: c07dbeb1c5071909fad44f494d217839 (reseed_counter=7)
+[PRNG DEBUG] Generated 32 random bytes: c1648c5b43adb68ec8ab47ece6937fad...
+[ZP::setRandom #6] Got 32 bytes: c1648c5b...
+[ZP::setRandom #6] ZP value (before mod): 41563796425730480935928145072297545141763180386112654839964375377096048825513
+[ZP::setRandom #6] ZP value (after mod): 41563796425730480935928145072297545141763180386112654839964375377096048825513
+[hashToSymmetricKey] Input GT: [gt_convert_to_bytestring] GT is_one=0, is_zero=0
+[gt_convert_to_bytestring] Serialized 576 bytes
+(7E4E86F7F854A71D53FFFBB9A30117FE57B13831DC81CA7A53F7079861DC093C2FAE8FA25D953D91BF9CE4E876F5FD199C1C85A7CDF11196B8AE32C26CFEEFE3DF458DA2B3F4FC20BAA23229AD12E76ED4D1D7C7665CC661D0984B36AC289C0ECB9CB5FD92AE01E6E0C83148481C1EE18B6EBBFF8C0BB3975EB6B56BDFF6144BCE4D0C72ACC8475FD41C1AF9C8E10219FAF2F7F8F6DB6D6181C82F6A54549E4120A18B8037AF58E0A759E8477595BE4D9248F458F9D37BBC86B723BC9B76F003B9EA4B8F63BFB74768F0BB71072EAA5584429EE3F3E5126A9627A147AA283B4793129EB3A1F5874009C33C82844B2F10A39F00364C5B4AD554CD1742DCBE3F05FE92A22B59CD12C335A7231E7D59E1623DCA20FC1E426C2618EACE8C373B7114D22DAF1CA52778976B24FF3285DA2782063E7470507E18F7EEF5A25DFF39FE404F6A9D5ADE6656FB22548DF1F81C2E1429071A06103AFB53F83D2A0C092394F67A50A5AE34DFC6A2D0F5EA493D885A67099EE5AEBE4A89786E1FD9A00934BB101FDF2F69BC61C225289E9832B2666398627EADD7FD4A61871A9AA3E0991C5E1B424718B6D6498C5CDB86891416BB2C11746B46A8236AD0B4FD3B45B2824977410386DEEA551170702E9E7B3F7755AE27B0225744E7FE92B837064341811EAA0B387D241E807E38FA24E0C4713F1D9B49ABFD9CA05ECCA230DA2B2585EFA9AF64705B5A44D752663BF507C1261873CB17A9F109CD903996B8C12D779871144E4B5A8397C2D31FD6005F24D54B41C6146A75DAD580C342ACD6DBA96E5EA8FDCE11)
+[gt_convert_to_bytestring] GT is_one=0, is_zero=0
+[gt_convert_to_bytestring] Serialized 576 bytes
+[GT HASH DEBUG] GT serialization size: 580 bytes
+[GT HASH DEBUG] GT serialized hex (first 128 chars): B4B202407E4E86F7F854A71D53FFFBB9A30117FE57B13831DC81CA7A53F7079861DC093C2FAE8FA25D953D91BF9CE4E876F5FD199C1C85A7CDF11196B8AE32C2
+[GT HASH DEBUG] Requesting keyLen: 32 bytes
+[GT HASH DEBUG] First SHA256 hash output: C073860B1A3CA36640117CB8DA8F4F81255557F085570BE5DD6B8C23180780D8
+[GT HASH DEBUG] Final derived key (hex): C073860B1A3CA36640117CB8DA8F4F81255557F085570BE5DD6B8C23180780D8
+[hashToSymmetricKey] Output key (hex): C073860B1A3CA36640117CB8DA8F4F81255557F085570BE5DD6B8C23180780D8
+DEBUG setHeader(rng): uid_set_extern = true
+DEBUG setHeader(rng): Keeping external UID, first 8 bytes: c9 0e 21 eb 45 8e d7 4c
+[PRNG INIT] Entropy (first 16 bytes): c073860b1a3ca36640117cb8da8f4f81
+[PRNG INIT] Nonce (16 bytes): d191a52c4268ac50ac91129ca5f13fb2
+[CTR-DRBG update_internal #8] Key (first 16 bytes): 62b0da35148f1db1b764b6488daea88b
+[CTR-DRBG update_internal #8] Counter: e309558f084952f704c518beb739c5b3 (reseed_counter=0)
+[PRNG INIT] Initial Key (first 16 bytes): 62b0da35148f1db1b764b6488daea88b
+[PRNG INIT] Initial Counter: e309558f084952f704c518beb739c5b3 (reseed_counter=1)
+[CTR-DRBG generate block #14] Counter after increment: e309558f084952f704c518beb739c5b4
+[CTR-DRBG generate block #14] Generated 16 bytes: 604f453bbb34600008ee35ddcdc80bcd
+[CTR-DRBG generate block #15] Counter after increment: e309558f084952f704c518beb739c5b5
+[CTR-DRBG generate block #15] Generated 16 bytes: e2126fa22bbc3de694e8ed5e26fa270a
+[CTR-DRBG generate block #16] Counter after increment: e309558f084952f704c518beb739c5b6
+[CTR-DRBG generate block #16] Generated 16 bytes: 1daace1a3c5c8f95be3d2dbf6a7fdb9f
+[CTR-DRBG generate block #17] Counter after increment: e309558f084952f704c518beb739c5b7
+[CTR-DRBG generate block #17] Generated 16 bytes: b98f318407b5c2da4de6a9522f6ac258
+[CTR-DRBG update_internal #9] Key (first 16 bytes): 96b974f5a12670a27b1b0565d87be721
+[CTR-DRBG update_internal #9] Counter: 8f54dfc4d57e0ccc1b8cd2d0eafe8ecc (reseed_counter=1)
+[PRNG DEBUG] Generated 64 random bytes: 604f453bbb34600008ee35ddcdc80bcd...
+DEBUG setHeader(uid): uid_set_extern = true, uid first 8 bytes: c9 0e 21 eb 45 8e d7 4c

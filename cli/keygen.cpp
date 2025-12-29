@@ -39,52 +39,14 @@ using namespace oabe;
 #define USAGE \
     "usage: [ -s scheme ] [ -p prefix ] [ -i input ] [ -o output ] -v\n\n" \
     "\t-v : turn on verbosity\n" \
-    "\t-s : scheme types are 'PK', 'CP' or 'KP'\n" \
-    "\t-i : key id for 'PK', attribute list for 'CP'/'MA' and policy string for 'KP'\n" \
+    "\t-s : scheme types are 'CP' or 'KP'\n" \
+    "\t-i : attribute list for 'CP'/'MA' and policy string for 'KP'\n" \
     "\t-o : output file for generated secret key\n" \
         "\t-p : prefix for generated authority public and secret parameter files (optional)\n\n"
 
-int runPkeKeygen(string& id, string& suffix) {
-  OpenABE_ERROR result = OpenABE_NOERROR;
-  int err_code = -1;
-
-  unique_ptr<OpenABEContextSchemePKE> schemeContext = OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME_PK_OPDH);
-  if (schemeContext == nullptr) {
-      cerr << "unable to create a new context" << endl;
-      return err_code;
-  }
-
-  // Generate a set of parameters for an ABE authority
-  if ( (result = schemeContext->generateParams(DEFAULT_NIST_PARAM_STRING)) != OpenABE_NOERROR) {
-      cerr << "Unable to generate curve parameters: " << DEFAULT_NIST_PARAM_STRING << endl;
-      return result;
-  }
-
-  // Compute party A's static public and private key
-  const string keyId = "ID_" + id;
-  const string pkId =  "public_" + id;
-  const string skId = "private_" + id;
-  if ((result = schemeContext->keygen(keyId, pkId, skId)) != OpenABE_NOERROR) {
-      cerr << "unable to generate keys for: " << keyId << endl;
-      return result;
-  }
-
-  const string pubKeyFile = id + ".pk" + suffix;
-  const string privKeyFile = id + ".sk" + suffix;
-  OpenABEByteString publicKey, privateKey;
-  schemeContext->exportKey(pkId, publicKey);
-  schemeContext->exportKey(skId, privateKey);
-
-  WriteToFile(pubKeyFile.c_str(), PK_BEGIN_HEADER + Base64Encode(publicKey.getInternalPtr(), publicKey.size()) + PK_END_HEADER);
-  WriteToFile(privKeyFile.c_str(), SK_BEGIN_HEADER + Base64Encode(privateKey.getInternalPtr(), privateKey.size()) + SK_END_HEADER);
-  err_code = 0;
-
-  return err_code;
-}
-
 int runAbeKeygen(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, string& keyInput, string& keyFile, string& userGlobID, bool verbose)
 {
-  int err_code = -1;
+  int err_code = 1;
   OpenABE_ERROR result = OpenABE_NOERROR;
   std::unique_ptr<OpenABEContextSchemeCCA> schemeContext = nullptr;
   std::unique_ptr<OpenABEFunctionInput> funcInput = nullptr;
@@ -158,10 +120,11 @@ int runAbeKeygen(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, str
 
 int main(int argc, char **argv)
 {
+    adjustArgsForWasm(argc, argv);
     if(argc <= 1) {
     cout << OpenABE_CLI_STRING << "keygen utility, v" << (OpenABE_LIBRARY_VERSION / 100.) << endl;
     fprintf(stderr, USAGE);
-    exit(-1);
+    exit(1);
     }
     int opt, status = 0;
     string scheme_type = "", prefix = "", suffix = "", funcInputStr = "", keyOutfile = "";
@@ -178,7 +141,7 @@ int main(int argc, char **argv)
     		case 'o': keyOutfile = optarg; break;
     		case 'v': verbose = true; break;
     		case '?': fprintf(stderr, USAGE);
-    		default: cout << endl; exit(-1);
+    		default: cout << endl; exit(1);
     	}
     }
     // check prefix ending
@@ -187,25 +150,15 @@ int main(int argc, char **argv)
     OpenABE_SCHEME scheme = checkForScheme(scheme_type, suffix);
     if(scheme == OpenABE_SCHEME_NONE) {
         cerr << "selected an invalid scheme type. Try again with -s option.\n";
-    	return -1;
+    	return 1;
     }
 
     addFileExtension(keyOutfile, keySuffix);
 
     InitializeOpenABE();
 
-  if (scheme == OpenABE_SCHEME_PK_OPDH) {
-    string key_id = funcInputStr;
-    if (key_id == "") {
-        cerr << "missing user's key ID. Specify with -i option." << endl;
-        status = -1;
-        goto cleanup;
-    }
-    runPkeKeygen(key_id, suffix);
-  } else {
     cout << "functional key input: "<< funcInputStr << endl;
     status = runAbeKeygen(scheme, prefix, suffix, funcInputStr, keyOutfile, userGlobID, verbose);
-  }
 
 cleanup:
 

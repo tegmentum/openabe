@@ -1,0 +1,146 @@
+ciphertext: cipher.cpabe
+MCL: Initialized BLS12-381 (curve ID 5) via C++ API
+user's SK file: userkey.key
+[ReadFile] begin_header='-----BEGIN MASTER PUBLIC KEY BLOCK-----'
+[ReadFile] end_header='-----END MASTER PUBLIC KEY BLOCK-----'
+[ReadFile] result size=883 bytes
+DEBUG OpenABEPairing constructor: pairingParams='BLS12_P381', curveID=162
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[ReadFile] begin_header='-----BEGIN USER PRIVATE KEY BLOCK-----'
+[ReadFile] end_header='-----END USER PRIVATE KEY BLOCK-----'
+[ReadFile] result size=385 bytes
+DEBUG loadFromBytes: curveID=162, algorithmID=201, group=0x0
+DEBUG loadFromBytes: After setGroupObject, group=0x600001a58050
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+DEBUG: loadFromBytesWithoutHeader - input size: 213 bytes
+DEBUG: loadFromBytesWithoutHeader - unpacked ciphertext size: 211 bytes, index after unpack: 213
+DEBUG: loadFromBytesWithoutHeader - about to call deserialize
+DEBUG: loadFromBytesWithoutHeader - deserialize completed
+[CREATE_POLICY] Call #1, input='((FOUR or THREE) and (ONE or TWO))'
+[LEAF_NODE] Processing 'FOUR', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'THREE', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'ONE', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'TWO', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[DRIVER] Setting duplicate info: attr_count.size()=4, attr_dup.size()=0
+[DRIVER]   attr_count['FOUR'] = 1
+[DRIVER]   attr_count['ONE'] = 1
+[DRIVER]   attr_count['THREE'] = 1
+[DRIVER]   attr_count['TWO'] = 1
+[TOSTRING] nodeType=3, returned='(FOUR or THREE)'
+[TOSTRING] nodeType=3, returned='(ONE or TWO)'
+[TOSTRING] nodeType=2, returned='((FOUR or THREE) and (ONE or TWO))'
+[ZPOLICY] Before canonicalize: ((FOUR or THREE) and (ONE or TWO))
+[ZPOLICY] Root node type:  and , children count: 2
+[ZPOLICY]   Child[0]: 
+[ZPOLICY]   Child[1]: 
+[TOSTRING] nodeType=3, returned='(FOUR or THREE)'
+[TOSTRING] nodeType=3, returned='(ONE or TWO)'
+[TOSTRING] nodeType=3, returned='(FOUR or THREE)'
+[TOSTRING] nodeType=3, returned='(ONE or TWO)'
+[TOSTRING] nodeType=2, returned='((FOUR or THREE) and (ONE or TWO))'
+[ZPOLICY] After canonicalize: ((FOUR or THREE) and (ONE or TWO))
+[ZPOLICY] After canonicalization - children count: 2
+[ZPOLICY]   Child[0]: 
+[ZPOLICY]   Child[1]: 
+[LSSS_DUPL] Policy reports NO duplicate nodes
+[LSSS_SCAN] Leaf 'TWO' matched: NO
+[LSSS_SCAN] Leaf 'ONE' matched: YES
+[LSSS_MARK] OR/THRESHOLD gate: threshold=1, num_subnodes=2
+[LSSS_MARK]   Subnode 0 is marked TRUE
+[LSSS_MARK]   Subnode 1 is marked FALSE
+[LSSS_SCAN] Leaf 'THREE' matched: YES
+[LSSS_SCAN] Leaf 'FOUR' matched: NO
+[LSSS_MARK] OR/THRESHOLD gate: threshold=1, num_subnodes=2
+[LSSS_MARK]   Subnode 0 is marked FALSE
+[LSSS_MARK]   Subnode 1 is marked TRUE
+[LSSS_COEFF] calculateCoefficient: index=0, threshold=2, total=2
+[LSSS_COEFF] Initial result = 1, indexPlusOne = 1
+[LSSS_COEFF] i=0: marked=1
+[LSSS_COEFF] i=1: marked=1
+[ZP_SUB_DEBUG] Before subtraction:
+[ZP_SUB_DEBUG]   x.isOrderSet=1, y.isOrderSet=1, zr.isOrderSet=1
+[ZP_SUB_DEBUG]   x.isZero=1, y.isZero=0
+[ZP_SUB_DEBUG]   x value: 0
+[ZP_SUB_DEBUG]   y value: 2
+[ZP_SUB_DEBUG] After subtraction:
+[ZP_SUB_DEBUG]   result.isZero=0
+[ZP_SUB_DEBUG]   result value: 52435875175126190479447740508185965837690552500527637822603658699938581184511
+[ZP_SUB_DEBUG] Before subtraction:
+[ZP_SUB_DEBUG]   x.isOrderSet=1, y.isOrderSet=1, zr.isOrderSet=1
+[ZP_SUB_DEBUG]   x.isZero=0, y.isZero=0
+[ZP_SUB_DEBUG]   x value: 1
+[ZP_SUB_DEBUG]   y value: 2
+[ZP_SUB_DEBUG] After subtraction:
+[ZP_SUB_DEBUG]   result.isZero=0
+[ZP_SUB_DEBUG]   result value: 52435875175126190479447740508185965837690552500527637822603658699938581184512
+[LSSS_COEFF] i=1 (i!=index): Computing (0 - 2) / (1 - 2)
+[LSSS_COEFF] i=1: numerator zero=0, denominator zero=0
+[ZP_DIV_DEBUG] Before div: x=52435875175126190479447740508185965837690552500527637822603658699938581184511, y=52435875175126190479447740508185965837690552500527637822603658699938581184512
+[ZP_DIV_DEBUG] r.m_ZP is_zero BEFORE=0
+[ZP_DIV_DEBUG] After div: r=2, is_zero=0
+[LSSS_COEFF] i=1: term zero=0
+[LSSS_COEFF] i=1: After multiply, result zero=0
+[LSSS_COEFF] Final coefficient zero=0
+[LSSS_COEFF] calculateCoefficient: index=1, threshold=2, total=2
+[LSSS_COEFF] Initial result = 1, indexPlusOne = 2
+[LSSS_COEFF] i=0: marked=1
+[ZP_SUB_DEBUG] Before subtraction:
+[ZP_SUB_DEBUG]   x.isOrderSet=1, y.isOrderSet=1, zr.isOrderSet=1
+[ZP_SUB_DEBUG]   x.isZero=1, y.isZero=0
+[ZP_SUB_DEBUG]   x value: 0
+[ZP_SUB_DEBUG]   y value: 1
+[ZP_SUB_DEBUG] After subtraction:
+[ZP_SUB_DEBUG]   result.isZero=0
+[ZP_SUB_DEBUG]   result value: 52435875175126190479447740508185965837690552500527637822603658699938581184512
+[ZP_SUB_DEBUG] Before subtraction:
+[ZP_SUB_DEBUG]   x.isOrderSet=1, y.isOrderSet=1, zr.isOrderSet=1
+[ZP_SUB_DEBUG]   x.isZero=0, y.isZero=0
+[ZP_SUB_DEBUG]   x value: 2
+[ZP_SUB_DEBUG]   y value: 1
+[ZP_SUB_DEBUG] After subtraction:
+[ZP_SUB_DEBUG]   result.isZero=0
+[ZP_SUB_DEBUG]   result value: 1
+[LSSS_COEFF] i=0 (i!=index): Computing (0 - 1) / (2 - 1)
+[LSSS_COEFF] i=0: numerator zero=0, denominator zero=0
+[ZP_DIV_DEBUG] Before div: x=52435875175126190479447740508185965837690552500527637822603658699938581184512, y=1
+[ZP_DIV_DEBUG] r.m_ZP is_zero BEFORE=1
+[ZP_DIV_DEBUG] After div: r=52435875175126190479447740508185965837690552500527637822603658699938581184512, is_zero=0
+[LSSS_COEFF] i=0: term zero=0
+[LSSS_COEFF] i=0: After multiply, result zero=0
+[LSSS_COEFF] i=1: marked=1
+[LSSS_COEFF] Final coefficient zero=0
+[LSSS_COEFF] calculateCoefficient: index=0, threshold=1, total=2
+[LSSS_COEFF] Initial result = 1, indexPlusOne = 1
+[LSSS_COEFF] i=0: marked=1
+[LSSS_COEFF] Final coefficient zero=0
+[LSSS_LABEL] Label 'ONE' is unique (no suffix)
+[LSSS_COEFF] calculateCoefficient: index=1, threshold=1, total=2
+[LSSS_COEFF] Initial result = 1, indexPlusOne = 2
+[LSSS_COEFF] i=0: marked=0
+[LSSS_COEFF] Final coefficient zero=0
+[LSSS_LABEL] Label 'THREE' is unique (no suffix)
+[DECRYPT_DEBUG] attr_key='ONE'
+[DECRYPT_DEBUG] Kx before exp: isZero=0
+[DECRYPT_DEBUG] Cx before exp: isZero=0
+[DECRYPT_DEBUG] Dx: isZero=0
+[DECRYPT_DEBUG] Kx after exp: isZero=0

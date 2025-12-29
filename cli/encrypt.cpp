@@ -56,66 +56,6 @@ bool getPublicKey(OpenABEByteString& publicKey, string& id, string& suffix) {
     return true;
 }
 
-void runPkEncrypt(string& suffix, string& sender_id, string& recipient_id,
-                  string& inputStr, string& ciphertextFile, bool verbose) {
-
-    OpenABE_ERROR result = OpenABE_NOERROR;
-    // load public key file for the recipient
-    OpenABEByteString send_PublicKey, recp_PublicKey, ctBlob;
-
-    if (!getPublicKey(send_PublicKey, sender_id, suffix)) {
-        return;
-    }
-    if (!getPublicKey(recp_PublicKey, recipient_id, suffix)) {
-        return;
-    }
-
-    unique_ptr<OpenABEContextSchemePKE> schemeContext = OpenABE_createContextPKESchemeCCA(OpenABE_SCHEME_PK_OPDH);
-    if (schemeContext == nullptr) {
-        cerr << "unable to create a new context" << endl;
-        return;
-    }
-
-    // Generate a set of parameters for an ABE authority
-    if ( (result = schemeContext->generateParams(DEFAULT_NIST_PARAM_STRING)) != OpenABE_NOERROR) {
-        cerr << "unable to generate curve parameters: " << DEFAULT_NIST_PARAM_STRING << endl;
-        return;
-    }
-
-    string sen_pkID = "public_" + sender_id;
-    string rec_pkID = "public_" + recipient_id;
-    if ((result = schemeContext->loadPublicKey(sen_pkID, send_PublicKey)) != OpenABE_NOERROR) {
-        cerr << "unable to load the sender's public key: " << rec_pkID << endl;
-        return;
-    }
-
-    if ((result = schemeContext->loadPublicKey(rec_pkID, recp_PublicKey)) != OpenABE_NOERROR) {
-        cerr << "unable to load the recipient's public key: " << rec_pkID << endl;
-        return;
-    }
-
-    unique_ptr<OpenABECiphertext> ciphertext(new OpenABECiphertext);
-    if ((result = schemeContext->encrypt(nullptr, rec_pkID, sen_pkID, inputStr, ciphertext.get())) != OpenABE_NOERROR) {
-        cerr << "error while trying to encrypt input file" << endl;
-        return;
-    }
-
-    // write ciphertext out
-    ciphertext->exportToBytes(ctBlob);
-    string ctBlobStr = CT2_BEGIN_HEADER;
-    ctBlobStr += NL + Base64Encode(ctBlob.getInternalPtr(), ctBlob.size()) + NL;
-    ctBlobStr += CT2_END_HEADER;
-    ctBlobStr += NL;
-
-    if (verbose) {
-        cout << "writing " << ctBlob.size() << " bytes" << endl;
-    }
-    WriteToFile(ciphertextFile.c_str(), ctBlobStr);
-
-    return;
-}
-
-
 void runAbeEncrypt(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, string& func_input,
     	       string& inputStr, string& ciphertextFile, bool verbose)
 {
@@ -187,10 +127,11 @@ void runAbeEncrypt(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, s
 
 int main(int argc, char **argv)
 {
+  adjustArgsForWasm(argc, argv);
   if (argc <= 1) {
     cout << OpenABE_CLI_STRING << "encryption utility, v" << (OpenABE_LIBRARY_VERSION / 100.) << endl;
     fprintf(stderr, USAGE);
-    exit(-1);
+    exit(1);
   }
   int opt;
   string func_input = "", input_file = "", prefix = "", suffix = "", scheme_type = "";
@@ -210,7 +151,7 @@ int main(int argc, char **argv)
       case 'o': ciphertext_file = optarg; break;
       case 'v': verbose = true; break;
       case '?': fprintf(stderr, USAGE);
-      default: cout<<endl; exit(-1);
+      default: cout<<endl; exit(1);
     }
   }
   // check prefix ending
@@ -219,7 +160,7 @@ int main(int argc, char **argv)
   OpenABE_SCHEME scheme = checkForScheme(scheme_type, suffix);
   if(scheme == OpenABE_SCHEME_NONE) {
       cerr << "selected an invalid scheme type. Try again with -s option.\n";
-      return -1;
+      return 1;
   }
 
   try {
@@ -227,11 +168,11 @@ int main(int argc, char **argv)
     size_t inputLen = inputStr.size();
     if (inputLen == 0 || inputLen > MAX_FILE_SIZE) {
       cerr << "input file is either empty or too big! Can encrypt up to 4GB files." << endl;
-      return -1;
+      return 1;
     }
   } catch(const std::ios_base::failure& e) {
     cerr << e.what() << endl;
-    return -1;
+    return 1;
   }
 
   if (verbose) {
@@ -243,19 +184,8 @@ int main(int argc, char **argv)
 
   InitializeOpenABE();
 
-  if (scheme == OpenABE_SCHEME_PK_OPDH) {
-    string sender_id = func_input;
-    if (sender_id == "" || recipient_id == "") {
-        cerr << "missing sender ID (-e option) and/or recipient ID (-r option)" << endl;
-        goto cleanup;
-    }
-    cout << "sender ID: " << sender_id << endl;
-    cout << "recipient ID: " << recipient_id << endl;
-    runPkEncrypt(suffix, sender_id, recipient_id, inputStr, ciphertext_file, verbose);
-  } else {
     cout << "encryption functional input: "<< func_input << endl;
     runAbeEncrypt(scheme, prefix, suffix, func_input, inputStr, ciphertext_file, verbose);
-  }
 
 cleanup:
   ShutdownOpenABE();

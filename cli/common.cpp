@@ -36,6 +36,20 @@
 using namespace std;
 using namespace oabe;
 
+// Adjust argc/argv to handle wasmtime's '--' separator
+void adjustArgsForWasm(int& argc, char**& argv) {
+    // Handle wasmtime's '--' separator: if argv[1] == "--", skip it
+    static int arg_offset = 0;
+    static char** adjusted_argv = nullptr;
+
+    if (argc > 1 && string(argv[1]) == "--") {
+        arg_offset = 1;
+        argc -= arg_offset;
+        adjusted_argv = argv + arg_offset;
+        argv = adjusted_argv;
+    }
+}
+
 void getFile(std::string &result, const std::string &filename) {
   result.clear();
 

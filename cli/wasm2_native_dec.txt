@@ -1,0 +1,1 @@
+WASM to native test v2

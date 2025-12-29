@@ -1,0 +1,1 @@
+❌ FAIL: Simple AND policy echo  echo Test 2: OR Policy echo Message 2 ./oabe_enc -s CP -p test -e ((one or two) and three) -i msg2.txt -o ct2.cpabe

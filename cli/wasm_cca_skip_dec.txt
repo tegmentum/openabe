@@ -1,0 +1,1 @@
+Test message with ETH serialization fix!

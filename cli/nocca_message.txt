@@ -1,0 +1,1 @@
+Hello from non-CCA CP-ABE\!

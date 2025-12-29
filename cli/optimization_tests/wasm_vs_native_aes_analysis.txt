@@ -1,0 +1,19 @@
+# WASM vs Native AES Divergence Analysis
+
+## AES Operation #0 - MATCH ✅
+Native:  [AES_ECB #0] Plaintext (counter): 00000000000000000000000000000000
+WASM:    [AES_ECB #0] Plaintext (counter): 00000000000000000000000000000000
+Native:  [AES_ECB #0] Ciphertext: f29000b62a499fd0a9f39a6add2e7780
+WASM:    [AES_ECB #0] Ciphertext: f29000b62a499fd0a9f39a6add2e7780
+
+## AES Operation #1 - DIVERGENCE ❌ 
+Native:  [AES_ECB #1] Plaintext (counter): f29000862a499fe0b37c0e9fa0e4bf8f
+WASM:    [AES_ECB #1] Plaintext (counter): f29000862a499fe026ff3a893a49221e
+                                                      ^^ DIFF at byte 8
+Native:  [AES_ECB #1] Ciphertext: 748cd2c9e8359ab4cb2e17ae69c2e6c9
+WASM:    [AES_ECB #1] Ciphertext: aaadd9923f8f1bcd61d03cb1b26e2ee9
+
+## Root Cause
+Counter increment at src/tools/zprng.cpp:384-394 produces different results in WASM.
+
+After first AES operation, counter should be incremented. Native and WASM produce different incremented counters.

@@ -1,0 +1,21 @@
+=== CTR-DRBG PRNG Optimization Test ===
+Testing if compiler optimization affects PRNG output
+
+Initial state:
+  Key:     4242424242424242424242424242424242424242424242424242424242424242
+  Counter: 000102030405060708090a0b0c0d0e0f
+
+Generated blocks:
+Block  0: 0e429979aed0afaba483403f5edabed4
+Block  1: 11e94f62924152cb16cdc0f115efb693
+Block  2: 05be70c3c53a397ac9737d6c55aebda3
+Block  3: 03ed28eed3d5edb6e0f16afde8186b38
+Block  4: 6b5e123c9dd7250a721022273c50cce4
+Block  5: ac7ef8a8106a385d56d9a99caf610c6c
+Block  6: 9c9ef787cfe6c941f61c0bc1225af757
+Block  7: f9a237b1f14c98d87e0d56dc6e5eafc1
+Block  8: 514ce555f6f80e8b9104e2590465ae9f
+Block  9: 2cbbeda028d349d3dbd00131189f4c13
+
+Final counter state:
+  Counter: 000102030405060708090a0b0c0d0e19

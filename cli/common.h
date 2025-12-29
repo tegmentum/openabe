@@ -85,6 +85,7 @@
 #define CT2_BEGIN_HEADER	"-----BEGIN CIPHERTEXT BLOCK-----"
 #define CT2_END_HEADER		"-----END CIPHERTEXT BLOCK-----"
 
+void adjustArgsForWasm(int& argc, char**& argv);
 void getFile(std::string &result, const std::string &filename);
 std::string ReadFile(const char* filename);
 std::string ReadBlockFromFile(const char* begin_header, const char* end_header, const char* filename);

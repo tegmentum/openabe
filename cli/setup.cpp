@@ -95,6 +95,8 @@ void runSetup(OpenABE_SCHEME scheme_type, string& prefix, string& suffix, bool v
 
 int main(int argc, char **argv)
 {
+    adjustArgsForWasm(argc, argv);
+
     // if interactive flag set, then enter password via stdin (instead of command line)
     bool verbose_flag = false;
     string scheme_type = "", prefix = "", suffix = "";
@@ -102,28 +104,39 @@ int main(int argc, char **argv)
     if(argc <= 1) {
         cout << OpenABE_CLI_STRING << "system setup utility, v" << (OpenABE_LIBRARY_VERSION / 100.) << endl;
         fprintf(stderr, USAGE);
-        return -1;
+        return 1;
     }
 
     while((c = getopt(argc, argv, "vs:p:")) != -1) {
     	switch(c) {
-          case 's': scheme_type = string(optarg); break;
-          case 'p': prefix = string(optarg); break;
-          case 'v': verbose_flag = true; break;
-          case '?': fprintf(stderr, USAGE);
-          default:  cout<<endl; exit(-1);
+          case 's':
+              scheme_type = string(optarg);
+              break;
+          case 'p':
+              prefix = string(optarg);
+              break;
+          case 'v':
+              verbose_flag = true;
+              break;
+          case '?':
+              fprintf(stderr, USAGE);
+              return 1;
+          default:
+              cout<<endl;
+              return 1;
     	}
     }
+
     // check prefix ending
     addNameSeparator(prefix);
     // validate scheme type
     OpenABE_SCHEME scheme = checkForScheme(scheme_type, suffix);
     if (scheme == OpenABE_SCHEME_NONE) {
         cerr << "selected an invalid scheme type. Try again with -s option." << endl;
-    	return -1;
+    	return 1;
     } else if (scheme == OpenABE_SCHEME_PK_OPDH) {
         cerr << "PK encryption does not require setup. Can simply proceed with keygen." << endl;
-        return -1;
+        return 1;
     }
 
     InitializeOpenABE();

@@ -1,0 +1,221 @@
+ciphertext: cipher.cpabe
+MCL: Initialized BLS12-381 (curve ID 5) via C API
+user's SK file: alice.key
+[ReadFile] begin_header='-----BEGIN MASTER PUBLIC KEY BLOCK-----'
+[ReadFile] end_header='-----END MASTER PUBLIC KEY BLOCK-----'
+[ReadFile] result size=883 bytes
+DEBUG OpenABEPairing constructor: pairingParams='BLS12_P381', curveID=162
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[ReadFile] begin_header='-----BEGIN USER PRIVATE KEY BLOCK-----'
+[ReadFile] end_header='-----END USER PRIVATE KEY BLOCK-----'
+[ReadFile] result size=450 bytes
+DEBUG loadFromBytes: curveID=162, algorithmID=201, group=0
+DEBUG loadFromBytes: After setGroupObject, group=0x1ee820
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+[g1_convert_to_point] BEFORE deserialize: p_is_zero=1
+[g1_convert_to_point] AFTER deserialize: read=48, p_is_zero=0, p_is_valid=1
+DEBUG: loadFromBytesWithoutHeader - input size: 80 bytes
+DEBUG: loadFromBytesWithoutHeader - unpacked ciphertext size: 78 bytes, index after unpack: 80
+DEBUG: loadFromBytesWithoutHeader - about to call deserialize
+DEBUG: loadFromBytesWithoutHeader - deserialize completed
+[CREATE_POLICY] Call #1, input='((one or two) and three)'
+[LEAF_NODE] Processing 'one', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'two', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'three', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[DRIVER] Setting duplicate info: attr_count.size()=3, attr_dup.size()=0
+[DRIVER]   attr_count['one'] = 1
+[DRIVER]   attr_count['three'] = 1
+[DRIVER]   attr_count['two'] = 1
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+[ZPOLICY] Before canonicalize: ((one or two) and three)
+[ZPOLICY] Root node type:  and , children count: 2
+[ZPOLICY]   Child[0]: 
+[ZPOLICY]   Child[1]: three
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+[ZPOLICY] After canonicalize: ((one or two) and three)
+[ZPOLICY] After canonicalization - children count: 2
+[ZPOLICY]   Child[0]: 
+[ZPOLICY]   Child[1]: three
+[LSSS_DUPL] Policy reports NO duplicate nodes
+[LSSS_SCAN] Leaf 'three' matched: YES
+[LSSS_SCAN] Leaf 'two' matched: YES
+[LSSS_SCAN] Leaf 'one' matched: YES
+[LSSS_MARK] OR/THRESHOLD gate: threshold=1, num_subnodes=2
+[LSSS_MARK]   Subnode 0 is marked TRUE
+[LSSS_MARK]   Subnode 1 is marked TRUE
+[LSSS_COEFF] calculateCoefficient: index=0, threshold=2, total=2
+[LSSS_COEFF] Initial result = 1, indexPlusOne = 1
+[LSSS_COEFF] i=0: marked=1
+[LSSS_COEFF] i=1: marked=1
+[ZP_SUB_DEBUG] Before subtraction:
+[ZP_SUB_DEBUG]   x.isOrderSet=1, y.isOrderSet=1, zr.isOrderSet=1
+[ZP_SUB_DEBUG]   x.isZero=1, y.isZero=0
+[ZP_SUB_DEBUG]   x value: 0
+[ZP_SUB_DEBUG]   y value: 2
+[ZP_SUB_DEBUG] After subtraction:
+[ZP_SUB_DEBUG]   result.isZero=0
+[ZP_SUB_DEBUG]   result value: 52435875175126190479447740508185965837690552500527637822603658699938581184511
+[ZP_SUB_DEBUG] Before subtraction:
+[ZP_SUB_DEBUG]   x.isOrderSet=1, y.isOrderSet=1, zr.isOrderSet=1
+[ZP_SUB_DEBUG]   x.isZero=0, y.isZero=0
+[ZP_SUB_DEBUG]   x value: 1
+[ZP_SUB_DEBUG]   y value: 2
+[ZP_SUB_DEBUG] After subtraction:
+[ZP_SUB_DEBUG]   result.isZero=0
+[ZP_SUB_DEBUG]   result value: 52435875175126190479447740508185965837690552500527637822603658699938581184512
+[LSSS_COEFF] i=1 (i!=index): Computing (0 - 2) / (1 - 2)
+[LSSS_COEFF] i=1: numerator zero=0, denominator zero=0
+[ZP_DIV_DEBUG] Before div: x=52435875175126190479447740508185965837690552500527637822603658699938581184511, y=52435875175126190479447740508185965837690552500527637822603658699938581184512
+[ZP_DIV_DEBUG] r.m_ZP is_zero BEFORE=0
+[ZP_DIV_DEBUG] After div: r=2, is_zero=0
+[LSSS_COEFF] i=1: term zero=0
+[LSSS_COEFF] i=1: After multiply, result zero=0
+[LSSS_COEFF] Final coefficient zero=0
+[LSSS_COEFF] calculateCoefficient: index=1, threshold=2, total=2
+[LSSS_COEFF] Initial result = 1, indexPlusOne = 2
+[LSSS_COEFF] i=0: marked=1
+[ZP_SUB_DEBUG] Before subtraction:
+[ZP_SUB_DEBUG]   x.isOrderSet=1, y.isOrderSet=1, zr.isOrderSet=1
+[ZP_SUB_DEBUG]   x.isZero=1, y.isZero=0
+[ZP_SUB_DEBUG]   x value: 0
+[ZP_SUB_DEBUG]   y value: 1
+[ZP_SUB_DEBUG] After subtraction:
+[ZP_SUB_DEBUG]   result.isZero=0
+[ZP_SUB_DEBUG]   result value: 52435875175126190479447740508185965837690552500527637822603658699938581184512
+[ZP_SUB_DEBUG] Before subtraction:
+[ZP_SUB_DEBUG]   x.isOrderSet=1, y.isOrderSet=1, zr.isOrderSet=1
+[ZP_SUB_DEBUG]   x.isZero=0, y.isZero=0
+[ZP_SUB_DEBUG]   x value: 2
+[ZP_SUB_DEBUG]   y value: 1
+[ZP_SUB_DEBUG] After subtraction:
+[ZP_SUB_DEBUG]   result.isZero=0
+[ZP_SUB_DEBUG]   result value: 1
+[LSSS_COEFF] i=0 (i!=index): Computing (0 - 1) / (2 - 1)
+[LSSS_COEFF] i=0: numerator zero=0, denominator zero=0
+[ZP_DIV_DEBUG] Before div: x=52435875175126190479447740508185965837690552500527637822603658699938581184512, y=1
+[ZP_DIV_DEBUG] r.m_ZP is_zero BEFORE=0
+[ZP_DIV_DEBUG] After div: r=52435875175126190479447740508185965837690552500527637822603658699938581184512, is_zero=0
+[LSSS_COEFF] i=0: term zero=0
+[LSSS_COEFF] i=0: After multiply, result zero=0
+[LSSS_COEFF] i=1: marked=1
+[LSSS_COEFF] Final coefficient zero=0
+[LSSS_LABEL] Label 'three' is unique (no suffix)
+[LSSS_COEFF] calculateCoefficient: index=0, threshold=1, total=2
+[LSSS_COEFF] Initial result = 1, indexPlusOne = 1
+[LSSS_COEFF] i=0: marked=1
+[LSSS_COEFF] Final coefficient zero=0
+[LSSS_LABEL] Label 'one' is unique (no suffix)
+[DECRYPT_DEBUG] attr_key='one'
+[DECRYPT_DEBUG] Kx before exp: isZero=0
+[DECRYPT_DEBUG] Cx before exp: isZero=0
+[DECRYPT_DEBUG] Dx: isZero=0
+[DECRYPT_DEBUG] Kx after exp: isZero=0
+[DECRYPT_DEBUG] attr_key='three'
+[DECRYPT_DEBUG] Kx before exp: isZero=0
+[DECRYPT_DEBUG] Cx before exp: isZero=0
+[DECRYPT_DEBUG] Dx: isZero=0
+[DECRYPT_DEBUG] Kx after exp: isZero=0
+[MULTI_PAIRING DEBUG] Called with 2 pairs
+[MULTI_PAIRING_MCL] Computing 2 pairings
+[MULTI_PAIRING_MCL] Pair 0: G1 valid=1 zero=0, G2 valid=1 zero=0
+[MULTI_PAIRING_MCL] Pair 0: pairing result is_one=0 is_zero=0
+[MULTI_PAIRING_MCL] Pair 0: copied to result
+[MULTI_PAIRING_MCL] Pair 1: G1 valid=1 zero=0, G2 valid=1 zero=0
+[MULTI_PAIRING_MCL] Pair 1: pairing result is_one=0 is_zero=0
+[MULTI_PAIRING_MCL] Pair 1: multiplied, result is_one=0
+[MULTI_PAIRING_MCL] Final result: is_one=0 is_zero=0
+[MULTI_PAIRING DEBUG] After multi_bp_map_op, checking isInfinity...
+[MULTI_PAIRING DEBUG] isInfinity() returned: 0
+[hashToSymmetricKey] Input GT: [gt_convert_to_bytestring] GT is_one=0, is_zero=0
+[gt_convert_to_bytestring] Serialized 576 bytes
+(627CEDC9A012C465C43FB60562E611CDA7EF523FD3C2A8F62CA95DD3391A6DE38A709DB2F391F354A14B9B6DC197A40285A5779317986E16553127F1356712D191FA5E53F3551280ADCE0FDB976F938BBD46782D2E3FF4CEA98AE31FDE40A00CCCA52BAD7CE56EB428F486E495A85886799C80F1654E0E37FB60B7241BA802AD28BBC30CF4581E410536D76535DB511467C377737FF6114959C9950A8D80D6F6B6D56C11F29CD0F89B509BB7D6B7395E009173811CDC439A9B9E3ECECD0F370F58A5185E5AE0D6FA7E1EDDA0F1DD6D516DB95CF377131BAE5B7681583363AC84C1D623F2B8B403D557181BC1F57DEF02FD2583286B994A410E15D9CBF036A544B8E1E01B7DB29795B62ED48B477568272187824C3048ACAE47CB0D92E6050008B1248F5765B1EC3D58178229FBA3A29F4CEE566143F17C9551875F45C5A22435510ABB6551B3325D1066D9DFD2D86C15D0EE7C907AA34CD88FFBAFD116A98D7497F606C95E0C6297C3EE938506E519A054396D19D9AB531F8D499E89B96D39052B6B72C7538B0B9EF58315E0C959D5271CEFB3B3451561B8D4A0A53EED927E546DC4B8EC081CA620D2EE0A2E0C25240F0F891D9AB9A04722B32F6765FD8356275CA46EC728C7AF4349BDD3ADE877A0411CCE2B861825BFC392B54B2595664502F04EFAD3CD1953B223308845D7B3FD7A73E449FAF11D01CA210A5DC34DABE78E36DC4466A7C5BBB3360F1A8E607D630B0D37A8A6EC8BAB4B02693BA6BC2757AD65C61D1A76FD8D7AEEE352067B4423D7E7A5089AC53DC9558EDDACCB6C4E0C10)
+[gt_convert_to_bytestring] GT is_one=0, is_zero=0
+[gt_convert_to_bytestring] Serialized 576 bytes
+[GT HASH DEBUG] GT serialization size: 580 bytes
+[GT HASH DEBUG] GT serialized hex (first 128 chars): B4B20240627CEDC9A012C465C43FB60562E611CDA7EF523FD3C2A8F62CA95DD3391A6DE38A709DB2F391F354A14B9B6DC197A40285A5779317986E16553127F1
+[GT HASH DEBUG] Requesting keyLen: 32 bytes
+[GT HASH DEBUG] First SHA256 hash output: 113DA6E3D02FAE395EFE31265B2A46C3EB5331DD67EC3CD3F5C89E835511DEA6
+[GT HASH DEBUG] Final derived key (hex): 113DA6E3D02FAE395EFE31265B2A46C3EB5331DD67EC3CD3F5C89E835511DEA6
+[hashToSymmetricKey] Output key (hex): 113DA6E3D02FAE395EFE31265B2A46C3EB5331DD67EC3CD3F5C89E835511DEA6
+[PRNG INIT] Entropy (first 16 bytes): 113da6e3d02fae395efe31265b2a46c3
+[PRNG INIT] Nonce (16 bytes): ec756a5b39d0e2f79705ca30d7da1362
+[CTR-DRBG update_internal #0] Key (first 16 bytes): 8207795bcda0927cd7cac039c4eb677b
+[CTR-DRBG update_internal #0] Counter: 2fe92010466201c53565be736565b28f (reseed_counter=0)
+[PRNG INIT] Initial Key (first 16 bytes): 8207795bcda0927cd7cac039c4eb677b
+[PRNG INIT] Initial Counter: 2fe92010466201c53565be736565b28f (reseed_counter=1)
+[CTR-DRBG generate block #0] Counter after increment: 2fe92010466201c53565be736565b290
+[CTR-DRBG generate block #0] Generated 16 bytes: 33859bd6bdf525c5af26fb88e72ab68b
+[CTR-DRBG generate block #1] Counter after increment: 2fe92010466201c53565be736565b291
+[CTR-DRBG generate block #1] Generated 16 bytes: 0a09c1a301ac3a2c3a9a5aa33b802153
+[CTR-DRBG generate block #2] Counter after increment: 2fe92010466201c53565be736565b292
+[CTR-DRBG generate block #2] Generated 16 bytes: 80c8002311620702ff48612d84830265
+[CTR-DRBG generate block #3] Counter after increment: 2fe92010466201c53565be736565b293
+[CTR-DRBG generate block #3] Generated 16 bytes: 8ddc104f5bafeb368b961ad7b94475bc
+[CTR-DRBG update_internal #1] Key (first 16 bytes): 7bd2c10578ffd5c4deb919271eeae93f
+[CTR-DRBG update_internal #1] Counter: 05f7441c6bffa614fb4917748e39e255 (reseed_counter=1)
+[PRNG DEBUG] Generated 64 random bytes: 33859bd6bdf525c5af26fb88e72ab68b...
+[CREATE_POLICY] Call #2, input='((one or two) and three)'
+[LEAF_NODE] Processing 'one', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'two', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[LEAF_NODE] Processing 'three', current count=0
+[LEAF_NODE] First occurrence, set count to 1, index=0
+[DRIVER] Setting duplicate info: attr_count.size()=3, attr_dup.size()=0
+[DRIVER]   attr_count['one'] = 1
+[DRIVER]   attr_count['three'] = 1
+[DRIVER]   attr_count['two'] = 1
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+[ZPOLICY] Before canonicalize: ((one or two) and three)
+[ZPOLICY] Root node type:  and , children count: 2
+[ZPOLICY]   Child[0]: 
+[ZPOLICY]   Child[1]: three
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+[ZPOLICY] After canonicalize: ((one or two) and three)
+[ZPOLICY] After canonicalization - children count: 2
+[ZPOLICY]   Child[0]: 
+[ZPOLICY]   Child[1]: three
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=3, returned='(one or two)'
+[TOSTRING] nodeType=2, returned='((one or two) and three)'
+DEBUG setHeader(uid): uid_set_extern = true, uid first 8 bytes: 00 5f 51 cf d4 af 82 d4
+[PRNG INIT] Entropy (first 16 bytes): 005f51cfd4af82d49682f63a27086d6c
+[PRNG INIT] Nonce (16 bytes): eb586888d0cb50ae52fa057613787df6
+[CTR-DRBG update_internal #2] Key (first 16 bytes): 8480895ce0a0b57e1c40d65b2618f6ff
+[CTR-DRBG update_internal #2] Counter: c560eb980b23e1e759748cf6796f2e41 (reseed_counter=0)
+[PRNG INIT] Initial Key (first 16 bytes): 8480895ce0a0b57e1c40d65b2618f6ff
+[PRNG INIT] Initial Counter: c560eb980b23e1e759748cf6796f2e41 (reseed_counter=1)
+[COMPILE-TIME] BP_WITH_MCL is DEFINED
+[CTR-DRBG generate block #4] Counter after increment: c560eb980b23e1e759748cf6796f2e42
+[CTR-DRBG generate block #4] Generated 16 bytes: 511c763446b6449c20759329c5216d56
+[CTR-DRBG generate block #5] Counter after increment: c560eb980b23e1e759748cf6796f2e43
+[CTR-DRBG generate block #5] Generated 16 bytes: 11fbff0274acf30996556900cb163f93
+[CTR-DRBG update_internal #3] Key (first 16 bytes): 93040ff4146a84ad85ed86dec45d7503
+[CTR-DRBG update_internal #3] Counter: 220365e8ec4b9ec769b62aebc1231135 (reseed_counter=1)
+[PRNG DEBUG] Generated 32 random bytes: 511c763446b6449c20759329c5216d56...
+[ZP::setRandom #0] Got 32 bytes: 511c7634...
+[ZP::setRandom #0] ZP value (before mod): 20061319024802134817780876062430476687123777476447740349753901145633209565851

@@ -1,0 +1,19 @@
+MCL Backend - Final Test Results
+=================================
+Date: October 23, 2025
+
+Test Environment:
+- Curve: BLS12-381 (128-bit security)
+- Backend: MCL (mcl library)
+- Platform: macOS arm64
+
+Critical Fixes Applied:
+1. g2_rand_op() function added to zelement_mcl.cpp
+2. zml_bignum_countbytes() fixed to use mclBnFr_serialize()
+
+=================================
+TEST SUITE RESULTS
+=================================
+
+Running comprehensive CP-ABE test suite...
+❌ FAIL: Three-way AND }

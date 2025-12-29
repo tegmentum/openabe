@@ -1,0 +1,1 @@
+❌ FAIL: Complex nested policy echo  echo Test 4: Three-way AND echo Message 4 ./oabe_enc -s CP -p test -e (one and two and three) -i msg4.txt -o ct4.cpabe

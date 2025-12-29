@@ -1,0 +1,1 @@
+Testing Bug #10 fix - encryption with MCL
