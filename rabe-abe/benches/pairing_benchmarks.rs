@@ -3,7 +3,7 @@
 //! Run with: cargo bench --bench pairing_benchmarks
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use rabe_bls12381::{Fr, G1, G2, Gt, pairing};
+use rabe_bls12381::{Fr, G1, G2, Gt, pairing, multi_pairing};
 use rand::thread_rng;
 
 fn bench_fr_operations(c: &mut Criterion) {
@@ -192,12 +192,20 @@ fn bench_pairing(c: &mut Criterion) {
         bencher.iter(|| pairing(black_box(g1), black_box(g2)))
     });
 
-    // Benchmark multi-pairing (product of pairings)
-    for n in [2, 4, 8, 16].iter() {
+    group.finish();
+}
+
+/// Compare multi_pairing vs individual pairings to quantify optimization
+fn bench_multi_pairing_comparison(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Multi-Pairing Comparison");
+    let mut rng = thread_rng();
+
+    for n in [2, 4, 8, 16, 32].iter() {
         let g1s: Vec<G1> = (0..*n).map(|_| G1::random(&mut rng)).collect();
         let g2s: Vec<G2> = (0..*n).map(|_| G2::random(&mut rng)).collect();
 
-        group.bench_with_input(BenchmarkId::new("product", n), n, |bencher, _| {
+        // Benchmark individual pairings (baseline)
+        group.bench_with_input(BenchmarkId::new("individual", n), n, |bencher, _| {
             bencher.iter(|| {
                 let mut result = pairing(g1s[0], g2s[0]);
                 for i in 1..g1s.len() {
@@ -205,6 +213,11 @@ fn bench_pairing(c: &mut Criterion) {
                 }
                 result
             })
+        });
+
+        // Benchmark multi_pairing (optimized)
+        group.bench_with_input(BenchmarkId::new("multi_pairing", n), n, |bencher, _| {
+            bencher.iter(|| multi_pairing(black_box(&g1s), black_box(&g2s)))
         });
     }
 
@@ -218,6 +231,7 @@ criterion_group!(
     bench_g2_operations,
     bench_gt_operations,
     bench_pairing,
+    bench_multi_pairing_comparison,
 );
 
 criterion_main!(benches);
