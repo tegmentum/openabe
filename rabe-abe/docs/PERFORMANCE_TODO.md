@@ -234,13 +234,37 @@ pub async fn fetch_keys_concurrent(
 
 ## Benchmarking Infrastructure
 
-### Current Gaps
+### ✅ Implemented
 
-1. No systematic benchmarks for different policy sizes
-2. No comparison with other ABE libraries
-3. No profiling data for hotspots
+Criterion benchmarks are available in `benches/`:
 
-### Proposed Benchmark Suite
+```bash
+# Run all benchmarks
+cargo bench
+
+# Run specific benchmark groups
+cargo bench --bench abe_benchmarks -- "Waters"
+cargo bench --bench abe_benchmarks -- "setup"
+cargo bench --bench pairing_benchmarks
+```
+
+Available benchmark groups:
+- **Waters CP-ABE (CPA)**: setup, keygen, encrypt, decrypt (varying policy sizes)
+- **Waters CP-ABE (CCA)**: encrypt, decrypt with CCA wrapper
+- **GPSW KP-ABE**: setup, keygen, encrypt, decrypt
+- **AC17 CP-ABE**: setup, keygen, encrypt, decrypt
+- **BSW CP-ABE**: setup, keygen, encrypt, decrypt
+- **LSSS**: policy parsing, matrix construction
+- **Serialization**: JSON and CBOR encode/decode
+- **Pairing**: single pairing, multi-pairing, MSM operations
+
+### Remaining Gaps
+
+1. No comparison with other ABE libraries (e.g., charm-crypto, rabe)
+2. No profiling data for hotspots (consider flamegraph)
+3. No WASM-specific benchmarks
+
+### Example Usage
 
 ```rust
 // benches/abe_benchmarks.rs
