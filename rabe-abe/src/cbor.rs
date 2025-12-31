@@ -124,17 +124,17 @@ impl Suite {
 
     /// Encode suite to CBOR value
     fn to_cbor(&self) -> Value {
-        let mut map: CborMap = Vec::new();
+        let mut map: CborMap = Vec::with_capacity(3);
         map_insert(&mut map, 0, Value::Text(self.scheme_id.clone()));
 
         // Curve info
-        let mut curve_map: CborMap = Vec::new();
+        let mut curve_map: CborMap = Vec::with_capacity(2);
         map_insert(&mut curve_map, 0, Value::Text(self.curve_id.clone()));
         map_insert(&mut curve_map, 1, Value::Integer(self.security_level.into()));
         map_insert(&mut map, 1, Value::Map(curve_map));
 
         // GE encoding
-        let mut ge_map: CborMap = Vec::new();
+        let mut ge_map: CborMap = Vec::with_capacity(3);
         map_insert(&mut ge_map, 0, Value::Integer(self.ge_encoding.into()));
         map_insert(&mut ge_map, 1, Value::Integer(self.endianness.into()));
         map_insert(&mut ge_map, 2, Value::Bool(self.subgroup_check));
@@ -329,33 +329,38 @@ fn rpn_to_policy(tokens: &[Value], attr_list: &[String]) -> Result<PolicyNode, A
 // ============================================================================
 
 fn encode_group_elems(elems: &[Vec<u8>]) -> Value {
-    Value::Array(elems.iter().map(|e| Value::Bytes(e.clone())).collect())
+    let mut arr = Vec::with_capacity(elems.len());
+    for e in elems {
+        arr.push(Value::Bytes(e.clone()));
+    }
+    Value::Array(arr)
 }
 
 fn decode_group_elems(value: &Value) -> Result<Vec<Vec<u8>>, AbeError> {
     let arr = value.as_array()
         .ok_or_else(|| AbeError::DecryptError("GroupElems must be array".to_string()))?;
-    arr.iter()
-        .map(|v| {
-            v.as_bytes()
-                .map(|b| b.to_vec())
-                .ok_or_else(|| AbeError::DecryptError("GroupElem must be bytes".to_string()))
-        })
-        .collect()
+    let mut result = Vec::with_capacity(arr.len());
+    for v in arr {
+        let bytes = v.as_bytes()
+            .ok_or_else(|| AbeError::DecryptError("GroupElem must be bytes".to_string()))?;
+        result.push(bytes.to_vec());
+    }
+    Ok(result)
 }
 
 fn encode_attr_set(attrs: &[String]) -> Value {
     let mut sorted_attrs: Vec<_> = attrs.to_vec();
     sorted_attrs.sort();
 
-    let attr_array: Vec<Value> = sorted_attrs.iter().map(|a| {
-        let mut attr_map: CborMap = Vec::new();
+    let mut attr_array = Vec::with_capacity(sorted_attrs.len());
+    for a in &sorted_attrs {
+        let mut attr_map: CborMap = Vec::with_capacity(2);
         map_insert(&mut attr_map, 0, Value::Integer(0.into())); // type = STRING
         map_insert(&mut attr_map, 1, Value::Text(a.clone()));
-        Value::Map(attr_map)
-    }).collect();
+        attr_array.push(Value::Map(attr_map));
+    }
 
-    let mut map: CborMap = Vec::new();
+    let mut map: CborMap = Vec::with_capacity(1);
     map_insert(&mut map, 0, Value::Array(attr_array));
     Value::Map(map)
 }
@@ -389,19 +394,19 @@ pub fn encode_mpk(mpk: &Mpk) -> Result<Vec<u8>, AbeError> {
     let suite = Suite::default();
 
     // Collect group elements: g1, g2, g1a, g2alpha, egg_alpha, k
-    let elems = vec![
-        mpk.g1.into_bytes(),
-        mpk.g2.into_bytes(),
-        mpk.g1a.into_bytes(),
-        mpk.g2alpha.into_bytes(),
-        mpk.egg_alpha.into_bytes(),
-        mpk.k.clone(),
-    ];
+    // Pre-allocate with known size: 6 elements
+    let mut elems = Vec::with_capacity(6);
+    elems.push(mpk.g1.into_bytes());
+    elems.push(mpk.g2.into_bytes());
+    elems.push(mpk.g1a.into_bytes());
+    elems.push(mpk.g2alpha.into_bytes());
+    elems.push(mpk.egg_alpha.into_bytes());
+    elems.push(mpk.k.clone());
 
-    let mut body: CborMap = Vec::new();
+    let mut body: CborMap = Vec::with_capacity(1);
     map_insert(&mut body, 0, encode_group_elems(&elems));
 
-    let mut item: CborMap = Vec::new();
+    let mut item: CborMap = Vec::with_capacity(4);
     map_insert(&mut item, 0, Value::Integer(kind::MPK.into()));
     map_insert(&mut item, 1, suite.to_cbor());
     map_insert(&mut item, 2, Value::Integer(ABE_CBOR_VERSION.into()));
@@ -409,7 +414,8 @@ pub fn encode_mpk(mpk: &Mpk) -> Result<Vec<u8>, AbeError> {
 
     let tagged = Value::Tag(ABE_CBOR_TAG, Box::new(Value::Map(item)));
 
-    let mut output = Vec::new();
+    // Pre-allocate output buffer: ~1KB for typical MPK
+    let mut output = Vec::with_capacity(1024);
     ciborium::into_writer(&tagged, &mut output)
         .map_err(|e| AbeError::EncryptError(format!("CBOR encode error: {}", e)))?;
 
@@ -474,15 +480,15 @@ pub fn decode_mpk(data: &[u8]) -> Result<Mpk, AbeError> {
 pub fn encode_msk(msk: &Msk) -> Result<Vec<u8>, AbeError> {
     let suite = Suite::default();
 
-    let elems = vec![
-        msk.alpha.into_bytes(),
-        msk.g2a.into_bytes(),
-    ];
+    // Pre-allocate for 2 elements
+    let mut elems = Vec::with_capacity(2);
+    elems.push(msk.alpha.into_bytes());
+    elems.push(msk.g2a.into_bytes());
 
-    let mut body: CborMap = Vec::new();
+    let mut body: CborMap = Vec::with_capacity(1);
     map_insert(&mut body, 0, encode_group_elems(&elems));
 
-    let mut item: CborMap = Vec::new();
+    let mut item: CborMap = Vec::with_capacity(4);
     map_insert(&mut item, 0, Value::Integer(kind::MSK.into()));
     map_insert(&mut item, 1, suite.to_cbor());
     map_insert(&mut item, 2, Value::Integer(ABE_CBOR_VERSION.into()));
@@ -490,7 +496,8 @@ pub fn encode_msk(msk: &Msk) -> Result<Vec<u8>, AbeError> {
 
     let tagged = Value::Tag(ABE_CBOR_TAG, Box::new(Value::Map(item)));
 
-    let mut output = Vec::new();
+    // Pre-allocate output buffer: ~256 bytes for typical MSK
+    let mut output = Vec::with_capacity(256);
     ciborium::into_writer(&tagged, &mut output)
         .map_err(|e| AbeError::EncryptError(format!("CBOR encode error: {}", e)))?;
 
@@ -548,13 +555,13 @@ pub fn decode_msk(data: &[u8]) -> Result<Msk, AbeError> {
 pub fn encode_sk(sk: &SecretKey) -> Result<Vec<u8>, AbeError> {
     let suite = Suite::default();
 
-    let mut elems = vec![
-        sk.k.into_bytes(),
-        sk.l.into_bytes(),
-    ];
-
     let mut sorted_attrs: Vec<_> = sk.attributes.clone();
     sorted_attrs.sort();
+
+    // Pre-allocate: 2 fixed elements + 1 per attribute
+    let mut elems = Vec::with_capacity(2 + sorted_attrs.len());
+    elems.push(sk.k.into_bytes());
+    elems.push(sk.l.into_bytes());
 
     for attr in &sorted_attrs {
         if let Some(kx) = sk.kx.get(attr) {
@@ -562,11 +569,11 @@ pub fn encode_sk(sk: &SecretKey) -> Result<Vec<u8>, AbeError> {
         }
     }
 
-    let mut body: CborMap = Vec::new();
+    let mut body: CborMap = Vec::with_capacity(2);
     map_insert(&mut body, 0, encode_group_elems(&elems));
     map_insert(&mut body, 1, encode_attr_set(&sorted_attrs));
 
-    let mut item: CborMap = Vec::new();
+    let mut item: CborMap = Vec::with_capacity(4);
     map_insert(&mut item, 0, Value::Integer(kind::SK.into()));
     map_insert(&mut item, 1, suite.to_cbor());
     map_insert(&mut item, 2, Value::Integer(ABE_CBOR_VERSION.into()));
@@ -574,7 +581,8 @@ pub fn encode_sk(sk: &SecretKey) -> Result<Vec<u8>, AbeError> {
 
     let tagged = Value::Tag(ABE_CBOR_TAG, Box::new(Value::Map(item)));
 
-    let mut output = Vec::new();
+    // Pre-allocate: ~256 bytes base + ~100 bytes per attribute
+    let mut output = Vec::with_capacity(256 + sorted_attrs.len() * 100);
     ciborium::into_writer(&tagged, &mut output)
         .map_err(|e| AbeError::EncryptError(format!("CBOR encode error: {}", e)))?;
 
@@ -649,13 +657,13 @@ pub fn encode_ct(ct: &Ciphertext) -> Result<Vec<u8>, AbeError> {
     let mut attr_list = Vec::new();
     let rpn_tokens = policy_to_rpn(&policy, &mut attr_list);
 
-    let mut elems = vec![
-        ct.c.into_bytes(),
-        ct.c_prime.into_bytes(),
-    ];
-
     let mut sorted_attrs: Vec<_> = attr_list.clone();
     sorted_attrs.sort();
+
+    // Pre-allocate: 2 fixed elements + 2 per attribute (c and d)
+    let mut elems = Vec::with_capacity(2 + sorted_attrs.len() * 2);
+    elems.push(ct.c.into_bytes());
+    elems.push(ct.c_prime.into_bytes());
 
     for attr in &sorted_attrs {
         if let Some(comp) = ct.components.get(attr) {
@@ -664,16 +672,16 @@ pub fn encode_ct(ct: &Ciphertext) -> Result<Vec<u8>, AbeError> {
         }
     }
 
-    let mut policy_map: CborMap = Vec::new();
+    let mut policy_map: CborMap = Vec::with_capacity(2);
     map_insert(&mut policy_map, 0, Value::Integer(policy_encoding::BOOL_AST.into()));
     map_insert(&mut policy_map, 1, Value::Array(rpn_tokens));
 
-    let mut body: CborMap = Vec::new();
+    let mut body: CborMap = Vec::with_capacity(3);
     map_insert(&mut body, 0, encode_group_elems(&elems));
     map_insert(&mut body, 1, Value::Map(policy_map));
     map_insert(&mut body, 2, encode_attr_set(&sorted_attrs));
 
-    let mut item: CborMap = Vec::new();
+    let mut item: CborMap = Vec::with_capacity(4);
     map_insert(&mut item, 0, Value::Integer(kind::CT.into()));
     map_insert(&mut item, 1, suite.to_cbor());
     map_insert(&mut item, 2, Value::Integer(ABE_CBOR_VERSION.into()));
@@ -681,7 +689,8 @@ pub fn encode_ct(ct: &Ciphertext) -> Result<Vec<u8>, AbeError> {
 
     let tagged = Value::Tag(ABE_CBOR_TAG, Box::new(Value::Map(item)));
 
-    let mut output = Vec::new();
+    // Pre-allocate: ~1KB base + ~200 bytes per attribute (G1 + G2)
+    let mut output = Vec::with_capacity(1024 + sorted_attrs.len() * 200);
     ciborium::into_writer(&tagged, &mut output)
         .map_err(|e| AbeError::EncryptError(format!("CBOR encode error: {}", e)))?;
 
@@ -772,12 +781,12 @@ pub fn encode_cca_ct(ct: &CcaCiphertext) -> Result<Vec<u8>, AbeError> {
 
     let cpa_cbor = encode_ct(&ct.cpa_ct)?;
 
-    let mut body: CborMap = Vec::new();
-    map_insert(&mut body, 0, Value::Bytes(cpa_cbor));
+    let mut body: CborMap = Vec::with_capacity(3);
+    map_insert(&mut body, 0, Value::Bytes(cpa_cbor.clone()));
     map_insert(&mut body, 1, Value::Bytes(ct.encrypted_m.clone()));
     map_insert(&mut body, 2, Value::Bytes(ct.uid.to_vec()));
 
-    let mut item: CborMap = Vec::new();
+    let mut item: CborMap = Vec::with_capacity(4);
     map_insert(&mut item, 0, Value::Integer(kind::CT.into()));
     map_insert(&mut item, 1, suite.to_cbor());
     map_insert(&mut item, 2, Value::Integer(ABE_CBOR_VERSION.into()));
@@ -785,7 +794,8 @@ pub fn encode_cca_ct(ct: &CcaCiphertext) -> Result<Vec<u8>, AbeError> {
 
     let tagged = Value::Tag(ABE_CBOR_TAG, Box::new(Value::Map(item)));
 
-    let mut output = Vec::new();
+    // Pre-allocate based on CPA size + overhead
+    let mut output = Vec::with_capacity(cpa_cbor.len() + 256);
     ciborium::into_writer(&tagged, &mut output)
         .map_err(|e| AbeError::EncryptError(format!("CBOR encode error: {}", e)))?;
 
@@ -852,11 +862,11 @@ pub fn encode_cca_full_ct(ct: &CcaFullCiphertext) -> Result<Vec<u8>, AbeError> {
 
     let cca_cbor = encode_cca_ct(&ct.cca_ct)?;
 
-    let mut body: CborMap = Vec::new();
-    map_insert(&mut body, 0, Value::Bytes(cca_cbor));
+    let mut body: CborMap = Vec::with_capacity(2);
+    map_insert(&mut body, 0, Value::Bytes(cca_cbor.clone()));
     map_insert(&mut body, 1, Value::Bytes(ct.sym_ct.clone()));
 
-    let mut item: CborMap = Vec::new();
+    let mut item: CborMap = Vec::with_capacity(4);
     map_insert(&mut item, 0, Value::Integer(kind::CT.into()));
     map_insert(&mut item, 1, suite.to_cbor());
     map_insert(&mut item, 2, Value::Integer(ABE_CBOR_VERSION.into()));
@@ -864,7 +874,8 @@ pub fn encode_cca_full_ct(ct: &CcaFullCiphertext) -> Result<Vec<u8>, AbeError> {
 
     let tagged = Value::Tag(ABE_CBOR_TAG, Box::new(Value::Map(item)));
 
-    let mut output = Vec::new();
+    // Pre-allocate based on CCA size + payload
+    let mut output = Vec::with_capacity(cca_cbor.len() + ct.sym_ct.len() + 256);
     ciborium::into_writer(&tagged, &mut output)
         .map_err(|e| AbeError::EncryptError(format!("CBOR encode error: {}", e)))?;
 
@@ -916,11 +927,11 @@ pub fn encode_full_ct(ct: &FullCiphertext) -> Result<Vec<u8>, AbeError> {
     let abe_ct: Ciphertext = ct.abe_ct.clone().into();
     let ct_cbor = encode_ct(&abe_ct)?;
 
-    let mut body: CborMap = Vec::new();
-    map_insert(&mut body, 0, Value::Bytes(ct_cbor));
+    let mut body: CborMap = Vec::with_capacity(2);
+    map_insert(&mut body, 0, Value::Bytes(ct_cbor.clone()));
     map_insert(&mut body, 1, Value::Bytes(ct.sym_ct.clone()));
 
-    let mut item: CborMap = Vec::new();
+    let mut item: CborMap = Vec::with_capacity(4);
     map_insert(&mut item, 0, Value::Integer(kind::CT.into()));
     map_insert(&mut item, 1, suite.to_cbor());
     map_insert(&mut item, 2, Value::Integer(ABE_CBOR_VERSION.into()));
@@ -928,7 +939,8 @@ pub fn encode_full_ct(ct: &FullCiphertext) -> Result<Vec<u8>, AbeError> {
 
     let tagged = Value::Tag(ABE_CBOR_TAG, Box::new(Value::Map(item)));
 
-    let mut output = Vec::new();
+    // Pre-allocate based on CT size + payload
+    let mut output = Vec::with_capacity(ct_cbor.len() + ct.sym_ct.len() + 256);
     ciborium::into_writer(&tagged, &mut output)
         .map_err(|e| AbeError::EncryptError(format!("CBOR encode error: {}", e)))?;
 
