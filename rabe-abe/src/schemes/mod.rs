@@ -43,6 +43,8 @@
 //! - `waters_traceable`: Waters '11 with white-box traitor tracing
 //! - `ac17_traceable`: AC17 with white-box traitor tracing
 //! - `dabe_traceable`: DABE with multi-authority white-box traitor tracing
+//! - `gpsw_traceable`: GPSW KP-ABE with white-box traitor tracing
+//! - `threshold_trace`: Threshold authority tracing (t-of-n required to trace)
 //!
 //! ## Trace-and-Revoke ABE
 //!
@@ -63,6 +65,10 @@
 //! - `attribute_expiration`: Attributes with validity periods, auto-expire unless renewed
 //! - `revocable_hibe`: Revocable Hierarchical IBE with tree-based revocation
 //! - `binary_tree_encryption`: Forward-secure encryption with evolving keys
+//!
+//! ## Privacy-Preserving Schemes
+//!
+//! - `hidden_policy`: CP-ABE with hidden access policies (policy privacy)
 
 pub mod bsw;
 pub mod waters;
@@ -85,6 +91,9 @@ pub mod dabe_multihop_pre;
 pub mod waters_traceable;
 pub mod ac17_traceable;
 pub mod dabe_traceable;
+pub mod gpsw_traceable;
+pub mod threshold_trace;
+pub mod hidden_policy;
 pub mod waters_trace_revoke;
 pub mod ac17_trace_revoke;
 pub mod dabe_trace_revoke;
@@ -621,4 +630,54 @@ pub use binary_tree_encryption::{
     decrypt as bte_decrypt,
     current_period as bte_current_period,
     remaining_periods as bte_remaining_periods,
+};
+
+// Re-export GPSW Traceable types
+pub use gpsw_traceable::{
+    TraceableMpk as GpswTraceableMpk,
+    TraceableMsk as GpswTraceableMsk,
+    TracingKey as GpswTracingKey,
+    TraceableSecretKey as GpswTraceableSecretKey,
+    IdentityProof as GpswIdentityProof,
+    traceable_setup as gpsw_traceable_setup,
+    traceable_keygen as gpsw_traceable_keygen,
+    trace_key as gpsw_trace_key,
+    verify_key_origin as gpsw_verify_key_origin,
+    encrypt as gpsw_traceable_encrypt,
+    decrypt as gpsw_traceable_decrypt,
+};
+
+// Re-export Threshold Tracing types
+pub use threshold_trace::{
+    ThresholdConfig,
+    ThresholdTracingParams,
+    AuthorityVerificationKey,
+    TracingKeyShare,
+    CombinedTracingKey,
+    PartialTraceResult,
+    ThresholdIdentityCommitment,
+    threshold_setup,
+    compute_partial_trace,
+    verify_partial_trace,
+    combine_partial_traces,
+    threshold_trace,
+    combine_shares,
+};
+
+// Re-export Hidden Policy ABE types
+pub use hidden_policy::{
+    HiddenMpk,
+    HiddenMsk,
+    AttributeToken,
+    HiddenSecretKey,
+    HiddenCtComponent,
+    HiddenCiphertext,
+    HiddenFullCiphertext,
+    PolicyVisibility,
+    setup as hidden_policy_setup,
+    keygen as hidden_policy_keygen,
+    encrypt as hidden_policy_encrypt,
+    decrypt as hidden_policy_decrypt,
+    can_potentially_decrypt,
+    encrypt_with_visibility,
 };
