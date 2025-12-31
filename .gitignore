@@ -27,8 +27,8 @@ BUILD*.md
 CP-*.md
 EXCEPTION-*.md
 IMPLEMENTATION-*.md
-POLICY-*.md
-REFACTORING-*.md
+POLICY*.md
+REFACTORING*.md
 REGRESSION-*.md
 PKSIG-*.md
 USE-*.md
@@ -41,6 +41,7 @@ COMPREHENSIVE-*.md
 DOCUMENTATION-*.md
 BENCHMARK*.md
 BLS12-*.md
+BUG*.md
 BUGS-*.md
 CBOR*.md
 CCA-*.md
@@ -197,6 +198,12 @@ fix-test.txt
 fix-test-decrypted.txt
 bug*.txt
 cli-test.txt
+
+# Development notes and summaries
+*-SUMMARY.txt
+*-RESULTS.md
+deps/relic/*-RESULTS.md
+benchmark_demo.cpp
 
 # Dependency source archives and builds
 deps/gmp/gmp-*.tar.xz
