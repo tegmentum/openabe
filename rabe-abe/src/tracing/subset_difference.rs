@@ -443,7 +443,7 @@ pub fn compute_sd_cover(
 
 /// Compute Steiner tree connecting revoked leaves to root
 fn compute_steiner_tree(
-    params: &SubsetDiffParams,
+    _params: &SubsetDiffParams,
     revoked_leaves: &HashSet<NodeId>,
 ) -> HashSet<NodeId> {
     let mut tree = HashSet::new();
@@ -525,9 +525,9 @@ fn compute_cover_from_steiner(
 
 /// Optimize cover by using subset differences instead of multiple full subtrees
 fn optimize_cover(
-    params: &SubsetDiffParams,
-    cover: &mut Vec<SubsetDiff>,
-    steiner: &HashSet<NodeId>,
+    _params: &SubsetDiffParams,
+    _cover: &mut Vec<SubsetDiff>,
+    _steiner: &HashSet<NodeId>,
 ) {
     // Try to merge adjacent subtrees using subset differences
     // This is a simplified optimization

@@ -144,7 +144,7 @@ pub fn generate_rekey<R: RngCore + CryptoRng>(
 ///
 /// Re-encrypted ciphertext
 pub fn re_encrypt(
-    mpk: &Mpk,
+    _mpk: &Mpk,
     ct: &Ciphertext,
     rk: &ReEncryptionKey,
 ) -> Result<ReEncryptedCiphertext, AbeError> {

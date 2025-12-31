@@ -323,7 +323,7 @@ pub fn generate_renewal<R: RngCore + CryptoRng>(
     new_valid_until: Timestamp,
 ) -> Result<RenewalToken, AbeError> {
     // Get the existing attribute component to extract t
-    let existing = sk.attributes.get(attribute)
+    let _existing = sk.attributes.get(attribute)
         .ok_or_else(|| AbeError::InvalidAttribute(
             format!("Attribute {} not found in key", attribute)
         ))?;

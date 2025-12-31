@@ -670,7 +670,7 @@ pub fn find_satisfying_assignment(
             }
 
             // Compute Lagrange coefficients for the satisfied points
-            let k = *k;
+            let _k = *k;
             let points: Vec<Fr> = satisfied.iter()
                 .map(|(i, _)| Fr::from_u64((*i + 1) as u64))
                 .collect();
@@ -678,7 +678,7 @@ pub fn find_satisfying_assignment(
             let mut all_assignments = Vec::new();
             for (idx, (_, mut assignment)) in satisfied.into_iter().enumerate() {
                 let coeff = lagrange_coefficient(&points, idx);
-                for (attr, c) in &mut assignment {
+                for (_attr, c) in &mut assignment {
                     *c = *c * coeff;
                 }
                 all_assignments.append(&mut assignment);

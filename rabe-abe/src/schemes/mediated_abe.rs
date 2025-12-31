@@ -380,7 +380,7 @@ pub fn mediator_assist<R: RngCore + CryptoRng>(
 
 /// User decrypts with mediator's assistance
 pub fn decrypt_with_mediator(
-    mpk: &Mpk,
+    _mpk: &Mpk,
     user_key: &UserPartialKey,
     mediator_share: &MediatorDecryptionShare,
     ct: &FullCiphertext,

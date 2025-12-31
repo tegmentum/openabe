@@ -267,7 +267,6 @@ pub fn binary_splitting<O: GroupTestOracle>(
     max_tests: usize,
 ) -> GroupTestResult {
     let mut tests_used = 0;
-    let mut defectives = Vec::new();
     let remaining: Vec<UserId> = users.to_vec();
 
     // First test: check if any defectives exist
@@ -340,7 +339,7 @@ pub fn binary_splitting<O: GroupTestOracle>(
         found
     }
 
-    defectives = find_defectives(oracle, &remaining, &mut tests_used, max_tests);
+    let defectives = find_defectives(oracle, &remaining, &mut tests_used, max_tests);
 
     GroupTestResult {
         defectives,

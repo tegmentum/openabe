@@ -236,7 +236,7 @@ pub fn setup<R: RngCore + CryptoRng>(rng: &mut R, depth: usize) -> (PublicKey, S
     let mut node_pks = Vec::with_capacity(depth);
     let mut alphas = Vec::with_capacity(depth);
 
-    for i in 0..depth {
+    for _i in 0..depth {
         let alpha_i = Fr::random(rng);
         alphas.push(alpha_i);
         node_pks.push(g1 * alpha_i);
@@ -410,7 +410,7 @@ pub fn encrypt<R: RngCore + CryptoRng>(
 
 /// Decrypt a message
 pub fn decrypt(
-    pk: &PublicKey,
+    _pk: &PublicKey,
     sk: &SecretKey,
     ct: &FullCiphertext,
 ) -> Result<Vec<u8>, AbeError> {

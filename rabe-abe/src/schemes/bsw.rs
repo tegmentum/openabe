@@ -259,7 +259,7 @@ pub fn decrypt(
     // and then e(C', D) to recover e(g, h)^(alpha * s)
 
     // First, compute e(C', D)
-    let e_c_prime_d = pairing(G1::one(), ct.c_prime) * pairing(G1::one(), sk.d);
+    let _e_c_prime_d = pairing(G1::one(), ct.c_prime) * pairing(G1::one(), sk.d);
     // Note: This is simplified - actual BSW is more complex
 
     // For this simplified implementation, we directly use the stored c value

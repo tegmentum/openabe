@@ -426,7 +426,7 @@ pub fn encrypt<R: RngCore + CryptoRng>(
 
 /// Decrypt a ciphertext
 pub fn decrypt(
-    mpk: &Mpk,
+    _mpk: &Mpk,
     sk: &SecretKey,
     ct: &FullCiphertext,
 ) -> Result<Vec<u8>, AbeError> {

@@ -268,7 +268,7 @@ pub fn traceable_keygen_versioned<R: RngCore + CryptoRng>(
 /// Given a leaked key and the tracing key, identify which user it belongs to.
 /// This requires checking against a list of known users.
 pub fn trace_key(
-    mpk: &TraceableMpk,
+    _mpk: &TraceableMpk,
     tracing_key: &TracingKey,
     leaked_key: &TraceableSecretKey,
     known_users: &[UserId],

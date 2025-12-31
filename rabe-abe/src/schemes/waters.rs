@@ -368,7 +368,7 @@ pub fn encrypt<R: RngCore + CryptoRng>(
 
 /// Decrypt: Decrypt using a secret key (KEM mode - returns symmetric key)
 pub fn decrypt_kem(
-    mpk: &Mpk,
+    _mpk: &Mpk,
     sk: &SecretKey,
     ct: &Ciphertext,
 ) -> Result<[u8; 32], AbeError> {

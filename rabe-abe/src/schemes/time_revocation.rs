@@ -336,7 +336,7 @@ pub fn keygen<R: RngCore + CryptoRng>(
 ///
 /// This should only be called for non-revoked users.
 pub fn generate_key_update(
-    msk: &TimeBasedMsk,
+    _msk: &TimeBasedMsk,
     mpk: &TimeBasedMpk,
     user_id: &str,
     new_period: TimePeriod,
@@ -454,7 +454,7 @@ pub fn encrypt<R: RngCore + CryptoRng>(
 
 /// Decrypt a ciphertext using a time-based secret key
 pub fn decrypt(
-    mpk: &TimeBasedMpk,
+    _mpk: &TimeBasedMpk,
     sk: &TimeBasedSecretKey,
     ct: &FullTimeBasedCiphertext,
 ) -> Result<Vec<u8>, AbeError> {

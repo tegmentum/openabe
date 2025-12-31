@@ -252,7 +252,7 @@ pub fn first_hop_re_encrypt_full(
 pub fn generate_next_hop_rekey<R: RngCore + CryptoRng>(
     rng: &mut R,
     mpk: &Mpk,
-    current_secret: &TargetSecret,
+    _current_secret: &TargetSecret,
     next_target_pk: &TargetPublicKey,
     current_hop_count: usize,
     max_remaining_hops: usize,

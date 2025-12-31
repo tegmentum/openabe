@@ -560,10 +560,10 @@ pub fn derive_decryption_key(
         .find(|cover_node| ancestors.iter().any(|a| a.path == cover_node.path))
         .ok_or_else(|| AbeError::RevocationError("User is revoked".into()))?;
 
-    let update_comp = update.updates.get(&matching_node.path)
+    let _update_comp = update.updates.get(&matching_node.path)
         .ok_or_else(|| AbeError::DecryptError("Missing update component".into()))?;
 
-    let tree_key = sk.tree_keys.get(&matching_node.path)
+    let _tree_key = sk.tree_keys.get(&matching_node.path)
         .ok_or_else(|| AbeError::DecryptError("Missing tree key".into()))?;
 
     // Combine components
@@ -628,7 +628,7 @@ pub fn encrypt<R: RngCore + CryptoRng>(
 
 /// Decrypt using a decryption key
 pub fn decrypt(
-    mpk: &Mpk,
+    _mpk: &Mpk,
     dk: &DecryptionKey,
     ct: &FullCiphertext,
 ) -> Result<Vec<u8>, AbeError> {

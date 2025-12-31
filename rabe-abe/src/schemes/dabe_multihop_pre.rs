@@ -197,7 +197,7 @@ pub fn generate_first_hop_rekey<R: RngCore + CryptoRng>(
 
 /// First hop re-encryption (from original DABE ciphertext)
 pub fn first_hop_re_encrypt(
-    gp: &GlobalParams,
+    _gp: &GlobalParams,
     ct: &Ciphertext,
     rk: &DabeMultiHopReEncryptionKey,
     max_hops: usize,
