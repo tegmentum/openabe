@@ -708,26 +708,26 @@ jobs:
 ## Security Testing Checklist
 
 ### Unit Tests
-- [ ] Constant-time comparison tests
-- [ ] Zeroization verification
-- [ ] Input validation edge cases
-- [ ] Point validation (invalid points)
-- [ ] Integer overflow scenarios
+- [x] Constant-time comparison tests (in `security/constant_time.rs`)
+- [x] Zeroization verification (`tests/crypto_security.rs`)
+- [x] Input validation edge cases (`security/validation.rs`)
+- [x] Point validation (invalid points) (`tests/crypto_security.rs`)
+- [x] Integer overflow scenarios (`security/bounds.rs`)
 
 ### Integration Tests
-- [ ] Full encrypt/decrypt with malformed inputs
+- [x] Full encrypt/decrypt with malformed inputs (`tests/crypto_security.rs`)
 - [ ] Replay attack simulation
-- [ ] Policy satisfaction edge cases
-- [ ] Multi-authority key combination
+- [x] Policy satisfaction edge cases (`tests/crypto_security.rs`)
+- [x] Multi-authority key combination (`tests/dabe_roundtrip.rs`)
 
 ### Fuzzing Campaigns
-- [ ] Deserialization fuzzing
-- [ ] Policy parsing fuzzing
-- [ ] LSSS reconstruction fuzzing
+- [x] Deserialization fuzzing (`fuzz/fuzz_targets/fuzz_cbor_decode.rs`)
+- [x] Policy parsing fuzzing (`fuzz/fuzz_targets/fuzz_policy_parse.rs`)
+- [x] LSSS reconstruction fuzzing (`fuzz/fuzz_targets/fuzz_lsss.rs`)
 
 ### Static Analysis
-- [ ] Clippy with all warnings
-- [ ] cargo-audit for dependencies
+- [x] Clippy with all warnings (style warnings only, no security issues)
+- [x] cargo-audit for dependencies (no vulnerabilities, 2 unmaintained warnings)
 - [ ] cargo-deny for license/security
 
 ---
