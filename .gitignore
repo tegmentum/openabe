@@ -1,5 +1,12 @@
 # OpenABE .gitignore
 
+# Rust build artifacts
+target/
+**/target/
+Cargo.lock
+!rabe-abe/Cargo.lock
+.cargo/
+
 # Investigation and debug session notes
 *-INVESTIGATION*.md
 *-DEBUG*.md
@@ -33,6 +40,27 @@ NEXT-*.md
 COMPREHENSIVE-*.md
 DOCUMENTATION-*.md
 BENCHMARK*.md
+BLS12-*.md
+BUGS-*.md
+CBOR*.md
+CCA-*.md
+CROSS*.md
+DEBUG*.md
+EMSCRIPTEN*.md
+EXCEPTION*.md
+FIX-*.md
+FUNCTIONAL*.md
+INVESTIGATION*.md
+LLVM*.md
+MCL_*.md
+NATIVE_*.md
+OPENABE*.md
+OPENSSL*.md
+PKE_*.md
+RABE_*.md
+STATIC*.md
+WASI*.md
+WASM*.md
 
 # Exception: Keep docs directory documentation
 !docs/**/*.md
@@ -70,12 +98,20 @@ pairing*.log
 
 # Test directories
 benchmark-results-*/
+mcl-benchmark-results-*/
 test-cpabe/
 test-final/
 test-roundtrip/
 test-wasm/
 test-wasm-quick/
+wasm-test/
 cli-wasm/
+cli-wasm-rabe/
+
+# Temporary directories
+root/
+tmpec-*/
+relic-toolkit-*/
 
 # Build artifacts
 *.o
@@ -136,6 +172,31 @@ src/stack.hh
 *.swp
 *~
 .DS_Store
+*.0.7.0-backup
+wasm-rng-test-results.txt
+
+# Standalone test files at root (not in src/)
+/test-*.c
+/test-*.cpp
+/test_*.c
+/test_*.cpp
+!/test-roundtrip.sh
+
+# Compiled test binaries at root
+/test_mcl_order
+/test_policy_canonicalization
+/test_relic_init
+/debug-pksig
+
+# Plain text test files
+plain.txt
+plain2.txt
+e2e-decrypted.txt
+native-decrypted.txt
+fix-test.txt
+fix-test-decrypted.txt
+bug*.txt
+cli-test.txt
 
 # Dependency source archives and builds
 deps/gmp/gmp-*.tar.xz
@@ -152,8 +213,11 @@ deps/relic/build-relic/
 deps/relic/deps/
 deps/relic/benchmark_curves
 deps/relic/test-*
+deps/relic/test_*
+deps/relic/tmpec-*/
 !deps/relic/*.sh
 !deps/relic/*.patch
+!deps/relic/*.c
 
 # Benchmark data
 bench_*.dat
