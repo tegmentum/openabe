@@ -1,0 +1,73 @@
+--- a/src/ep/relic_ep_mul.c
++++ b/src/ep/relic_ep_mul.c
+@@ -498,7 +498,7 @@ void ep_mul_naf(ep_t r, const ep_t p, const bn_t k) {
+ void ep_mul_slide(ep_t r, const ep_t p, const bn_t k) {
+ 	bn_t _k, n;
+ 	ep_t t[1 << (RLC_WIDTH - 1)], q;
+-	uint8_t win[RLC_FP_BITS + 1];
++	uint8_t win[RLC_BN_BITS * 2];
+ 	size_t l;
+
+ 	if (bn_is_zero(k) || ep_is_infty(p)) {
+@@ -539,7 +539,7 @@ void ep_mul_slide(ep_t r, const ep_t p, const bn_t k) {
+ #endif
+
+ 		ep_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS * 2;
+ 		bn_rec_slw(win, &l, _k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+--- a/src/epx/relic_ep2_mul.c
++++ b/src/epx/relic_ep2_mul.c
+@@ -450,7 +450,7 @@ void ep2_mul_naf(ep2_t r, const ep2_t p, const bn_t k) {
+
+ void ep2_mul_slide(ep2_t r, const ep2_t p, const bn_t k) {
+ 	ep2_t t[1 << (RLC_WIDTH - 1)], q;
+-	uint8_t win[RLC_FP_BITS + 1];
++	uint8_t win[RLC_BN_BITS * 2];
+ 	size_t l;
+
+ 	if (bn_is_zero(k) || ep2_is_infty(p)) {
+@@ -484,7 +484,7 @@ void ep2_mul_slide(ep2_t r, const ep2_t p, const bn_t k) {
+ 		ep2_tab(t, q, RLC_WIDTH);
+
+ 		ep2_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS * 2;
+ 		bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+--- a/src/epx/relic_ep3_mul.c
++++ b/src/epx/relic_ep3_mul.c
+@@ -213,7 +213,7 @@ void ep3_mul_naf(ep3_t r, const ep3_t p, const bn_t k) {
+
+ void ep3_mul_slide(ep3_t r, const ep3_t p, const bn_t k) {
+ 	ep3_t t[1 << (RLC_WIDTH - 1)], q;
+-	uint8_t win[RLC_FP_BITS + 1];
++	uint8_t win[RLC_BN_BITS * 2];
+ 	size_t l;
+
+ 	if (bn_is_zero(k) || ep3_is_infty(p)) {
+--- a/src/epx/relic_ep4_mul.c
++++ b/src/epx/relic_ep4_mul.c
+@@ -213,7 +213,7 @@ void ep4_mul_naf(ep4_t r, const ep4_t p, const bn_t k) {
+
+ void ep4_mul_slide(ep4_t r, const ep4_t p, const bn_t k) {
+ 	ep4_t t[1 << (RLC_WIDTH - 1)], q;
+-	uint8_t win[RLC_FP_BITS + 1];
++	uint8_t win[RLC_BN_BITS * 2];
+ 	size_t l;
+
+ 	if (bn_is_zero(k) || ep4_is_infty(p)) {
+--- a/src/epx/relic_ep8_mul.c
++++ b/src/epx/relic_ep8_mul.c
+@@ -217,7 +217,7 @@ void ep8_mul_naf(ep8_t r, const ep8_t p, const bn_t k) {
+
+ void ep8_mul_slide(ep8_t r, const ep8_t p, const bn_t k) {
+ 	ep8_t t[1 << (RLC_WIDTH - 1)], q;
+-	uint8_t win[RLC_FP_BITS + 1];
++	uint8_t win[RLC_BN_BITS * 2];
+ 	size_t l;
+
+ 	if (bn_is_zero(k) || ep8_is_infty(p)) {

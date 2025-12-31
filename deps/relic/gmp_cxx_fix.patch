@@ -1,0 +1,23 @@
+diff --git a/include/relic_types.h b/include/relic_types.h
+index 1234567..abcdefg 100644
+--- a/include/relic_types.h
++++ b/include/relic_types.h
+@@ -37,9 +37,18 @@
+ #include <stdio.h>
+ #include <inttypes.h>
+
++// Close extern "C" before including GMP to avoid C++ linkage conflicts
++#ifdef __cplusplus
++}
++#endif
++
+ #if ARITH == GMP || ARITH == GMP_SEC
+ #include <gmp.h>
+ #endif
++
++#ifdef __cplusplus
++extern "C" {
++#endif
+
+ /*============================================================================*/
+ /* Constant definitions                                                       */

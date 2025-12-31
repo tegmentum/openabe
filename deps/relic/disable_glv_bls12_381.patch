@@ -1,0 +1,71 @@
+--- a/src/ep/relic_ep_mul.c
++++ b/src/ep/relic_ep_mul.c
+@@ -37,7 +37,13 @@
+ 
+ /* Private definitions                                                       */
+ /*============================================================================*/
+-
++
++/**
++ * Disable GLV endomorphism for BLS12-381 (FP_PRIME=381) due to buffer overflow
++ * issues with scalar decomposition. The GLV optimization in RELIC 0.7.0 generates
++ * scalars larger than RLC_FP_BITS for BLS12-381, causing buffer overflows.
++ * See: OpenABE Bug #19
++ */
+ #if defined(EP_ENDOM)
+ 
+ /**
+@@ -143,7 +149,7 @@ static void ep_mul_naf_imp(ep_t r, const ep_t p, const bn_t k) {
+ 	}
+ }
+ 
+-#endif /* EP_ENDOM */
++#endif /* EP_ENDOM */
+ 
+ #if defined(EP_PLAIN) || defined(EP_SUPER)
+ 
+@@ -207,7 +213,12 @@ static void ep_mul_reg_imp(ep_t r, const ep_t p, const bn_t k) {
+ }
+ #endif
+ 
+-#if defined(EP_ENDOM)
++/**
++ * Disable GLV for BLS12-381: The endomorphism-based scalar multiplication
++ * creates scalars exceeding buffer size, causing runtime errors.
++ * Fall back to non-endomorphism methods which work correctly.
++ */
++#if defined(EP_ENDOM) && FP_PRIME != 381
+ 
+ static void ep_mul_reg_glv(ep_t r, const ep_t p, const bn_t k) {
+ 	int8_t reg[2][RLC_FP_BITS + 1], s[2], b[2], c0, c1, n0, n1;
+@@ -343,7 +354,7 @@ static void ep_mul_reg_glv(ep_t r, const ep_t p, const bn_t k) {
+ 	}
+ }
+ 
+-#endif /* EP_ENDOM */
++#endif /* EP_ENDOM && FP_PRIME != 381 */
+ 
+ /*============================================================================*/
+ /* Public definitions                                                         */
+@@ -647,7 +658,7 @@ void ep_mul_basic(ep_t r, const ep_t p, const bn_t k) {
+ void ep_mul_slide(ep_t r, const ep_t p, const bn_t k) {
+ 	ep_t t[1 << (RLC_WIDTH - 1)], q;
+ 	uint8_t win[RLC_FP_BITS + 1];
+-	size_t l;
++	size_t l;
+ 
+ 	ep_null(q);
+ 
+@@ -669,7 +680,11 @@ void ep_mul_slide(ep_t r, const ep_t p, const bn_t k) {
+ void ep_mul_monty(ep_t r, const ep_t p, const bn_t k) {
+ 	ep_t t[2];
+ 
+-#if defined(EP_ENDOM)
++	/**
++	 * Disable GLV for BLS12-381 (FP_PRIME=381) - use standard Montgomery ladder
++	 * instead of endomorphism-based multiplication to avoid buffer overflows.
++	 */
++#if defined(EP_ENDOM) && FP_PRIME != 381
+ 	if (ep_curve_is_endom()) {
+ 		if (bn_is_even(k)) {
+ 			ep_mul_reg_glv(r, p, k);

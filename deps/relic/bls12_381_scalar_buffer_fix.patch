@@ -1,0 +1,152 @@
+diff --git a/src/ed/relic_ed_mul.c b/src/ed/relic_ed_mul.c
+index 1234567..abcdefg 100644
+--- a/src/ed/relic_ed_mul.c
++++ b/src/ed/relic_ed_mul.c
+@@ -288,7 +288,7 @@ void ed_mul_slw(ed_t r, const ed_t p, const bn_t k) {
+ #endif
+ 
+ 		ed_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, _k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+diff --git a/src/ed/relic_ed_mul_fix.c b/src/ed/relic_ed_mul_fix.c
+index 1234567..abcdefg 100644
+--- a/src/ed/relic_ed_mul_fix.c
++++ b/src/ed/relic_ed_mul_fix.c
+@@ -52,7 +52,7 @@ void ed_mul_pre_glv(ed_t *t, const ed_t p) {
+ 	if (ed_curve_is_endom()) {
+ 		_k = &k;
+ 		bn_rec_frb(_k, 4, p->x, order, ed_curve_get_beta(), ed_curve_is_kbltz());
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, _k[0], RLC_DEPTH);
+ 		for (int i = 0; i < l; i++) {
+ 			ed_set_infty(t[i]);
+diff --git a/src/ep/relic_ep_mul.c b/src/ep/relic_ep_mul.c
+index 1234567..abcdefg 100644
+--- a/src/ep/relic_ep_mul.c
++++ b/src/ep/relic_ep_mul.c
+@@ -260,9 +260,9 @@ void ep_mul_slw(ep_t r, const ep_t p, const bn_t k) {
+ #endif
+ 
+ 		ep_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, _k, RLC_WIDTH);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+ 				ep_dbl(q, q);
+@@ -539,7 +539,7 @@ void ep_mul_monty(ep_t r, const ep_t p, const bn_t k) {
+ #endif
+ 
+ 		ep_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+diff --git a/src/ep/relic_ep_mul_fix.c b/src/ep/relic_ep_mul_fix.c
+index 1234567..abcdefg 100644
+--- a/src/ep/relic_ep_mul_fix.c
++++ b/src/ep/relic_ep_mul_fix.c
+@@ -51,7 +51,7 @@ void ep_mul_pre_glv(ep_t *t, const ep_t p) {
+ 	if (ep_curve_is_endom()) {
+ 		_k = &k;
+ 		bn_rec_frb(_k, 4, p->x, order, ep_curve_get_beta(), ep_curve_is_kbltz());
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, _k[0], RLC_DEPTH);
+ 		for (int i = 0; i < l; i++) {
+ 			ep_set_infty(t[i]);
+diff --git a/src/epx/relic_ep2_mul.c b/src/epx/relic_ep2_mul.c
+index 1234567..abcdefg 100644
+--- a/src/epx/relic_ep2_mul.c
++++ b/src/epx/relic_ep2_mul.c
+@@ -485,7 +485,7 @@ void ep2_mul_slw(ep2_t r, const ep2_t p, const bn_t k) {
+ #endif
+ 
+ 		ep2_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+diff --git a/src/epx/relic_ep3_mul.c b/src/epx/relic_ep3_mul.c
+index 1234567..abcdefg 100644
+--- a/src/epx/relic_ep3_mul.c
++++ b/src/epx/relic_ep3_mul.c
+@@ -137,7 +137,7 @@ void ep3_mul_slw(ep3_t r, const ep3_t p, const bn_t k) {
+ #endif
+ 
+ 		ep3_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+@@ -244,7 +244,7 @@ void ep3_mul_basic(ep3_t r, const ep3_t p, const bn_t k) {
+ #endif
+ 
+ 		ep3_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+@@ -560,7 +560,7 @@ void ep3_mul_monty(ep3_t r, const ep3_t p, const bn_t k) {
+ #endif
+ 
+ 		ep3_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+diff --git a/src/epx/relic_ep4_mul.c b/src/epx/relic_ep4_mul.c
+index 1234567..abcdefg 100644
+--- a/src/epx/relic_ep4_mul.c
++++ b/src/epx/relic_ep4_mul.c
+@@ -229,7 +229,7 @@ void ep4_mul_slw(ep4_t r, const ep4_t p, const bn_t k) {
+ #endif
+ 
+ 			ep4_set_infty(q);
+-			l = RLC_FP_BITS + 1;
++			l = RLC_BN_BITS + 1;
+ 			bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 			for (size_t i = 0; i < l; i++) {
+ 				if (win[i] == 0) {
+@@ -557,7 +557,7 @@ void ep4_mul_monty(ep4_t r, const ep4_t p, const bn_t k) {
+ #endif
+ 
+ 		ep4_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {
+diff --git a/src/epx/relic_ep8_mul.c b/src/epx/relic_ep8_mul.c
+index 1234567..abcdefg 100644
+--- a/src/epx/relic_ep8_mul.c
++++ b/src/epx/relic_ep8_mul.c
+@@ -176,7 +176,7 @@ void ep8_mul_slw(ep8_t r, const ep8_t p, const bn_t k) {
+ #endif
+ 
+ 			ep8_set_infty(q);
+-			l = RLC_FP_BITS + 1;
++			l = RLC_BN_BITS + 1;
+ 			bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 			for (size_t i = 0; i < l; i++) {
+ 				if (win[i] == 0) {
+@@ -504,7 +504,7 @@ void ep8_mul_monty(ep8_t r, const ep8_t p, const bn_t k) {
+ #endif
+ 
+ 		ep8_set_infty(q);
+-		l = RLC_FP_BITS + 1;
++		l = RLC_BN_BITS + 1;
+ 		bn_rec_slw(win, &l, k, RLC_WIDTH);
+ 		for (size_t i = 0; i < l; i++) {
+ 			if (win[i] == 0) {

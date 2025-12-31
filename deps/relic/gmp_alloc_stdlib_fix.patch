@@ -1,0 +1,36 @@
+diff --git a/src/low/gmp/relic_bn_add_low.c b/src/low/gmp/relic_bn_add_low.c
+index 1234567..abcdefg 100644
+--- a/src/low/gmp/relic_bn_add_low.c
++++ b/src/low/gmp/relic_bn_add_low.c
+@@ -34,6 +34,7 @@
+  */
+
+ #include <gmp.h>
++#include <stdlib.h>
+
+ #include "relic_bn.h"
+ #include "relic_bn_low.h"
+diff --git a/src/low/gmp/relic_bn_mul_low.c b/src/low/gmp/relic_bn_mul_low.c
+index 1234567..abcdefg 100644
+--- a/src/low/gmp/relic_bn_mul_low.c
++++ b/src/low/gmp/relic_bn_mul_low.c
+@@ -34,6 +34,7 @@
+  */
+
+ #include <gmp.h>
++#include <stdlib.h>
+
+ #include "relic_bn.h"
+ #include "relic_bn_low.h"
+diff --git a/src/low/gmp/relic_bn_shift_low.c b/src/low/gmp/relic_bn_shift_low.c
+index 1234567..abcdefg 100644
+--- a/src/low/gmp/relic_bn_shift_low.c
++++ b/src/low/gmp/relic_bn_shift_low.c
+@@ -34,6 +34,7 @@
+  */
+
+ #include <gmp.h>
++#include <stdlib.h>
+
+ #include "relic_bn.h"
+ #include "relic_bn_low.h"
