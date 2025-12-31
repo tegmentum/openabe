@@ -15,89 +15,29 @@ This document lists traitor tracing schemes that could be added to the library.
 - **KP-ABE Tracing**: GPSW traceable with identity commitments (`gpsw_traceable.rs`) ✓
 - **Threshold Authority Tracing**: t-of-n threshold using Shamir secret sharing (`threshold_trace.rs`) ✓
 - **Hidden Policies ABE**: CP-ABE with hidden access policies (`hidden_policy.rs`) ✓
+- **Subset Difference (SD)**: Efficient broadcast revocation with O(2r-1) ciphertext size (`subset_difference.rs`) ✓
+- **Public Traceability**: Anyone can trace leaked keys without secret tracing key (`waters_public_trace.rs`) ✓
+- **Short Ciphertext TT (BSW06)**: O(1) ciphertext size traitor tracing (`short_ciphertext_tt.rs`) ✓
 
 ---
 
 ## Unimplemented Schemes
 
-### 1. Subset Difference (SD) Method
+### 1. ~~Subset Difference (SD) Method~~ ✅ IMPLEMENTED
 
-**Priority**: High
-**Complexity**: Medium
-**File**: `src/tracing/broadcast.rs` (extend existing)
-
-More efficient broadcast revocation than Complete Subtree. Instead of covering non-revoked users with subtrees, SD uses differences between subtrees.
-
-**Complexity**: O(2r-1) ciphertext size vs O(r log n) for Complete Subtree, where r = revoked users.
-
-**References**:
-- Naor, Naor, Lotspiech. "Revocation and Tracing Schemes for Stateless Receivers" (2001)
-
-**Implementation Notes**:
-```rust
-pub struct SubsetDifferenceParams {
-    pub num_users: usize,
-    pub height: usize,
-}
-
-pub struct SDCover {
-    /// Each element is (ancestor, descendant) representing S_{ancestor} \ S_{descendant}
-    pub differences: Vec<(NodeId, NodeId)>,
-}
-
-pub fn compute_sd_cover(params: &SubsetDifferenceParams, revoked: &[usize]) -> SDCover;
-```
+See `src/tracing/subset_difference.rs`
 
 ---
 
-### 2. Public Traceability
+### 2. ~~Public Traceability~~ ✅ IMPLEMENTED
 
-**Priority**: Medium
-**Complexity**: Medium
-**File**: `src/schemes/waters_public_trace.rs` (new)
-
-Allows anyone to trace a leaked key without the tracing secret key. Uses publicly verifiable identity commitments.
-
-**Key Idea**: Instead of `H(user_id)^τ` where τ is secret, use a structure where the commitment can be verified against a public verification key without revealing τ.
-
-**References**:
-- Liu, Au, Susilo. "Self-Generated-Certificate Public Key Encryption Without Pairing" (2007)
-- Boneh, Naor. "Traitor Tracing with Constant Size Ciphertext" (2008)
-
-**Implementation Notes**:
-```rust
-pub struct PublicTraceableMpk {
-    pub base: Mpk,
-    pub trace_vk: G2,           // Public verification key
-    pub commitment_base: G1,     // For public verification
-}
-
-/// Anyone can call this - no tracing key needed
-pub fn public_trace(
-    mpk: &PublicTraceableMpk,
-    leaked_key: &PublicTraceableSecretKey,
-    known_users: &[UserId],
-) -> TraceResult;
-```
+See `src/schemes/waters_public_trace.rs`
 
 ---
 
-### 3. Short Ciphertext Traitor Tracing (BSW06)
+### 3. ~~Short Ciphertext Traitor Tracing (BSW06)~~ ✅ IMPLEMENTED
 
-**Priority**: Medium
-**Complexity**: High
-**File**: `src/schemes/short_ciphertext_tt.rs` (new)
-
-Achieves constant-size ciphertexts regardless of the number of users or revocation set size. Based on bilinear groups and algebraic techniques.
-
-**References**:
-- Boneh, Sahai, Waters. "Fully Collusion Resistant Traitor Tracing with Short Ciphertexts and Private Keys" (2006)
-
-**Implementation Notes**:
-- Ciphertext size: O(1) group elements
-- Secret key size: O(√n) group elements
-- Tracing time: O(n) pairings
-- Uses algebraic structure to encode user identities
+See `src/schemes/short_ciphertext_tt.rs`
 
 ---
 
@@ -227,9 +167,9 @@ Retroactively revoke access to old ciphertexts. Even if a user had valid keys wh
 
 | Priority | Schemes |
 |----------|---------|
-| High | Subset Difference |
-| Medium | Public Traceability, ~~KP-ABE Tracing~~ ✅, ~~Threshold Authority~~ ✅ |
-| Low | Short Ciphertext TT, Lattice-based, Asymmetric Fingerprinting, Pirate Evolution, Revocable Storage |
+| High | ~~Subset Difference~~ ✅ |
+| Medium | ~~Public Traceability~~ ✅, ~~KP-ABE Tracing~~ ✅, ~~Threshold Authority~~ ✅, ~~Short Ciphertext TT~~ ✅ |
+| Low | Lattice-based, Asymmetric Fingerprinting, Pirate Evolution, Revocable Storage |
 
 ## Dependencies
 

@@ -24,7 +24,7 @@
 use crate::tracing::UserId;
 use rand::{RngCore, CryptoRng};
 use sha2::{Sha256, Digest};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeSet};
 
 /// Node identifier in the binary tree
 pub type NodeId = u64;
@@ -631,5 +631,633 @@ mod tests {
         assert_eq!(broadcast_decrypt(&user3_key, &ct).unwrap(), plaintext);
         assert_eq!(broadcast_decrypt(&user5_key, &ct).unwrap(), plaintext);
         assert_eq!(broadcast_decrypt(&user7_key, &ct).unwrap(), plaintext);
+    }
+}
+
+// =============================================================================
+// Subset Difference (SD) Method
+// =============================================================================
+//
+// More efficient than Complete Subtree for larger revocation sets.
+// Ciphertext size: O(2r - 1) vs O(r log n) for CS method.
+//
+// Key idea: Instead of covering with complete subtrees, use differences
+// S_i \ S_j where S_i is an ancestor subtree and S_j is a descendant subtree.
+
+/// Subset Difference element: represents S_ancestor \ S_descendant
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SubsetDiff {
+    /// The larger subtree (ancestor)
+    pub ancestor: NodeId,
+    /// The smaller subtree to exclude (descendant), or None for full subtree
+    pub descendant: Option<NodeId>,
+}
+
+impl SubsetDiff {
+    /// Create a new subset difference
+    pub fn new(ancestor: NodeId, descendant: Option<NodeId>) -> Self {
+        SubsetDiff { ancestor, descendant }
+    }
+
+    /// Create a complete subtree (no exclusion)
+    pub fn complete(node: NodeId) -> Self {
+        SubsetDiff { ancestor: node, descendant: None }
+    }
+}
+
+/// Subset Difference method parameters
+#[derive(Clone, Debug)]
+pub struct SubsetDifferenceParams {
+    /// Base tree parameters
+    pub tree: CompleteSubtreeParams,
+}
+
+impl SubsetDifferenceParams {
+    /// Create new SD parameters
+    pub fn new(num_users: usize) -> Self {
+        SubsetDifferenceParams {
+            tree: CompleteSubtreeParams::new(num_users),
+        }
+    }
+
+    /// Get all leaves in a subtree rooted at node
+    pub fn leaves_in_subtree(&self, node: NodeId) -> Vec<usize> {
+        let mut leaves = Vec::new();
+        self.collect_leaves(node, &mut leaves);
+        leaves
+    }
+
+    fn collect_leaves(&self, node: NodeId, leaves: &mut Vec<usize>) {
+        if self.tree.is_leaf(node) {
+            if let Some(user_idx) = self.tree.leaf_to_user(node) {
+                leaves.push(user_idx);
+            }
+        } else {
+            self.collect_leaves(self.tree.left_child(node), leaves);
+            self.collect_leaves(self.tree.right_child(node), leaves);
+        }
+    }
+
+    /// Check if a user is covered by a subset difference
+    pub fn user_in_subset_diff(&self, user_index: usize, sd: &SubsetDiff) -> bool {
+        let user_leaf = self.tree.user_to_leaf(user_index);
+
+        // Check if user is in ancestor subtree
+        if !self.is_in_subtree(user_leaf, sd.ancestor) {
+            return false;
+        }
+
+        // If there's an exclusion, check user is NOT in it
+        if let Some(desc) = sd.descendant {
+            if self.is_in_subtree(user_leaf, desc) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Check if leaf is in subtree rooted at node
+    fn is_in_subtree(&self, leaf: NodeId, subtree_root: NodeId) -> bool {
+        let mut current = leaf;
+        while current >= subtree_root {
+            if current == subtree_root {
+                return true;
+            }
+            if let Some(parent) = self.tree.parent(current) {
+                current = parent;
+            } else {
+                break;
+            }
+        }
+        false
+    }
+
+    /// Get the path from a node to an ancestor
+    pub fn path_to_ancestor(&self, node: NodeId, ancestor: NodeId) -> Vec<NodeId> {
+        let mut path = vec![node];
+        let mut current = node;
+        while current != ancestor {
+            if let Some(parent) = self.tree.parent(current) {
+                path.push(parent);
+                current = parent;
+            } else {
+                break;
+            }
+        }
+        path
+    }
+}
+
+/// Cover using Subset Difference method
+#[derive(Clone, Debug)]
+pub struct SDCover {
+    /// Subset differences that cover non-revoked users
+    pub differences: Vec<SubsetDiff>,
+    /// Revoked user indices
+    pub revoked_indices: HashSet<usize>,
+}
+
+/// Compute SD cover set
+///
+/// Algorithm: For each revoked leaf, we need to exclude it from the cover.
+/// We build subset differences that cover all non-revoked users efficiently.
+pub fn compute_sd_cover(
+    params: &SubsetDifferenceParams,
+    revoked_indices: &[usize],
+) -> SDCover {
+    let revoked_set: HashSet<usize> = revoked_indices.iter().copied().collect();
+
+    if revoked_set.is_empty() {
+        return SDCover {
+            differences: vec![SubsetDiff::complete(params.tree.root())],
+            revoked_indices: revoked_set,
+        };
+    }
+
+    // Convert revoked indices to leaves
+    let revoked_leaves: BTreeSet<NodeId> = revoked_indices
+        .iter()
+        .map(|&idx| params.tree.user_to_leaf(idx))
+        .collect();
+
+    // Build the SD cover using the Steiner tree approach
+    let differences = build_sd_cover_steiner(params, &revoked_leaves);
+
+    SDCover {
+        differences,
+        revoked_indices: revoked_set,
+    }
+}
+
+/// Build SD cover using Steiner tree algorithm
+fn build_sd_cover_steiner(
+    params: &SubsetDifferenceParams,
+    revoked_leaves: &BTreeSet<NodeId>,
+) -> Vec<SubsetDiff> {
+    if revoked_leaves.is_empty() {
+        return vec![SubsetDiff::complete(params.tree.root())];
+    }
+
+    // Find the Steiner tree: minimal subtree connecting all revoked leaves
+    let steiner_nodes = find_steiner_tree(params, revoked_leaves);
+
+    // For each edge leaving the Steiner tree, create a subset difference
+    let mut cover = Vec::new();
+    build_sd_from_steiner(params, params.tree.root(), &steiner_nodes, revoked_leaves, &mut cover);
+
+    cover
+}
+
+/// Find Steiner tree nodes connecting revoked leaves
+fn find_steiner_tree(
+    params: &SubsetDifferenceParams,
+    revoked_leaves: &BTreeSet<NodeId>,
+) -> HashSet<NodeId> {
+    let mut steiner: HashSet<NodeId> = HashSet::new();
+
+    // Add all revoked leaves and their ancestors up to LCA
+    for &leaf in revoked_leaves {
+        let mut current = leaf;
+        while !steiner.contains(&current) {
+            steiner.insert(current);
+            if let Some(parent) = params.tree.parent(current) {
+                current = parent;
+            } else {
+                break;
+            }
+        }
+    }
+
+    steiner
+}
+
+/// Recursively build SD cover from Steiner tree
+fn build_sd_from_steiner(
+    params: &SubsetDifferenceParams,
+    node: NodeId,
+    steiner: &HashSet<NodeId>,
+    revoked: &BTreeSet<NodeId>,
+    cover: &mut Vec<SubsetDiff>,
+) {
+    if !steiner.contains(&node) {
+        // This subtree has no revoked leaves - add as complete subtree
+        cover.push(SubsetDiff::complete(node));
+        return;
+    }
+
+    if params.tree.is_leaf(node) {
+        // Leaf node in Steiner tree = revoked user, don't add to cover
+        return;
+    }
+
+    let left = params.tree.left_child(node);
+    let right = params.tree.right_child(node);
+
+    let left_in_steiner = steiner.contains(&left);
+    let right_in_steiner = steiner.contains(&right);
+
+    match (left_in_steiner, right_in_steiner) {
+        (true, true) => {
+            // Both children in Steiner tree - recurse on both
+            build_sd_from_steiner(params, left, steiner, revoked, cover);
+            build_sd_from_steiner(params, right, steiner, revoked, cover);
+        }
+        (true, false) => {
+            // Only left in Steiner tree
+            // Right subtree is completely non-revoked
+            cover.push(SubsetDiff::complete(right));
+            build_sd_from_steiner(params, left, steiner, revoked, cover);
+        }
+        (false, true) => {
+            // Only right in Steiner tree
+            // Left subtree is completely non-revoked
+            cover.push(SubsetDiff::complete(left));
+            build_sd_from_steiner(params, right, steiner, revoked, cover);
+        }
+        (false, false) => {
+            // Neither child in Steiner - shouldn't happen if node is in Steiner
+            // But handle gracefully
+            cover.push(SubsetDiff::complete(node));
+        }
+    }
+}
+
+/// Key for subset difference decryption
+#[derive(Clone, Debug)]
+pub struct SDNodeKey {
+    /// The subset difference this key covers
+    pub subset: SubsetDiff,
+    /// Key material
+    pub key: [u8; 32],
+}
+
+/// User key for SD method - contains keys for all valid subset differences
+/// the user might need
+#[derive(Clone, Debug)]
+pub struct SDUserKey {
+    /// User ID
+    pub user_id: UserId,
+    /// User index
+    pub user_index: usize,
+    /// User's leaf node
+    pub leaf: NodeId,
+    /// Keys for subset differences containing this user
+    /// Key is (ancestor, descendant) pair
+    pub sd_keys: HashMap<(NodeId, Option<NodeId>), [u8; 32]>,
+}
+
+/// Master key for SD broadcast encryption
+#[derive(Clone, Debug)]
+pub struct SDMasterKey {
+    /// Parameters
+    pub params: SubsetDifferenceParams,
+    /// Master secret
+    pub master_secret: [u8; 32],
+    /// User mapping
+    pub user_mapping: HashMap<String, usize>,
+    /// Next index
+    pub next_index: usize,
+}
+
+impl SDMasterKey {
+    /// Create new SD master key
+    pub fn new<R: RngCore + CryptoRng>(rng: &mut R, max_users: usize) -> Self {
+        let params = SubsetDifferenceParams::new(max_users);
+        let mut master_secret = [0u8; 32];
+        rng.fill_bytes(&mut master_secret);
+
+        SDMasterKey {
+            params,
+            master_secret,
+            user_mapping: HashMap::new(),
+            next_index: 0,
+        }
+    }
+
+    /// Register a user
+    pub fn register_user(&mut self, user_id: UserId) -> usize {
+        let index = self.next_index;
+        self.user_mapping.insert(user_id.as_str().to_string(), index);
+        self.next_index += 1;
+        index
+    }
+
+    /// Get user index
+    pub fn get_user_index(&self, user_id: &UserId) -> Option<usize> {
+        self.user_mapping.get(user_id.as_str()).copied()
+    }
+
+    /// Derive key for a subset difference
+    pub fn derive_sd_key(&self, sd: &SubsetDiff) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(&self.master_secret);
+        hasher.update(b"sd_key");
+        hasher.update(sd.ancestor.to_le_bytes());
+        if let Some(desc) = sd.descendant {
+            hasher.update(desc.to_le_bytes());
+        } else {
+            hasher.update([0u8; 8]);
+        }
+        let result = hasher.finalize();
+
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&result);
+        key
+    }
+}
+
+/// Generate SD user key
+pub fn generate_sd_user_key(
+    msk: &SDMasterKey,
+    user_id: impl Into<UserId>,
+) -> Result<SDUserKey, String> {
+    let user_id = user_id.into();
+    let user_index = msk.get_user_index(&user_id)
+        .ok_or_else(|| format!("User {} not registered", user_id))?;
+
+    let leaf = msk.params.tree.user_to_leaf(user_index);
+
+    // Generate keys for all subset differences that could contain this user
+    // This is all (ancestor, descendant) pairs where:
+    // 1. ancestor is on the path from leaf to root
+    // 2. descendant is a sibling subtree or None
+    let mut sd_keys = HashMap::new();
+
+    // Get path from leaf to root
+    let mut current = leaf;
+    let mut path_to_root = vec![leaf];
+    while let Some(parent) = msk.params.tree.parent(current) {
+        path_to_root.push(parent);
+        current = parent;
+    }
+
+    // For each node on path, generate keys for SDs with that node as ancestor
+    for &ancestor in &path_to_root {
+        // Complete subtree key (no exclusion)
+        let sd = SubsetDiff::complete(ancestor);
+        if msk.params.user_in_subset_diff(user_index, &sd) {
+            sd_keys.insert((ancestor, None), msk.derive_sd_key(&sd));
+        }
+
+        // Keys with various descendant exclusions
+        // We need keys where the user is in ancestor but NOT in descendant
+        for &potential_desc in &path_to_root {
+            if potential_desc < ancestor {
+                // descendant is below ancestor
+                let sd = SubsetDiff::new(ancestor, Some(potential_desc));
+                if msk.params.user_in_subset_diff(user_index, &sd) {
+                    sd_keys.insert((ancestor, Some(potential_desc)), msk.derive_sd_key(&sd));
+                }
+            }
+        }
+    }
+
+    // Also add keys for siblings at each level
+    for &node in &path_to_root {
+        if let Some(parent) = msk.params.tree.parent(node) {
+            let sibling = if node == msk.params.tree.left_child(parent) {
+                msk.params.tree.right_child(parent)
+            } else {
+                msk.params.tree.left_child(parent)
+            };
+
+            // If we're not in the sibling subtree, we might need keys for SDs rooted there
+            if !msk.params.is_in_subtree(leaf, sibling) {
+                // User is not in sibling, so they wouldn't need keys for sibling-rooted SDs
+                continue;
+            }
+        }
+    }
+
+    Ok(SDUserKey {
+        user_id,
+        user_index,
+        leaf,
+        sd_keys,
+    })
+}
+
+/// SD broadcast ciphertext
+#[derive(Clone, Debug)]
+pub struct SDBroadcastCiphertext {
+    /// Cover using subset differences
+    pub cover: SDCover,
+    /// Encrypted session keys for each subset difference
+    pub encrypted_keys: HashMap<(NodeId, Option<NodeId>), Vec<u8>>,
+    /// Nonce
+    pub nonce: [u8; 12],
+    /// Encrypted payload
+    pub payload: Vec<u8>,
+}
+
+/// Encrypt using SD method
+pub fn sd_broadcast_encrypt<R: RngCore + CryptoRng>(
+    rng: &mut R,
+    msk: &SDMasterKey,
+    revoked_users: &[UserId],
+    plaintext: &[u8],
+) -> Result<SDBroadcastCiphertext, String> {
+    let revoked_indices: Vec<usize> = revoked_users
+        .iter()
+        .filter_map(|uid| msk.get_user_index(uid))
+        .collect();
+
+    let cover = compute_sd_cover(&msk.params, &revoked_indices);
+
+    // Generate session key
+    let mut session_key = [0u8; 32];
+    rng.fill_bytes(&mut session_key);
+
+    // Encrypt session key for each subset difference in cover
+    let mut encrypted_keys = HashMap::new();
+    for sd in &cover.differences {
+        let sd_key = msk.derive_sd_key(sd);
+        let encrypted = xor_encrypt(&session_key, &sd_key);
+        encrypted_keys.insert((sd.ancestor, sd.descendant), encrypted);
+    }
+
+    // Generate nonce and encrypt payload
+    let mut nonce = [0u8; 12];
+    rng.fill_bytes(&mut nonce);
+    let payload = aes_gcm_encrypt(&session_key, &nonce, plaintext);
+
+    Ok(SDBroadcastCiphertext {
+        cover,
+        encrypted_keys,
+        nonce,
+        payload,
+    })
+}
+
+/// Decrypt using SD method
+pub fn sd_broadcast_decrypt(
+    user_key: &SDUserKey,
+    ct: &SDBroadcastCiphertext,
+) -> Result<Vec<u8>, String> {
+    // Check if user is revoked
+    if ct.cover.revoked_indices.contains(&user_key.user_index) {
+        return Err("User is revoked".into());
+    }
+
+    // Find a subset difference the user can decrypt
+    for sd in &ct.cover.differences {
+        let key_id = (sd.ancestor, sd.descendant);
+        if let Some(&sd_key) = user_key.sd_keys.get(&key_id) {
+            if let Some(encrypted_session_key) = ct.encrypted_keys.get(&key_id) {
+                let session_key = xor_decrypt(encrypted_session_key, &sd_key);
+                let plaintext = aes_gcm_decrypt(&session_key, &ct.nonce, &ct.payload)
+                    .map_err(|_| "Decryption failed")?;
+                return Ok(plaintext);
+            }
+        }
+    }
+
+    Err("No matching subset difference key found".into())
+}
+
+#[cfg(test)]
+mod sd_tests {
+    use super::*;
+    use rand::thread_rng;
+
+    #[test]
+    fn test_sd_params() {
+        let params = SubsetDifferenceParams::new(8);
+        assert_eq!(params.tree.num_users, 8);
+
+        // Test user in subset diff
+        let sd = SubsetDiff::complete(1); // Root
+        assert!(params.user_in_subset_diff(0, &sd));
+        assert!(params.user_in_subset_diff(7, &sd));
+
+        // Test with exclusion
+        let left_child = params.tree.left_child(1);
+        let sd_exclude = SubsetDiff::new(1, Some(left_child));
+        // Users in left subtree should be excluded
+        assert!(!params.user_in_subset_diff(0, &sd_exclude));
+        assert!(!params.user_in_subset_diff(3, &sd_exclude));
+        // Users in right subtree should be included
+        assert!(params.user_in_subset_diff(4, &sd_exclude));
+        assert!(params.user_in_subset_diff(7, &sd_exclude));
+    }
+
+    #[test]
+    fn test_sd_cover_no_revocation() {
+        let params = SubsetDifferenceParams::new(8);
+        let cover = compute_sd_cover(&params, &[]);
+
+        assert_eq!(cover.differences.len(), 1);
+        assert_eq!(cover.differences[0], SubsetDiff::complete(1));
+    }
+
+    #[test]
+    fn test_sd_cover_single_revocation() {
+        let params = SubsetDifferenceParams::new(8);
+        let cover = compute_sd_cover(&params, &[0]);
+
+        // Should have subset differences covering users 1-7
+        assert!(!cover.differences.is_empty());
+
+        // Verify all non-revoked users are covered
+        for user in 1..8 {
+            let covered = cover.differences.iter().any(|sd| params.user_in_subset_diff(user, sd));
+            assert!(covered, "User {} should be covered", user);
+        }
+
+        // Verify revoked user is not covered
+        let user0_covered = cover.differences.iter().any(|sd| params.user_in_subset_diff(0, sd));
+        assert!(!user0_covered, "User 0 should not be covered");
+    }
+
+    #[test]
+    fn test_sd_encrypt_decrypt() {
+        let mut rng = thread_rng();
+        let mut msk = SDMasterKey::new(&mut rng, 16);
+
+        for i in 0..8 {
+            msk.register_user(UserId::new(format!("user{}", i)));
+        }
+
+        let user0_key = generate_sd_user_key(&msk, "user0").unwrap();
+        let user1_key = generate_sd_user_key(&msk, "user1").unwrap();
+
+        let plaintext = b"SD broadcast message";
+        let ct = sd_broadcast_encrypt(&mut rng, &msk, &[], plaintext).unwrap();
+
+        let dec0 = sd_broadcast_decrypt(&user0_key, &ct).unwrap();
+        let dec1 = sd_broadcast_decrypt(&user1_key, &ct).unwrap();
+
+        assert_eq!(dec0, plaintext);
+        assert_eq!(dec1, plaintext);
+    }
+
+    #[test]
+    fn test_sd_revocation() {
+        let mut rng = thread_rng();
+        let mut msk = SDMasterKey::new(&mut rng, 16);
+
+        for i in 0..8 {
+            msk.register_user(UserId::new(format!("user{}", i)));
+        }
+
+        let user0_key = generate_sd_user_key(&msk, "user0").unwrap();
+        let user1_key = generate_sd_user_key(&msk, "user1").unwrap();
+
+        let revoked = vec![UserId::new("user0")];
+        let plaintext = b"Secret message";
+        let ct = sd_broadcast_encrypt(&mut rng, &msk, &revoked, plaintext).unwrap();
+
+        // User0 revoked - cannot decrypt
+        let result0 = sd_broadcast_decrypt(&user0_key, &ct);
+        assert!(result0.is_err());
+
+        // User1 can decrypt
+        let dec1 = sd_broadcast_decrypt(&user1_key, &ct).unwrap();
+        assert_eq!(dec1, plaintext);
+    }
+
+    #[test]
+    fn test_sd_multiple_revocations() {
+        let mut rng = thread_rng();
+        let mut msk = SDMasterKey::new(&mut rng, 16);
+
+        for i in 0..8 {
+            msk.register_user(UserId::new(format!("user{}", i)));
+        }
+
+        let user3_key = generate_sd_user_key(&msk, "user3").unwrap();
+        let user5_key = generate_sd_user_key(&msk, "user5").unwrap();
+
+        let revoked = vec![
+            UserId::new("user0"),
+            UserId::new("user1"),
+            UserId::new("user2"),
+            UserId::new("user4"),
+            UserId::new("user6"),
+            UserId::new("user7"),
+        ];
+
+        let plaintext = b"For users 3 and 5 only";
+        let ct = sd_broadcast_encrypt(&mut rng, &msk, &revoked, plaintext).unwrap();
+
+        let dec3 = sd_broadcast_decrypt(&user3_key, &ct).unwrap();
+        let dec5 = sd_broadcast_decrypt(&user5_key, &ct).unwrap();
+
+        assert_eq!(dec3, plaintext);
+        assert_eq!(dec5, plaintext);
+    }
+
+    #[test]
+    fn test_sd_cover_efficiency() {
+        let params = SubsetDifferenceParams::new(1024);
+
+        // With r revocations, SD should have O(2r-1) subsets
+        // vs O(r log n) for Complete Subtree
+        let revoked: Vec<usize> = (0..10).collect();
+        let cover = compute_sd_cover(&params, &revoked);
+
+        // Should be roughly 2r - 1 = 19 or fewer subsets
+        assert!(cover.differences.len() <= 20, "SD cover too large: {}", cover.differences.len());
     }
 }

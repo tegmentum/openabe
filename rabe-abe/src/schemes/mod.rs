@@ -69,6 +69,14 @@
 //! ## Privacy-Preserving Schemes
 //!
 //! - `hidden_policy`: CP-ABE with hidden access policies (policy privacy)
+//!
+//! ## Public Traceability
+//!
+//! - `waters_public_trace`: Waters '11 with public traceability (anyone can trace)
+//!
+//! ## Short Ciphertext Traitor Tracing
+//!
+//! - `short_ciphertext_tt`: BSW06 constant-size ciphertext traitor tracing
 
 pub mod bsw;
 pub mod waters;
@@ -105,6 +113,8 @@ pub mod split_key_abe;
 pub mod attribute_expiration;
 pub mod revocable_hibe;
 pub mod binary_tree_encryption;
+pub mod waters_public_trace;
+pub mod short_ciphertext_tt;
 
 // Re-export commonly used types (BSW)
 pub use bsw::{
@@ -680,4 +690,41 @@ pub use hidden_policy::{
     decrypt as hidden_policy_decrypt,
     can_potentially_decrypt,
     encrypt_with_visibility,
+};
+
+// Re-export Waters Public Trace types
+pub use waters_public_trace::{
+    TraceVerificationKey,
+    PublicTraceableMpk,
+    PublicTraceableMsk,
+    PublicIdentityCommitment,
+    CommitmentProof,
+    PublicTraceableSecretKey,
+    setup as waters_public_trace_setup,
+    keygen as waters_public_trace_keygen,
+    verify_commitment as waters_verify_public_commitment,
+    encrypt as waters_public_trace_encrypt,
+    decrypt as waters_public_trace_decrypt,
+    public_trace,
+    batch_public_trace,
+    extract_claimed_user,
+};
+
+// Re-export Short Ciphertext Traitor Tracing types
+pub use short_ciphertext_tt::{
+    ShortTTParams,
+    ShortTTMpk,
+    ShortTTMsk,
+    ShortTTSecretKey,
+    ShortTTCiphertext,
+    TracingCiphertext,
+    TraceTag,
+    TracingSession,
+    setup as short_tt_setup,
+    register_user as short_tt_register_user,
+    keygen as short_tt_keygen,
+    encrypt as short_tt_encrypt,
+    encrypt_with_tag as short_tt_encrypt_with_tag,
+    decrypt as short_tt_decrypt,
+    trace_leaked_key as short_tt_trace_leaked_key,
 };
