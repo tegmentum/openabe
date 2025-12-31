@@ -12,6 +12,9 @@ This document lists traitor tracing schemes that could be added to the library.
 - **Broadcast Encryption**: Complete Subtree (NNL) method (`broadcast.rs`)
 - **Dynamic Tracing**: Sequential elimination, adaptive phases (`dynamic.rs`)
 - **Group Testing**: Binary splitting, Hwang's algorithm, disjunct matrices (`group_testing.rs`)
+- **KP-ABE Tracing**: GPSW traceable with identity commitments (`gpsw_traceable.rs`) ✓
+- **Threshold Authority Tracing**: t-of-n threshold using Shamir secret sharing (`threshold_trace.rs`) ✓
+- **Hidden Policies ABE**: CP-ABE with hidden access policies (`hidden_policy.rs`) ✓
 
 ---
 
@@ -117,36 +120,9 @@ Post-quantum secure traitor tracing based on Learning With Errors (LWE) or Ring-
 
 ---
 
-### 5. KP-ABE Traitor Tracing
+### 5. ~~KP-ABE Traitor Tracing~~ ✅ IMPLEMENTED
 
-**Priority**: Medium
-**Complexity**: Medium
-**File**: `src/schemes/gpsw_traceable.rs` (new)
-
-Traitor tracing for Key-Policy ABE (GPSW). The policy is in the key, attributes are in the ciphertext.
-
-**Implementation Notes**:
-```rust
-pub struct GpswTraceableMpk {
-    pub base: gpsw::Mpk,
-    pub trace_vk: G2,
-}
-
-pub struct GpswTraceableSecretKey {
-    pub base: gpsw::SecretKey,
-    pub policy: PolicyNode,
-    pub identity_commitment: G1,
-    pub metadata: TracingMetadata,
-}
-
-pub fn gpsw_traceable_keygen<R: RngCore>(
-    rng: &mut R,
-    mpk: &GpswTraceableMpk,
-    msk: &GpswTraceableMsk,
-    user_id: UserId,
-    policy: &PolicyNode,
-) -> Result<GpswTraceableSecretKey, AbeError>;
-```
+See `src/schemes/gpsw_traceable.rs`
 
 ---
 
@@ -222,39 +198,9 @@ pub struct StealthyTracingConfig {
 
 ---
 
-### 8. Threshold Authority Tracing
+### 8. ~~Threshold Authority Tracing~~ ✅ IMPLEMENTED
 
-**Priority**: Medium
-**Complexity**: Medium
-**File**: `src/schemes/threshold_trace.rs` (new)
-
-Multiple authorities must cooperate (t-of-n threshold) to trace a leaked key. Prevents single authority abuse.
-
-**Implementation Notes**:
-```rust
-pub struct ThresholdTracingSetup {
-    pub threshold: usize,      // t authorities needed
-    pub total_authorities: usize,  // n total
-}
-
-pub struct TracingKeyShare {
-    pub authority_id: String,
-    pub share: Fr,
-    pub verification: G2,
-}
-
-/// Each authority computes partial trace
-pub fn partial_trace(
-    share: &TracingKeyShare,
-    leaked_key: &TraceableSecretKey,
-) -> PartialTraceResult;
-
-/// Combine t shares to get final result
-pub fn combine_traces(
-    partials: &[PartialTraceResult],
-    threshold: usize,
-) -> TraceResult;
-```
+See `src/schemes/threshold_trace.rs`
 
 ---
 
@@ -282,14 +228,14 @@ Retroactively revoke access to old ciphertexts. Even if a user had valid keys wh
 | Priority | Schemes |
 |----------|---------|
 | High | Subset Difference |
-| Medium | Public Traceability, KP-ABE Tracing, Threshold Authority |
+| Medium | Public Traceability, ~~KP-ABE Tracing~~ ✅, ~~Threshold Authority~~ ✅ |
 | Low | Short Ciphertext TT, Lattice-based, Asymmetric Fingerprinting, Pirate Evolution, Revocable Storage |
 
 ## Dependencies
 
 Some schemes require additional crates:
 - **Lattice-based**: Would need `lattice` or similar post-quantum crypto crate
-- **Threshold**: Could use existing `threshold-secret-sharing` patterns
+- **Threshold**: ✅ Implemented using native Shamir secret sharing with Lagrange interpolation
 - **ZK proofs**: Could use `bellman` or `ark-snark` for asymmetric fingerprinting
 
 ## Testing Strategy
