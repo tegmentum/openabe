@@ -43,3 +43,10 @@ path = "fuzz_targets/fuzz_cbor_decode.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_lsss"
+path = "fuzz_targets/fuzz_lsss.rs"
+test = false
+doc = false
+bench = false
